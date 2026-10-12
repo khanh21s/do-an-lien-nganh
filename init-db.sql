@@ -1,0 +1,426 @@
+-- =============================================
+-- PARROTO BACKEND - DATABASE INITIALIZATION
+-- =============================================
+-- This script runs automatically when PostgreSQL starts in Docker
+-- It creates separate databases for each microservice (Database per Service pattern)
+
+-- Create database users with specific permissions
+CREATE ROLE auth_user WITH LOGIN PASSWORD 'auth_password' CREATEDB;
+CREATE ROLE content_user WITH LOGIN PASSWORD 'content_password' CREATEDB;
+CREATE ROLE practice_user WITH LOGIN PASSWORD 'practice_password' CREATEDB;
+CREATE ROLE vocabulary_user WITH LOGIN PASSWORD 'vocabulary_password' CREATEDB;
+CREATE ROLE subscription_user WITH LOGIN PASSWORD 'subscription_password' CREATEDB;
+
+-- Create databases for each microservice
+CREATE DATABASE auth_db OWNER auth_user;
+CREATE DATABASE content_db OWNER content_user;
+CREATE DATABASE practice_db OWNER practice_user;
+CREATE DATABASE vocabulary_db OWNER vocabulary_user;
+CREATE DATABASE subscription_db OWNER subscription_user;
+
+-- ========================================
+-- AUTH_DB SCHEMA
+-- ========================================
+\c auth_db auth_user
+
+CREATE TABLE "user" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255),
+  auth_provider VARCHAR(50) NOT NULL DEFAULT 'email', -- email|google|apple
+  cefr_level VARCHAR(2) NOT NULL DEFAULT 'B1', -- A1|A2|B1|B2|C1|C2
+  total_hours_learned DECIMAL DEFAULT 0,
+  total_words_learned INTEGER DEFAULT 0,
+  avatar_url TEXT,
+  is_active BOOLEAN DEFAULT true,
+  last_login_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_user_email ON "user"(email);
+CREATE INDEX idx_user_cefr_level ON "user"(cefr_level);
+CREATE INDEX idx_user_created_at ON "user"(created_at DESC);
+CREATE INDEX idx_user_is_active ON "user"(is_active);
+
+-- Trigger to auto-update updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_user_updated_at
+BEFORE UPDATE ON "user"
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+GRANT CONNECT ON DATABASE auth_db TO auth_user;
+GRANT USAGE ON SCHEMA public TO auth_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO auth_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO auth_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO auth_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO auth_user;
+
+-- ========================================
+-- CONTENT_DB SCHEMA
+-- ========================================
+\c content_db content_user
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TABLE lesson (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title VARCHAR(255) NOT NULL,
+  source_url TEXT,
+  cefr_level VARCHAR(2), -- A1|A2|B1|B2|C1|C2
+  topic_tag VARCHAR(100), -- vocabulary|grammar|pronunciation|listening|etc
+  audio_url TEXT NOT NULL,
+  description TEXT,
+  duration INTEGER, -- seconds
+  is_deleted BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE sentence (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lesson_id UUID NOT NULL REFERENCES lesson(id) ON DELETE CASCADE,
+  sentence_order INTEGER NOT NULL, -- Position in lesson (1, 2, 3...)
+  text TEXT NOT NULL, -- English sentence
+  ipa VARCHAR(255), -- International Phonetic Alphabet
+  translation_vi TEXT, -- Vietnamese translation
+  start_ms INTEGER, -- Start time in audio (milliseconds)
+  end_ms INTEGER, -- End time in audio
+  audio_url TEXT, -- Separate audio file for sentence (optional)
+  image_url TEXT, -- Supporting image (optional)
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indices for performance
+CREATE INDEX idx_lesson_cefr_level ON lesson(cefr_level);
+CREATE INDEX idx_lesson_topic_tag ON lesson(topic_tag);
+CREATE INDEX idx_lesson_created_at ON lesson(created_at DESC);
+CREATE INDEX idx_sentence_lesson_id ON sentence(lesson_id);
+CREATE INDEX idx_sentence_order ON sentence(lesson_id, sentence_order);
+
+-- Trigger for lesson updated_at
+CREATE TRIGGER update_lesson_updated_at
+BEFORE UPDATE ON lesson
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+GRANT CONNECT ON DATABASE content_db TO content_user;
+GRANT USAGE ON SCHEMA public TO content_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO content_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO content_user;
+
+-- ========================================
+-- CONTENT_DB SEED DATA
+-- Sample lessons for local dev/demo. audio_url points at a bucket key that only
+-- resolves once real AWS credentials are configured (see .env) — until then the
+-- frontend shows "Audio chưa khả dụng" instead of a broken player. Dictation scoring
+-- itself does not depend on audio and works fully with just the seeded text below.
+-- ========================================
+
+INSERT INTO lesson (id, title, cefr_level, topic_tag, description, audio_url, duration) VALUES
+('11111111-1111-1111-1111-111111111101', 'Greetings and Introductions', 'A1', 'greetings', 'Học cách chào hỏi và giới thiệu bản thân bằng tiếng Anh.', 'https://parroto-dev-bucket.s3.amazonaws.com/lessons/greetings.mp3', 60),
+('11111111-1111-1111-1111-111111111102', 'Ordering Food at a Restaurant', 'A2', 'dining', 'Các mẫu câu thông dụng khi gọi món tại nhà hàng.', 'https://parroto-dev-bucket.s3.amazonaws.com/lessons/restaurant.mp3', 55),
+('11111111-1111-1111-1111-111111111103', 'Talking About Your Daily Routine', 'B1', 'daily-life', 'Mô tả các hoạt động thường ngày của bạn.', 'https://parroto-dev-bucket.s3.amazonaws.com/lessons/daily-routine.mp3', 65),
+('11111111-1111-1111-1111-111111111104', 'Job Interview Basics', 'B2', 'career', 'Các câu hỏi và câu trả lời thường gặp khi phỏng vấn xin việc.', 'https://parroto-dev-bucket.s3.amazonaws.com/lessons/job-interview.mp3', 70),
+('11111111-1111-1111-1111-111111111105', 'Travel and Directions', 'A2', 'travel', 'Hỏi đường và các mẫu câu cần thiết khi đi du lịch.', 'https://parroto-dev-bucket.s3.amazonaws.com/lessons/travel.mp3', 50);
+
+INSERT INTO sentence (lesson_id, sentence_order, text, ipa, translation_vi, start_ms, end_ms) VALUES
+('11111111-1111-1111-1111-111111111101', 1, 'Hello! How are you today?', '/həˈloʊ haʊ ɑːr juː təˈdeɪ/', 'Xin chào! Hôm nay bạn khỏe không?', 0, 3000),
+('11111111-1111-1111-1111-111111111101', 2, 'I''m fine, thank you. And you?', '/aɪm faɪn θæŋk juː ænd juː/', 'Tôi khỏe, cảm ơn. Còn bạn thì sao?', 3000, 6500),
+('11111111-1111-1111-1111-111111111101', 3, 'Nice to meet you.', '/naɪs tuː miːt juː/', 'Rất vui được gặp bạn.', 6500, 8500),
+('11111111-1111-1111-1111-111111111101', 4, 'My name is Anna. What''s your name?', NULL, 'Tên tôi là Anna. Bạn tên gì?', 8500, 11500),
+('11111111-1111-1111-1111-111111111101', 5, 'Where are you from?', '/wɛr ɑːr juː frʌm/', 'Bạn đến từ đâu?', 11500, 13500),
+
+('11111111-1111-1111-1111-111111111102', 1, 'Can I see the menu, please?', '/kæn aɪ siː ðə ˈmɛnjuː pliːz/', 'Tôi có thể xem thực đơn được không?', 0, 3000),
+('11111111-1111-1111-1111-111111111102', 2, 'I would like to order a coffee.', NULL, 'Tôi muốn gọi một ly cà phê.', 3000, 6000),
+('11111111-1111-1111-1111-111111111102', 3, 'What do you recommend?', '/wʌt duː juː ˌrɛkəˈmɛnd/', 'Bạn gợi ý món gì?', 6000, 8000),
+('11111111-1111-1111-1111-111111111102', 4, 'The bill, please.', '/ðə bɪl pliːz/', 'Cho tôi xin hóa đơn.', 8000, 9500),
+('11111111-1111-1111-1111-111111111102', 5, 'This tastes delicious.', '/ðɪs teɪsts dɪˈlɪʃəs/', 'Món này ngon quá.', 9500, 11500),
+
+('11111111-1111-1111-1111-111111111103', 1, 'I usually wake up at seven o''clock.', NULL, 'Tôi thường thức dậy lúc bảy giờ.', 0, 3500),
+('11111111-1111-1111-1111-111111111103', 2, 'After breakfast, I go to work by bus.', NULL, 'Sau bữa sáng, tôi đi làm bằng xe buýt.', 3500, 7000),
+('11111111-1111-1111-1111-111111111103', 3, 'I have lunch with my colleagues at noon.', NULL, 'Tôi ăn trưa cùng đồng nghiệp vào buổi trưa.', 7000, 10500),
+('11111111-1111-1111-1111-111111111103', 4, 'In the evening, I like to read a book.', NULL, 'Vào buổi tối, tôi thích đọc sách.', 10500, 13500),
+('11111111-1111-1111-1111-111111111103', 5, 'I go to bed around eleven.', '/aɪ ɡoʊ tuː bɛd əˈraʊnd ɪˈlɛvən/', 'Tôi đi ngủ vào khoảng mười một giờ.', 13500, 16000),
+
+('11111111-1111-1111-1111-111111111104', 1, 'Could you tell me about your previous experience?', NULL, 'Bạn có thể kể về kinh nghiệm trước đây của mình không?', 0, 4000),
+('11111111-1111-1111-1111-111111111104', 2, 'I have worked in marketing for five years.', NULL, 'Tôi đã làm việc trong ngành marketing được năm năm.', 4000, 7500),
+('11111111-1111-1111-1111-111111111104', 3, 'What are your greatest strengths?', '/wʌt ɑːr jʊər ɡreɪtɪst strɛŋkθs/', 'Điểm mạnh lớn nhất của bạn là gì?', 7500, 10000),
+('11111111-1111-1111-1111-111111111104', 4, 'I am a fast learner and a team player.', NULL, 'Tôi học hỏi nhanh và làm việc nhóm tốt.', 10000, 13000),
+('11111111-1111-1111-1111-111111111104', 5, 'Do you have any questions for us?', '/duː juː hæv ˈɛni ˈkwɛstʃənz fɔːr ʌs/', 'Bạn có câu hỏi nào cho chúng tôi không?', 13000, 15500),
+
+('11111111-1111-1111-1111-111111111105', 1, 'Excuse me, how do I get to the train station?', NULL, 'Xin lỗi, làm sao để đến ga tàu?', 0, 4000),
+('11111111-1111-1111-1111-111111111105', 2, 'Turn left at the next corner.', '/tɜːrn lɛft æt ðə nɛkst ˈkɔːrnər/', 'Rẽ trái ở góc đường tiếp theo.', 4000, 6500),
+('11111111-1111-1111-1111-111111111105', 3, 'Is it far from here?', '/ɪz ɪt fɑːr frʌm hɪr/', 'Có xa đây không?', 6500, 8000),
+('11111111-1111-1111-1111-111111111105', 4, 'You can take the bus number twelve.', NULL, 'Bạn có thể đi xe buýt số mười hai.', 8000, 10500),
+('11111111-1111-1111-1111-111111111105', 5, 'Thank you for your help.', '/θæŋk juː fɔːr jʊər hɛlp/', 'Cảm ơn bạn đã giúp đỡ.', 10500, 12500);
+
+-- ========================================
+-- PRACTICE_DB SCHEMA
+-- ========================================
+\c practice_db practice_user
+
+CREATE TABLE practice_attempt (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL, -- References auth_db.user.id
+  lesson_id UUID NOT NULL, -- References content_db.lesson.id
+  sentence_id UUID, -- References content_db.sentence.id (nullable: null = whole-lesson attempt)
+  mode VARCHAR(20) NOT NULL, -- dictation|shadowing
+  score DECIMAL, -- 0-100 or higher
+  accuracy DECIMAL, -- 0-100 percentage
+  word_scores JSONB, -- Array of {word, isCorrect, position, ...}
+  audio_recording_url TEXT, -- For shadowing mode (uploaded to S3)
+  duration DECIMAL, -- Session duration in seconds
+  difficulty VARCHAR(20), -- Easy|Normal|Hard (for dictation)
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indices for fast queries
+CREATE INDEX idx_practice_user_id ON practice_attempt(user_id);
+CREATE INDEX idx_practice_lesson_id ON practice_attempt(lesson_id);
+CREATE INDEX idx_practice_sentence_id ON practice_attempt(sentence_id);
+CREATE INDEX idx_practice_user_created ON practice_attempt(user_id, created_at DESC);
+CREATE INDEX idx_practice_created_at ON practice_attempt(created_at DESC);
+CREATE INDEX idx_practice_mode ON practice_attempt(mode);
+
+GRANT CONNECT ON DATABASE practice_db TO practice_user;
+GRANT USAGE ON SCHEMA public TO practice_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO practice_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO practice_user;
+
+-- ========================================
+-- VOCABULARY_DB SCHEMA
+-- ========================================
+\c vocabulary_db vocabulary_user
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TABLE vocab_deck (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  level VARCHAR(2), -- A1-C2 (CEFR level)
+  is_pro_only BOOLEAN DEFAULT false,
+  card_count INTEGER DEFAULT 0, -- Denormalized for performance
+  created_by UUID, -- Admin user ID
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE vocab_card (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  deck_id UUID NOT NULL REFERENCES vocab_deck(id) ON DELETE CASCADE,
+  word VARCHAR(255) NOT NULL,
+  meaning TEXT NOT NULL, -- Vietnamese meaning
+  example TEXT, -- English example sentence
+  example_vi TEXT, -- Vietnamese example translation
+  ipa VARCHAR(255), -- Pronunciation (/həˈloʊ/)
+  audio_url TEXT, -- Audio pronunciation file URL
+  image_url TEXT, -- Supporting image URL
+  part_of_speech VARCHAR(50), -- noun, verb, adjective, etc.
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User's personal vocabulary learning tracker (SRS)
+CREATE TABLE user_vocab (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL, -- References auth_db.user.id
+  card_id UUID NOT NULL REFERENCES vocab_card(id) ON DELETE CASCADE,
+
+  -- SM-2 Spaced Repetition Algorithm fields
+  next_review_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP, -- When to review next
+  interval_days INTEGER DEFAULT 1, -- Days until next review
+  ease_factor DECIMAL DEFAULT 2.5, -- Difficulty factor (1.3-2.5)
+  repetitions INTEGER DEFAULT 0, -- Number of times reviewed
+  quality INTEGER, -- Last review quality (0-5 SM-2 scale)
+  last_review_at TIMESTAMPTZ, -- Last review timestamp
+
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indices for SRS algorithm
+CREATE INDEX idx_vocab_deck_level ON vocab_deck(level);
+CREATE INDEX idx_vocab_card_deck ON vocab_card(deck_id);
+CREATE INDEX idx_vocab_card_word ON vocab_card(word);
+CREATE INDEX idx_user_vocab_user ON user_vocab(user_id);
+CREATE INDEX idx_user_vocab_next_review ON user_vocab(user_id, next_review_at);
+CREATE INDEX idx_user_vocab_created ON user_vocab(user_id, created_at DESC);
+CREATE UNIQUE INDEX idx_user_vocab_user_card ON user_vocab(user_id, card_id);
+
+-- Trigger for deck updated_at
+CREATE TRIGGER update_vocab_deck_updated_at
+BEFORE UPDATE ON vocab_deck
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger for user_vocab updated_at
+CREATE TRIGGER update_user_vocab_updated_at
+BEFORE UPDATE ON user_vocab
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+GRANT CONNECT ON DATABASE vocabulary_db TO vocabulary_user;
+GRANT USAGE ON SCHEMA public TO vocabulary_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO vocabulary_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO vocabulary_user;
+
+-- ========================================
+-- VOCABULARY_DB SEED DATA
+-- card_count is denormalized (maintained by the app on writes), so it is set
+-- explicitly here to match the number of cards seeded for each deck.
+-- ========================================
+
+INSERT INTO vocab_deck (id, name, description, level, is_pro_only, card_count) VALUES
+('22222222-2222-2222-2222-222222222201', 'Giao tiếp hằng ngày', 'Các từ vựng cơ bản dùng trong giao tiếp thường ngày.', 'A1', false, 8),
+('22222222-2222-2222-2222-222222222202', 'Từ vựng Du lịch', 'Từ vựng cần thiết khi đi du lịch nước ngoài.', 'A2', false, 8),
+('22222222-2222-2222-2222-222222222203', 'Từ vựng Công việc (Premium)', 'Từ vựng chuyên sâu về công việc và phỏng vấn.', 'B1', true, 8);
+
+INSERT INTO vocab_card (deck_id, word, meaning, example, example_vi, ipa, part_of_speech) VALUES
+('22222222-2222-2222-2222-222222222201', 'hello', 'xin chào', 'Hello, nice to meet you.', 'Xin chào, rất vui được gặp bạn.', '/həˈloʊ/', 'interjection'),
+('22222222-2222-2222-2222-222222222201', 'goodbye', 'tạm biệt', 'Goodbye, see you tomorrow.', 'Tạm biệt, hẹn gặp lại ngày mai.', '/ˌɡʊdˈbaɪ/', 'interjection'),
+('22222222-2222-2222-2222-222222222201', 'please', 'làm ơn / xin vui lòng', 'Please close the door.', 'Làm ơn đóng cửa lại.', '/pliːz/', 'adverb'),
+('22222222-2222-2222-2222-222222222201', 'thank you', 'cảm ơn', 'Thank you for your help.', 'Cảm ơn vì sự giúp đỡ của bạn.', '/θæŋk juː/', 'phrase'),
+('22222222-2222-2222-2222-222222222201', 'sorry', 'xin lỗi', 'Sorry, I am late.', 'Xin lỗi, tôi đến muộn.', '/ˈsɒri/', 'adjective'),
+('22222222-2222-2222-2222-222222222201', 'friend', 'bạn bè', 'She is my best friend.', 'Cô ấy là bạn thân nhất của tôi.', '/frɛnd/', 'noun'),
+('22222222-2222-2222-2222-222222222201', 'family', 'gia đình', 'I love my family.', 'Tôi yêu gia đình của mình.', '/ˈfæməli/', 'noun'),
+('22222222-2222-2222-2222-222222222201', 'happy', 'hạnh phúc, vui vẻ', 'I am happy today.', 'Hôm nay tôi rất vui.', '/ˈhæpi/', 'adjective'),
+
+('22222222-2222-2222-2222-222222222202', 'airport', 'sân bay', 'The airport is far from downtown.', 'Sân bay cách trung tâm khá xa.', '/ˈɛrpɔːrt/', 'noun'),
+('22222222-2222-2222-2222-222222222202', 'ticket', 'vé', 'I bought a train ticket.', 'Tôi đã mua một vé tàu.', '/ˈtɪkɪt/', 'noun'),
+('22222222-2222-2222-2222-222222222202', 'passport', 'hộ chiếu', 'Don''t forget your passport.', 'Đừng quên hộ chiếu của bạn.', '/ˈpæspɔːrt/', 'noun'),
+('22222222-2222-2222-2222-222222222202', 'hotel', 'khách sạn', 'We stayed at a nice hotel.', 'Chúng tôi đã ở một khách sạn đẹp.', '/hoʊˈtɛl/', 'noun'),
+('22222222-2222-2222-2222-222222222202', 'luggage', 'hành lý', 'My luggage is very heavy.', 'Hành lý của tôi rất nặng.', '/ˈlʌɡɪdʒ/', 'noun'),
+('22222222-2222-2222-2222-222222222202', 'map', 'bản đồ', 'Can you show me on the map?', 'Bạn có thể chỉ cho tôi trên bản đồ không?', '/mæp/', 'noun'),
+('22222222-2222-2222-2222-222222222202', 'direction', 'hướng đi, chỉ đường', 'Can you give me directions?', 'Bạn có thể chỉ đường cho tôi không?', '/dəˈrɛkʃən/', 'noun'),
+('22222222-2222-2222-2222-222222222202', 'reservation', 'đặt chỗ trước', 'I have a reservation for two.', 'Tôi đã đặt chỗ cho hai người.', '/ˌrɛzərˈveɪʃən/', 'noun'),
+
+('22222222-2222-2222-2222-222222222203', 'interview', 'buổi phỏng vấn', 'I have a job interview tomorrow.', 'Tôi có một buổi phỏng vấn vào ngày mai.', '/ˈɪntərvjuː/', 'noun'),
+('22222222-2222-2222-2222-222222222203', 'resume', 'sơ yếu lý lịch', 'Please send me your resume.', 'Vui lòng gửi cho tôi sơ yếu lý lịch của bạn.', '/ˈrɛzʊmeɪ/', 'noun'),
+('22222222-2222-2222-2222-222222222203', 'salary', 'lương', 'The salary is negotiable.', 'Mức lương có thể thương lượng.', '/ˈsæləri/', 'noun'),
+('22222222-2222-2222-2222-222222222203', 'colleague', 'đồng nghiệp', 'My colleague helped me finish the report.', 'Đồng nghiệp của tôi đã giúp tôi hoàn thành báo cáo.', '/ˈkɒliːɡ/', 'noun'),
+('22222222-2222-2222-2222-222222222203', 'deadline', 'hạn chót', 'We need to meet the deadline.', 'Chúng ta cần hoàn thành đúng hạn chót.', '/ˈdɛdlaɪn/', 'noun'),
+('22222222-2222-2222-2222-222222222203', 'meeting', 'cuộc họp', 'The meeting starts at nine.', 'Cuộc họp bắt đầu lúc chín giờ.', '/ˈmiːtɪŋ/', 'noun'),
+('22222222-2222-2222-2222-222222222203', 'promotion', 'thăng chức', 'She got a promotion last month.', 'Cô ấy đã được thăng chức tháng trước.', '/prəˈmoʊʃən/', 'noun'),
+('22222222-2222-2222-2222-222222222203', 'teamwork', 'làm việc nhóm', 'Teamwork makes the project easier.', 'Làm việc nhóm giúp dự án dễ dàng hơn.', '/ˈtiːmwɜːrk/', 'noun');
+
+-- ========================================
+-- SUBSCRIPTION_DB SCHEMA
+-- ========================================
+\c subscription_db subscription_user
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TABLE plan (
+  id VARCHAR(50) PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  duration_days INTEGER NOT NULL,
+  price BIGINT NOT NULL, -- VND (Vietnamese Dong)
+  features JSONB, -- Array of feature strings
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE subscription (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL, -- References auth_db.user.id
+  plan_id VARCHAR(50) NOT NULL REFERENCES plan(id),
+  start_at TIMESTAMPTZ NOT NULL,
+  end_at TIMESTAMPTZ NOT NULL,
+  status VARCHAR(20) DEFAULT 'active', -- active|expired|cancelled
+  payment_method VARCHAR(50), -- vnpay|momo|activation_code
+  transaction_id VARCHAR(255), -- VNPay transaction ID
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE payment_transaction (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL, -- References auth_db.user.id
+  plan_id VARCHAR(50), -- References plan.id (optional, for activation codes)
+  amount BIGINT NOT NULL, -- VND
+  method VARCHAR(50), -- vnpay|momo|gift_code
+  status VARCHAR(20) DEFAULT 'pending', -- pending|success|failed
+  transaction_id VARCHAR(255) UNIQUE, -- VNPay/MoMo transaction reference
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE activation_code (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(50) UNIQUE NOT NULL, -- GiveCode format: PROMO-XXXXX-XXXXX
+  plan_id VARCHAR(50) NOT NULL REFERENCES plan(id),
+  used_by_user_id UUID, -- References auth_db.user.id (NULL if unused)
+  used_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indices
+CREATE INDEX idx_plan_active ON plan(created_at DESC);
+CREATE INDEX idx_subscription_user ON subscription(user_id);
+CREATE INDEX idx_subscription_end_at ON subscription(end_at) WHERE status = 'active';
+CREATE INDEX idx_subscription_status ON subscription(status);
+CREATE INDEX idx_payment_user ON payment_transaction(user_id);
+CREATE INDEX idx_payment_status ON payment_transaction(status);
+CREATE INDEX idx_activation_code ON activation_code(code);
+CREATE INDEX idx_activation_code_expires ON activation_code(expires_at);
+
+-- Triggers
+CREATE TRIGGER update_subscription_updated_at
+BEFORE UPDATE ON subscription
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+-- Insert sample plans
+INSERT INTO plan (id, name, duration_days, price, features) VALUES
+  ('plan-1month', '1 tháng Premium', 30, 99000, '["Không quảng cáo", "Tất cả bộ từ vựng Pro", "Sổ tay không giới hạn"]'::jsonb),
+  ('plan-3month', '3 tháng Premium', 90, 199000, '["Không quảng cáo", "Tất cả bộ từ vựng Pro", "Sổ tay không giới hạn", "Ưu tiên hỗ trợ"]'::jsonb),
+  ('plan-1year', '1 năm Premium', 365, 299000, '["Không quảng cáo", "Tất cả bộ từ vựng Pro", "Sổ tay không giới hạn", "Ưu tiên hỗ trợ", "Ghi chú không giới hạn"]'::jsonb),
+  ('plan-lifetime', 'Premium trọn đời', 36500, 599000, '["Không quảng cáo", "Tất cả bộ từ vựng Pro", "Sổ tay không giới hạn", "Ưu tiên hỗ trợ", "Ghi chú không giới hạn", "Truy cập tất cả tính năng mới"]'::jsonb);
+
+GRANT CONNECT ON DATABASE subscription_db TO subscription_user;
+GRANT USAGE ON SCHEMA public TO subscription_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO subscription_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO subscription_user;
+
+-- ========================================
+-- FINAL SETUP
+-- ========================================
+-- Connect back to main database
+\c parroto
+
+-- Grant all users access to their respective databases
+GRANT CONNECT ON DATABASE auth_db TO auth_user;
+GRANT CONNECT ON DATABASE content_db TO content_user;
+GRANT CONNECT ON DATABASE practice_db TO practice_user;
+GRANT CONNECT ON DATABASE vocabulary_db TO vocabulary_user;
+GRANT CONNECT ON DATABASE subscription_db TO subscription_user;
+
+-- Status message
+SELECT 'Database initialization completed successfully!' as status;

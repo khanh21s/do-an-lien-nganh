@@ -1,0 +1,115 @@
+# ========================================
+# Dockerfile Template for Parroto Microservices
+# ========================================
+# Multi-stage build to minimize image size
+# Usage: Copy this to each service directory and adjust service names
+
+# Stage 1: Build Stage
+FROM maven:3.9-eclipse-temurin-25 AS builder
+LABEL stage=builder
+
+WORKDIR /app
+
+# Copy POM file
+COPY pom.xml .
+
+# Download dependencies (cached layer, only rebuilt if pom.xml changes)
+RUN mvn dependency:go-offline -DdownloadSources -DdownloadJavadocs
+
+# Copy source code
+COPY src src
+
+# Build application
+RUN mvn clean package -DskipTests \
+    && ls -la target/
+
+# Stage 2: Runtime Stage
+FROM eclipse-temurin:25-jre-alpine
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+# Create non-root user for security
+RUN addgroup -S appuser && adduser -S appuser -G appuser
+
+WORKDIR /app
+
+# Copy JAR from builder stage
+COPY --from=builder /app/target/*.jar app.jar
+
+# Change ownership to non-root user
+RUN chown appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
+# Expose port (override in docker-compose)
+EXPOSE 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+  CMD curl -f http://localhost:8001/actuator/health || exit 1
+
+# Start application
+ENTRYPOINT ["java", "-jar", "app.jar"]
+
+# ========================================
+# Build Instructions
+# ========================================
+# 1. Copy this file to each service directory:
+#    cp Dockerfile.template services/auth-service/Dockerfile
+#
+# 2. Update the port number in EXPOSE (8001, 8002, etc.)
+#
+# 3. Build image:
+#    docker build -t parroto-auth-service:latest .
+#
+# 4. Run container:
+#    docker run -p 8001:8001 \
+#      -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/auth_db \
+#      -e SPRING_DATASOURCE_PASSWORD=password \
+#      parroto-auth-service:latest
+#
+# 5. Or use docker-compose (recommended):
+#    docker-compose up -d
+
+# ========================================
+# Image Optimization
+# ========================================
+# Original size: ~1.5GB (with builder stage)
+# Final size: ~300MB (without builder stage)
+# Build time: 2-3 minutes
+
+# ========================================
+# Security Best Practices
+# ========================================
+# ✓ Multi-stage build (remove build artifacts)
+# ✓ Non-root user (prevents container escape)
+# ✓ No unnecessary packages (Alpine base)
+# ✓ Minimal layers (reduces attack surface)
+# ✓ Health check endpoint (enables orchestration monitoring)
+
+# ========================================
+# Java Runtime Options
+# ========================================
+# For production, add to ENTRYPOINT:
+# java \
+#   -Xmx512m \                    # Max heap size
+#   -Xms256m \                    # Initial heap size
+#   -XX:+UseG1GC \                # G1 garbage collector
+#   -XX:MaxGCPauseMillis=200 \    # Max GC pause
+#   -jar app.jar
+
+# ========================================
+# .dockerignore file (in same directory)
+# ========================================
+# target/
+# .git
+# .gitignore
+# *.md
+# .env
+# .env.local
+# *.log
+# .DS_Store
+# node_modules/
+# .mvn/wrapper/maven-wrapper.jar

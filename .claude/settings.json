@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Program Files/Docker/Docker/**)",
+      "PowerShell(Start-Process \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\")",
+      "Bash(docker info *)",
+      "Bash(docker-compose build *)",
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(echo \"AUTH_EXIT=$?\")",
+      "Bash(echo \"SUB_EXIT=$?\")",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(node --check server.js)",
+      "Bash(node --check middleware/auth.js)",
+      "Bash(node --check middleware/errorHandler.js)",
+      "Bash(node --check middleware/logger.js)",
+      "Bash(node --check middleware/rateLimiter.js)",
+      "Bash(cp .env.example .env)",
+      "Bash(docker-compose up *)",
+      "Bash(docker volume *)",
+      "Bash(docker-compose ps *)",
+      "Bash(docker-compose down *)",
+      "Bash(curl -s -w \"\\\\nHTTP_CODE:%{http_code}\\\\n\" -X POST http://localhost:8001/auth/register -H \"Content-Type: application/json\" -d '{\"email\":\"direct@example.com\",\"password\":\"password123\",\"cefrLevel\":\"B1\"}')",
+      "Bash(curl -s http://localhost:8000/auth/profile)",
+      "Bash(curl -s http://localhost:8000/practice/stats)",
+      "Bash(curl -s http://localhost:8000/vocabs/user/stats)",
+      "Bash(npm -v)",
+      "Bash(mkdir -p /d/Do-an-lien-nganh/frontend/src/app && echo ok)",
+      "Bash(npm view *)",
+      "Bash(node -e \"const v=JSON.parse\\(require\\('fs'\\).readFileSync\\(0,'utf8'\\)\\); console.log\\(v.filter\\(x=>x.startsWith\\('14.2.'\\)\\).slice\\(-10\\).join\\('\\\\n'\\)\\)\")",
+      "Bash(NEXT_PUBLIC_API_URL=http://localhost:8000 npm run build)",
+      "Bash(curl -s \"http://localhost:8000/content/lessons?limit=50\")",
+      "Bash(curl -s \"http://localhost:8000/vocabs/decks?limit=50\")",
+      "Bash(node -e ' *)"
+    ],
+    "additionalDirectories": [
+      "D:\\Do-an-lien-nganh\\frontend\\src"
+    ]
+  }
+}

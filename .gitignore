@@ -1,0 +1,38 @@
+# Environment
+.env
+.env.local
+.env.prod
+.env.staging
+
+# Java / Maven
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/
+
+# Node
+node_modules/
+npm-debug.log*
+dist/
+.next/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Docker volumes (local dev data, not meant to be committed)
+postgres_data/
+redis_data/

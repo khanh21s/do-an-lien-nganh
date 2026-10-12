@@ -1,0 +1,412 @@
+services:
+  # ==================== INFRASTRUCTURE ====================
+  
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: parroto-postgres
+    environment:
+      POSTGRES_USER: parroto
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-parroto_dev_password}
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Mounting a whole directory here (e.g. ./seeds) would NOT work: the official
+      # postgres image's docker-entrypoint-initdb.d runner only processes files directly
+      # inside that path (*.sql/*.sh/*.sql.gz), it does not recurse into subdirectories —
+      # so all seed data lives directly in init-db.sql instead (see its "SEED DATA" sections).
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parroto"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - parroto-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: parroto-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - parroto-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==================== MICROSERVICES ====================
+
+  # Auth Service - Port 8001
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: parroto-auth-service
+    environment:
+      # Server
+      SERVER_PORT: 8001
+      
+      # Database
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: auth_user
+      SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD:-auth_password}
+      
+      # Redis
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      
+      # JWT
+      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
+      JWT_EXPIRY_SECONDS: 3600
+      JWT_REFRESH_EXPIRY_SECONDS: 604800
+      
+      # Google OAuth (set in production)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+
+      # Admin allow-list (drives the isAdmin flag on GET /auth/profile, used by the
+      # frontend to show/hide admin navigation — actual write endpoints are still
+      # gated independently by each service's own ADMIN_EMAILS check)
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@parroto.com}
+
+      # Logging
+      LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
+      LOGGING_LEVEL_COM_PARROTO: DEBUG
+
+      # Spring
+      SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - parroto-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Content Service - Port 8002
+  content-service:
+    build:
+      context: ./services/content-service
+      dockerfile: Dockerfile
+    container_name: parroto-content-service
+    environment:
+      SERVER_PORT: 8002
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/content_db
+      SPRING_DATASOURCE_USERNAME: content_user
+      SPRING_DATASOURCE_PASSWORD: ${CONTENT_DB_PASSWORD:-content_password}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      
+      # AWS S3 (for audio/video files)
+      AWS_S3_BUCKET: ${S3_BUCKET:-parroto-dev-bucket}
+      AWS_S3_REGION: ${S3_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+
+      # JWT (must match auth-service's secret)
+      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
+
+      # Comma-separated emails allowed to call admin-only endpoints (MVP stand-in for a roles table)
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@parroto.com}
+
+      # Logging
+      LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
+      LOGGING_LEVEL_COM_PARROTO: DEBUG
+      SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
+    ports:
+      - "8002:8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - parroto-network
+    restart: unless-stopped
+
+  # Practice Service - Port 8003
+  practice-service:
+    build:
+      context: ./services/practice-service
+      dockerfile: Dockerfile
+    container_name: parroto-practice-service
+    environment:
+      SERVER_PORT: 8003
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/practice_db
+      SPRING_DATASOURCE_USERNAME: practice_user
+      SPRING_DATASOURCE_PASSWORD: ${PRACTICE_DB_PASSWORD:-practice_password}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      
+      # Microservices communication
+      CONTENT_SERVICE_URL: http://content-service:8002
+      
+      # Azure Speech API (for Shadowing pronunciation scoring)
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-eastus}
+
+      # AWS S3 (for recording uploads)
+      AWS_S3_BUCKET: ${S3_BUCKET:-parroto-dev-bucket}
+      AWS_S3_REGION: ${S3_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+
+      # JWT (must match auth-service's secret)
+      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
+
+      # Logging
+      LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
+      LOGGING_LEVEL_COM_PARROTO: DEBUG
+      SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
+    ports:
+      - "8003:8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      content-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - parroto-network
+    restart: unless-stopped
+
+  # Vocabulary Service - Port 8004
+  vocabulary-service:
+    build:
+      context: ./services/vocabulary-service
+      dockerfile: Dockerfile
+    container_name: parroto-vocabulary-service
+    environment:
+      SERVER_PORT: 8004
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/vocabulary_db
+      SPRING_DATASOURCE_USERNAME: vocabulary_user
+      SPRING_DATASOURCE_PASSWORD: ${VOCABULARY_DB_PASSWORD:-vocabulary_password}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+
+      # JWT (must match auth-service's secret)
+      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
+
+      # Comma-separated emails allowed to call admin-only endpoints (MVP stand-in for a roles table)
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@parroto.com}
+
+      # Microservices communication (premium gate for Pro-only decks)
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:8005
+
+      # Logging
+      LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
+      LOGGING_LEVEL_COM_PARROTO: DEBUG
+      SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
+    ports:
+      - "8004:8004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - parroto-network
+    restart: unless-stopped
+
+  # Subscription Service - Port 8005
+  subscription-service:
+    build:
+      context: ./services/subscription-service
+      dockerfile: Dockerfile
+    container_name: parroto-subscription-service
+    environment:
+      SERVER_PORT: 8005
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/subscription_db
+      SPRING_DATASOURCE_USERNAME: subscription_user
+      SPRING_DATASOURCE_PASSWORD: ${SUBSCRIPTION_DB_PASSWORD:-subscription_password}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      
+      # Microservices communication
+      AUTH_SERVICE_URL: http://auth-service:8001
+      
+      # VNPay Payment Gateway
+      VNPAY_API_URL: ${VNPAY_API_URL:-https://sandbox.vnpayment.vn}
+      VNPAY_API_KEY: ${VNPAY_API_KEY:-}
+      VNPAY_SECRET: ${VNPAY_SECRET:-}
+      VNPAY_MERCHANT_ID: ${VNPAY_MERCHANT_ID:-}
+      
+      # Callback URL: VNPay calls this (via the gateway) to deliver the signed payment
+      # result; subscription-service verifies it and then redirects the browser to
+      # FRONTEND_URL + /subscription/success|failed. Must NOT point directly at a frontend page.
+      VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8000/subscriptions/payment-callback}
+
+      # JWT (must match auth-service's secret)
+      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
+
+      # Email notifications (for subscription updates)
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-noreply@parroto.com}
+      
+      # Logging
+      LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
+      LOGGING_LEVEL_COM_PARROTO: DEBUG
+      SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
+    ports:
+      - "8005:8005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - parroto-network
+    restart: unless-stopped
+
+  # ==================== API GATEWAY ====================
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: parroto-api-gateway
+    environment:
+      # Server
+      PORT: 8000
+      NODE_ENV: ${ENVIRONMENT:-development}
+      
+      # JWT
+      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
+      
+      # Microservices URLs
+      AUTH_SERVICE_URL: http://auth-service:8001
+      CONTENT_SERVICE_URL: http://content-service:8002
+      PRACTICE_SERVICE_URL: http://practice-service:8003
+      VOCABULARY_SERVICE_URL: http://vocabulary-service:8004
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:8005
+      
+      # Frontend
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - auth-service
+      - content-service
+      - practice-service
+      - vocabulary-service
+      - subscription-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - parroto-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ==================== FRONTEND ====================
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* vars are inlined into the browser bundle at build time, so they
+        # must reach the browser directly — the Docker-internal "api-gateway" hostname
+        # would not be reachable from the user's browser.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    container_name: parroto-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - parroto-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  parroto-network:
+    driver: bridge
+
+# ==================== USEFUL COMMANDS ====================
+# docker-compose up -d                          # Start all services
+# docker-compose down                           # Stop all services
+# docker-compose logs -f api-gateway            # Watch API Gateway logs
+# docker-compose ps                             # View running services
+# docker-compose exec postgres psql -U parroto parroto_db  # Access PostgreSQL
+# docker-compose exec redis redis-cli           # Access Redis CLI
+# docker-compose up -d --build                  # Rebuild and start
+# docker-compose restart auth-service           # Restart single service
