@@ -63,6 +63,10 @@ public class DeckService {
     public PageResponse<CardResponse> getDeckCards(AuthenticatedUser principal, UUID deckId, String searchWord, int page, int limit) {
         VocabDeck deck = deckRepository.findById(deckId)
                 .orElseThrow(() -> ApiException.notFound("Deck not found"));
+        // Personal decks (T13) are visible to their owner only; guests/others get 404 (no existence leak).
+        if (deck.isPersonal() && (principal == null || !deck.isOwnedBy(principal.userUuid()))) {
+            throw ApiException.notFound("Deck not found");
+        }
         if (Boolean.TRUE.equals(deck.getIsProOnly())) {
             if (principal == null || !premiumClient.isPremium(principal.userId())) {
                 throw ApiException.forbidden("This vocabulary deck requires a Premium subscription");
@@ -123,8 +127,7 @@ public class DeckService {
 
     @Transactional
     public List<CardResponse> addCards(UUID deckId, CreateCardsRequest request) {
-        VocabDeck deck = deckRepository.findById(deckId)
-                .orElseThrow(() -> ApiException.notFound("Deck not found"));
+        VocabDeck deck = findPublicDeck(deckId);
 
         for (CardInput input : request.cards()) {
             if (cardRepository.existsByDeck_IdAndWordIgnoreCase(deckId, input.word())) {
@@ -157,8 +160,7 @@ public class DeckService {
 
     @Transactional
     public CardResponse updateCard(UUID cardId, UpdateCardRequest request) {
-        VocabCard card = cardRepository.findById(cardId)
-                .orElseThrow(() -> ApiException.notFound("Card not found"));
+        VocabCard card = findPublicCard(cardId);
         if (request.meaning() != null) card.setMeaning(request.meaning());
         if (request.example() != null) card.setExample(request.example());
         if (request.exampleVi() != null) card.setExampleVi(request.exampleVi());
@@ -177,8 +179,7 @@ public class DeckService {
      */
     @Transactional
     public void deleteCard(UUID cardId) {
-        VocabCard card = cardRepository.findById(cardId)
-                .orElseThrow(() -> ApiException.notFound("Card not found"));
+        VocabCard card = findPublicCard(cardId);
         VocabDeck deck = card.getDeck();
         UUID deckId = deck.getId();
         cardRepository.delete(card);
@@ -191,11 +192,23 @@ public class DeckService {
 
     @Transactional
     public void deleteDeck(UUID deckId) {
-        VocabDeck deck = deckRepository.findById(deckId)
-                .orElseThrow(() -> ApiException.notFound("Deck not found"));
+        VocabDeck deck = findPublicDeck(deckId);
         deckRepository.delete(deck); // cascades to cards via ON DELETE CASCADE
         cacheService.invalidateByPattern("vocab:deck:" + deckId + ":*");
         cacheService.invalidateByPattern("vocab:decks:list:*");
+    }
+
+    /** Admin endpoints never touch personal decks (T13): they behave as if the deck did not exist. */
+    private VocabDeck findPublicDeck(UUID deckId) {
+        return deckRepository.findById(deckId)
+                .filter(d -> !d.isPersonal())
+                .orElseThrow(() -> ApiException.notFound("Deck not found"));
+    }
+
+    private VocabCard findPublicCard(UUID cardId) {
+        return cardRepository.findById(cardId)
+                .filter(c -> c.getDeck() == null || !c.getDeck().isPersonal())
+                .orElseThrow(() -> ApiException.notFound("Card not found"));
     }
 
     private static String blankToNull(String s) {

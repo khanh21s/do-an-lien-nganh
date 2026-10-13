@@ -104,6 +104,8 @@ public class ReviewService {
             throw ApiException.conflict("Từ đã có trong sổ tay");
         }
         VocabCard card = cardRepository.findById(request.cardId())
+                // another user's personal card (T13) is treated as non-existent
+                .filter(c -> c.getDeck() == null || !c.getDeck().isPersonal() || c.getDeck().isOwnedBy(userId))
                 .orElseThrow(() -> ApiException.notFound("Card not found"));
         if (card.getDeck() != null && Boolean.TRUE.equals(card.getDeck().getIsProOnly())
                 && !premiumClient.isPremium(userId.toString())) {
