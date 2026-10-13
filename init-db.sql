@@ -347,7 +347,9 @@ CREATE TABLE plan (
   duration_days INTEGER NOT NULL,
   price BIGINT NOT NULL, -- VND (Vietnamese Dong)
   features JSONB, -- Array of feature strings
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  is_active BOOLEAN NOT NULL DEFAULT true, -- false = no longer sold (T14; never hard-deleted)
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE subscription (
@@ -392,6 +394,7 @@ CREATE INDEX idx_subscription_end_at ON subscription(end_at) WHERE status = 'act
 CREATE INDEX idx_subscription_status ON subscription(status);
 CREATE INDEX idx_payment_user ON payment_transaction(user_id);
 CREATE INDEX idx_payment_status ON payment_transaction(status);
+CREATE INDEX idx_payment_created ON payment_transaction(created_at DESC);
 CREATE INDEX idx_activation_code ON activation_code(code);
 CREATE INDEX idx_activation_code_expires ON activation_code(expires_at);
 

@@ -52,6 +52,8 @@ class ActivationCodeTest {
         planService = mock(PlanService.class);
         when(planService.getPlanOrThrow("plan-1month")).thenReturn(plan30);
         when(planService.getPlanOrThrow("nope")).thenThrow(ApiException.notFound("Plan not found"));
+        when(planService.getActivePlanOrThrow("plan-1month")).thenReturn(plan30);
+        when(planService.getActivePlanOrThrow("nope")).thenThrow(ApiException.notFound("Plan not found"));
         when(subscriptionRepository.save(any(Subscription.class))).thenAnswer(inv -> inv.getArgument(0));
         when(codeRepository.save(any(ActivationCode.class))).thenAnswer(inv -> inv.getArgument(0));
         when(codeRepository.saveAllAndFlush(anyCollection())).thenAnswer(inv -> new ArrayList<>(inv.getArgument(0)));

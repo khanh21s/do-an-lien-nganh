@@ -29,7 +29,7 @@ public class AdminGuard {
 
     public void requireAdmin(AuthenticatedUser user) {
         if (!isAdmin(user)) {
-            throw ApiException.forbidden("Admin privileges required");
+            throw ApiException.forbidden("Bạn không có quyền quản trị");
         }
     }
 }
