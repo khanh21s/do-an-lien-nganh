@@ -1,7 +1,6 @@
 'use client';
 
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { authApi } from '@/lib/endpoints/auth';
 import { subscriptionApi } from '@/lib/endpoints/subscription';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
 import { qk } from '@/lib/queryKeys';
@@ -10,15 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  ADMIN_NAV,
-  MAIN_NAV,
-  allNavHrefs,
-  badgeCount,
-  findActiveHref,
-  type NavEntry,
-  type NavLeaf,
-} from './navItems';
+import { MAIN_NAV, allNavHrefs, badgeCount, findActiveHref, type NavLeaf } from './navItems';
 
 /** Desktop sidebar (≥ md). Collapsible to icons only (NAV-04), state kept in localStorage. */
 export function Sidebar() {
@@ -26,17 +17,13 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useLocalStorage<boolean>(storageKeys.sidebarCollapsed, false);
 
   // Shared cache keys: Topbar / pages reuse these without extra requests; T10 invalidates qk.vocabStats.
-  const { data: profile } = useQuery({ queryKey: qk.profile, queryFn: authApi.getProfile });
   const { data: vocabStats } = useQuery({ queryKey: qk.vocabStats, queryFn: vocabularyApi.getStats });
   const { data: userSub } = useQuery({
     queryKey: qk.userSubscription,
     queryFn: subscriptionApi.getUserSubscription,
   });
 
-  const isAdmin = !!profile?.isAdmin;
-  const activeHref = findActiveHref(pathname, allNavHrefs(isAdmin));
-
-  const sections: NavEntry[] = isAdmin ? [...MAIN_NAV, ADMIN_NAV] : MAIN_NAV;
+  const activeHref = findActiveHref(pathname, allNavHrefs());
 
   return (
     <aside
@@ -58,7 +45,7 @@ export function Sidebar() {
       </Link>
 
       <nav className="scrollbar-thin flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-3 py-4">
-        {sections.map((entry) =>
+        {MAIN_NAV.map((entry) =>
           entry.kind === 'leaf' ? (
             <SidebarLink
               key={entry.href}
@@ -68,12 +55,7 @@ export function Sidebar() {
               badge={badgeCount(entry.badge, vocabStats)}
             />
           ) : (
-            <div
-              key={entry.key}
-              className={clsx(entry.key === 'admin' && 'mt-3 border-t border-slate-100 pt-3')}
-              role="group"
-              aria-label={entry.label}
-            >
+            <div key={entry.key} role="group" aria-label={entry.label}>
               {!collapsed ? (
                 <p
                   className={clsx(

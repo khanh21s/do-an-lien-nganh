@@ -1,6 +1,5 @@
 'use client';
 
-import { authApi } from '@/lib/endpoints/auth';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
 import { qk } from '@/lib/queryKeys';
 import { useQuery } from '@tanstack/react-query';
@@ -21,11 +20,9 @@ export const MOBILE_TAB_BAR_PADDING = 'pb-[calc(4rem+env(safe-area-inset-bottom)
 export function MobileTabBar() {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { data: profile } = useQuery({ queryKey: qk.profile, queryFn: authApi.getProfile });
   const { data: vocabStats } = useQuery({ queryKey: qk.vocabStats, queryFn: vocabularyApi.getStats });
 
-  const isAdmin = !!profile?.isAdmin;
-  const activeHref = findActiveHref(pathname, allNavHrefs(isAdmin));
+  const activeHref = findActiveHref(pathname, allNavHrefs());
   const tabActive = MOBILE_TABS.some((t) => t.href === activeHref);
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
@@ -86,7 +83,6 @@ export function MobileTabBar() {
       <MoreDrawer
         open={drawerOpen}
         onClose={closeDrawer}
-        isAdmin={isAdmin}
         activeHref={activeHref}
         vocabStats={vocabStats}
       />

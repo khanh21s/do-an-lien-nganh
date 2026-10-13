@@ -50,24 +50,14 @@ export const MAIN_NAV: NavEntry[] = [
   NAV_PROFILE,
 ];
 
-/** ADM-01: only rendered when `profile.isAdmin`. */
-export const ADMIN_NAV: NavGroup = {
-  kind: 'group',
-  key: 'admin',
-  label: 'Quản trị',
-  icon: '🛠️',
-  children: [
-    leaf('/admin/lessons', 'Bài học', '🎧'),
-    leaf('/admin/vocabulary', 'Từ vựng', '📝'),
-    leaf('/admin/activation-codes', 'Mã kích hoạt', '🎟️'),
-  ],
-};
+// T14: admin pages are no longer part of the learner navigation; they live in the separate
+// admin console (`components/admin/adminNav.ts`, `AdminShell`).
 
 /** NAV-01: the four fixed tabs; the fifth tab ("Thêm") opens the MoreDrawer. */
 export const MOBILE_TABS: NavLeaf[] = [NAV_DASHBOARD, NAV_LESSONS, NAV_REVIEW, NAV_HISTORY];
 
-/** Entries shown in the "Thêm" drawer: everything not already a tab (admin appended when allowed). */
-export function moreDrawerEntries(isAdmin: boolean): NavEntry[] {
+/** Entries shown in the "Thêm" drawer: everything not already a tab. */
+export function moreDrawerEntries(): NavEntry[] {
   const tabHrefs = new Set(MOBILE_TABS.map((t) => t.href));
   const entries: NavEntry[] = [];
   for (const entry of MAIN_NAV) {
@@ -78,7 +68,6 @@ export function moreDrawerEntries(isAdmin: boolean): NavEntry[] {
       if (children.length) entries.push({ ...entry, children });
     }
   }
-  if (isAdmin) entries.push(ADMIN_NAV);
   return entries;
 }
 
@@ -112,9 +101,8 @@ export function findActiveHref(pathname: string | null | undefined, hrefs: strin
 }
 
 /** All navigable hrefs (used to resolve the active item across sidebar sections). */
-export function allNavHrefs(isAdmin: boolean): string[] {
-  const entries = isAdmin ? [...MAIN_NAV, ADMIN_NAV] : MAIN_NAV;
-  return flattenNav(entries).map((l) => l.href);
+export function allNavHrefs(): string[] {
+  return flattenNav(MAIN_NAV).map((l) => l.href);
 }
 
 const PRACTICE_ROUTE = /^\/lessons\/[^/]+\/(dictation|shadowing)(\/|$)/;
