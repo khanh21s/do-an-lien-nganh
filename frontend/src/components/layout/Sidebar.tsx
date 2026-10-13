@@ -1,64 +1,109 @@
 'use client';
 
+import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { authApi } from '@/lib/endpoints/auth';
 import { subscriptionApi } from '@/lib/endpoints/subscription';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
+import { qk } from '@/lib/queryKeys';
+import { storageKeys } from '@/lib/storageKeys';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import {
+  ADMIN_NAV,
+  MAIN_NAV,
+  allNavHrefs,
+  badgeCount,
+  findActiveHref,
+  type NavEntry,
+  type NavLeaf,
+} from './navItems';
 
-const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Tổng quan', icon: '🏠' },
-  { href: '/lessons', label: 'Bài học', icon: '📚' },
-  { href: '/practice/history', label: 'Lịch sử luyện tập', icon: '📈' },
-  { href: '/vocabulary', label: 'Bộ từ vựng', icon: '🗂️' },
-  { href: '/vocabulary/review', label: 'Ôn tập từ vựng', icon: '🧠', badgeKey: 'dueToday' as const },
-  { href: '/vocabulary/notebook', label: 'Sổ tay từ vựng', icon: '📓' },
-  { href: '/subscription', label: 'Gói Premium', icon: '💎' },
-  { href: '/profile', label: 'Hồ sơ', icon: '👤' },
-];
-
-const ADMIN_ITEMS = [
-  { href: '/admin/lessons', label: 'Quản lý bài học', icon: '🛠️' },
-  { href: '/admin/vocabulary', label: 'Quản lý từ vựng', icon: '🛠️' },
-];
-
+/** Desktop sidebar (≥ md). Collapsible to icons only (NAV-04), state kept in localStorage. */
 export function Sidebar() {
   const pathname = usePathname();
-  // Cache key 'profile' is shared with the Profile page's own useQuery, so this doesn't
-  // trigger an extra network call once that page (or this sidebar) has fetched it once.
-  const { data: profile } = useQuery({ queryKey: ['profile'], queryFn: authApi.getProfile });
-  const { data: vocabStats } = useQuery({ queryKey: ['vocab-stats'], queryFn: vocabularyApi.getStats });
-  const { data: userSub } = useQuery({ queryKey: ['user-subscription'], queryFn: subscriptionApi.getUserSubscription });
+  const [collapsed, setCollapsed] = useLocalStorage<boolean>(storageKeys.sidebarCollapsed, false);
+
+  // Shared cache keys: Topbar / pages reuse these without extra requests; T10 invalidates qk.vocabStats.
+  const { data: profile } = useQuery({ queryKey: qk.profile, queryFn: authApi.getProfile });
+  const { data: vocabStats } = useQuery({ queryKey: qk.vocabStats, queryFn: vocabularyApi.getStats });
+  const { data: userSub } = useQuery({
+    queryKey: qk.userSubscription,
+    queryFn: subscriptionApi.getUserSubscription,
+  });
+
+  const isAdmin = !!profile?.isAdmin;
+  const activeHref = findActiveHref(pathname, allNavHrefs(isAdmin));
+
+  const sections: NavEntry[] = isAdmin ? [...MAIN_NAV, ADMIN_NAV] : MAIN_NAV;
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-100 bg-white md:flex">
-      <div className="flex h-16 items-center gap-2 border-b border-slate-100 px-6">
-        <span className="text-xl">🦜</span>
-        <span className="text-xl font-bold text-brand-600">Parroto</span>
-      </div>
+    <aside
+      className={clsx(
+        'sticky top-0 hidden h-screen shrink-0 flex-col border-r border-slate-100 bg-white transition-[width] duration-200 md:flex',
+        collapsed ? 'w-[72px]' : 'w-64'
+      )}
+      aria-label="Điều hướng chính"
+    >
+      <Link
+        href="/dashboard"
+        className={clsx('flex h-16 items-center gap-2 border-b border-slate-100', collapsed ? 'justify-center' : 'px-6')}
+      >
+        <span className="text-xl" aria-hidden>
+          🦜
+        </span>
+        {!collapsed && <span className="text-xl font-bold text-brand-600">Parroto</span>}
+        {collapsed && <span className="sr-only">Parroto</span>}
+      </Link>
 
-      <nav className="scrollbar-thin flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            active={pathname === item.href || pathname.startsWith(item.href + '/')}
-            badge={item.badgeKey && vocabStats ? vocabStats[item.badgeKey] : undefined}
-          />
-        ))}
-        {profile?.isAdmin && (
-          <div className="my-3 border-t border-slate-100 pt-3">
-            <p className="px-3 pb-1 text-xs font-semibold uppercase text-slate-400">Quản trị</p>
-            {ADMIN_ITEMS.map((item) => (
-              <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} />
-            ))}
-          </div>
+      <nav className="scrollbar-thin flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-3 py-4">
+        {sections.map((entry) =>
+          entry.kind === 'leaf' ? (
+            <SidebarLink
+              key={entry.href}
+              item={entry}
+              active={activeHref === entry.href}
+              collapsed={collapsed}
+              badge={badgeCount(entry.badge, vocabStats)}
+            />
+          ) : (
+            <div
+              key={entry.key}
+              className={clsx(entry.key === 'admin' && 'mt-3 border-t border-slate-100 pt-3')}
+              role="group"
+              aria-label={entry.label}
+            >
+              {!collapsed ? (
+                <p
+                  className={clsx(
+                    'flex items-center gap-3 px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide',
+                    entry.children.some((c) => c.href === activeHref) ? 'text-brand-700' : 'text-slate-400'
+                  )}
+                >
+                  {entry.label}
+                </p>
+              ) : (
+                <div className="mx-3 my-2 border-t border-slate-100" aria-hidden />
+              )}
+              <div className={clsx('space-y-1', !collapsed && 'pl-2')}>
+                {entry.children.map((child) => (
+                  <SidebarLink
+                    key={child.href}
+                    item={child}
+                    active={activeHref === child.href}
+                    collapsed={collapsed}
+                    badge={badgeCount(child.badge, vocabStats)}
+                    groupLabel={entry.label}
+                  />
+                ))}
+              </div>
+            </div>
+          )
         )}
       </nav>
 
-      {!userSub?.isPremium && (
+      {!userSub?.isPremium && !collapsed && (
         <div className="px-3 pb-3">
           <Link
             href="/subscription"
@@ -69,51 +114,74 @@ export function Sidebar() {
         </div>
       )}
 
-      <Link
-        href="/profile"
-        className="flex items-center gap-3 border-t border-slate-100 px-4 py-3 transition-colors hover:bg-slate-50"
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className={clsx(
+          'flex h-11 items-center gap-3 border-t border-slate-100 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800',
+          collapsed ? 'justify-center' : 'px-6'
+        )}
+        aria-label={collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
+        aria-expanded={!collapsed}
+        title={collapsed ? 'Mở rộng' : 'Thu gọn'}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700">
-          {profile?.email?.[0]?.toUpperCase() ?? '?'}
+        <span aria-hidden className="text-base">
+          {collapsed ? '»' : '«'}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-slate-800">{profile?.email ?? '...'}</span>
-          <span className="block text-xs text-slate-400">Hồ sơ · {profile?.cefrLevel ?? ''}</span>
-        </span>
-      </Link>
+        {!collapsed && <span>Thu gọn</span>}
+      </button>
     </aside>
   );
 }
 
-function NavLink({
+function SidebarLink({
   item,
   active,
+  collapsed,
   badge,
+  groupLabel,
 }: {
-  item: { href: string; label: string; icon: string };
+  item: NavLeaf;
   active: boolean;
+  collapsed: boolean;
   badge?: number;
+  groupLabel?: string;
 }) {
+  const fullLabel = groupLabel ? `${groupLabel} › ${item.label}` : item.label;
   return (
     <Link
       href={item.href}
+      aria-current={active ? 'page' : undefined}
+      title={collapsed ? fullLabel : undefined}
       className={clsx(
-        'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
+        'relative flex items-center gap-3 rounded-xl py-2 text-sm font-medium transition-colors',
+        collapsed ? 'justify-center px-0' : 'px-3',
         active ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100'
       )}
     >
       <span
         className={clsx(
-          'flex h-7 w-7 items-center justify-center rounded-lg text-base',
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-base',
           active ? 'bg-white' : 'bg-slate-50'
         )}
+        aria-hidden
       >
         {item.icon}
       </span>
-      <span className="flex-1">{item.label}</span>
+      {collapsed ? (
+        <span className="sr-only">{fullLabel}</span>
+      ) : (
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      )}
       {!!badge && (
-        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-semibold text-white">
-          {badge}
+        <span
+          className={clsx(
+            'flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-semibold text-white',
+            collapsed && 'absolute right-1 top-0.5'
+          )}
+          aria-label={`${badge} thẻ cần ôn`}
+        >
+          {badge > 99 ? '99+' : badge}
         </span>
       )}
     </Link>
