@@ -30,13 +30,36 @@ public interface UserVocabRepository extends JpaRepository<UserVocab, UUID> {
             """)
     List<UserVocab> findDueForReview(@Param("userId") UUID userId, @Param("now") OffsetDateTime now);
 
-    @Query("""
-            SELECT uv FROM UserVocab uv
+    /** Card and deck are fetched in the same query (LearnedWordResponse reads both: no N+1). */
+    @Query(value = """
+            SELECT uv FROM UserVocab uv JOIN FETCH uv.card c JOIN FETCH c.deck
             WHERE uv.userId = :userId
-              AND (:searchWord IS NULL OR LOWER(uv.card.word) LIKE LOWER(CONCAT('%', CAST(:searchWord AS string), '%')))
+              AND (:searchWord IS NULL OR LOWER(c.word) LIKE LOWER(CONCAT('%', CAST(:searchWord AS string), '%')))
             ORDER BY uv.createdAt DESC
+            """,
+            countQuery = """
+            SELECT COUNT(uv) FROM UserVocab uv JOIN uv.card c
+            WHERE uv.userId = :userId
+              AND (:searchWord IS NULL OR LOWER(c.word) LIKE LOWER(CONCAT('%', CAST(:searchWord AS string), '%')))
             """)
     Page<UserVocab> findLearned(@Param("userId") UUID userId, @Param("searchWord") String searchWord, Pageable pageable);
+
+    @Query("SELECT uv FROM UserVocab uv JOIN FETCH uv.card c JOIN FETCH c.deck WHERE uv.id = :id")
+    Optional<UserVocab> findWithCardAndDeck(@Param("id") UUID id);
+
+    /** T13 duplicate check: {@code normalizedWord} is already {@code lower(trim(word))}. */
+    @Query("""
+            SELECT COUNT(uv) > 0 FROM UserVocab uv
+            WHERE uv.userId = :userId AND LOWER(TRIM(uv.card.word)) = :normalizedWord
+            """)
+    boolean existsWord(@Param("userId") UUID userId, @Param("normalizedWord") String normalizedWord);
+
+    @Query("""
+            SELECT COUNT(uv) > 0 FROM UserVocab uv
+            WHERE uv.userId = :userId AND LOWER(TRIM(uv.card.word)) = :normalizedWord AND uv.id <> :excludeId
+            """)
+    boolean existsWordExcluding(@Param("userId") UUID userId, @Param("normalizedWord") String normalizedWord,
+                                @Param("excludeId") UUID excludeId);
 
     long countByUserId(UUID userId);
 

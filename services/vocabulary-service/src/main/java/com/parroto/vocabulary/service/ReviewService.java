@@ -132,16 +132,6 @@ public class ReviewService {
                 .build();
     }
 
-    @Transactional
-    public void removeFromNotebook(UUID userId, UUID userVocabId) {
-        UserVocab userVocab = userVocabRepository.findById(userVocabId)
-                .orElseThrow(() -> ApiException.notFound("Vocabulary entry not found"));
-        if (!userVocab.getUserId().equals(userId)) {
-            throw ApiException.notFound("Vocabulary entry not found");
-        }
-        userVocabRepository.delete(userVocab);
-    }
-
     static String messageFor(int quality, int intervalDays) {
         if (quality < 3) {
             return "Đừng lo! Thẻ sẽ được ôn lại sau %d ngày.".formatted(intervalDays);

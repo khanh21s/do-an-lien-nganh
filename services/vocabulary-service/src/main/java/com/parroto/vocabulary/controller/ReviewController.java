@@ -2,6 +2,7 @@ package com.parroto.vocabulary.controller;
 
 import com.parroto.vocabulary.dto.*;
 import com.parroto.vocabulary.security.AuthenticatedUser;
+import com.parroto.vocabulary.service.PersonalWordService;
 import com.parroto.vocabulary.service.ReviewService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -16,9 +17,11 @@ import java.util.UUID;
 public class ReviewController {
 
     private final ReviewService reviewService;
+    private final PersonalWordService personalWordService;
 
-    public ReviewController(ReviewService reviewService) {
+    public ReviewController(ReviewService reviewService, PersonalWordService personalWordService) {
         this.reviewService = reviewService;
+        this.personalWordService = personalWordService;
     }
 
     @GetMapping("/review-queue")
@@ -52,10 +55,24 @@ public class ReviewController {
         return ResponseEntity.status(HttpStatus.CREATED).body(reviewService.addFromLesson(principal.userUuid(), request));
     }
 
+    /** T13: add a word of the user's own (validated in the service -> 400, not Bean Validation 422). */
+    @PostMapping("/words")
+    public ResponseEntity<LearnedWordResponse> createWord(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                            @RequestBody CreatePersonalWordRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(personalWordService.create(principal.userUuid(), request));
+    }
+
+    @PutMapping("/words/{userVocabId}")
+    public ResponseEntity<LearnedWordResponse> updateWord(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                            @PathVariable UUID userVocabId,
+                                                            @RequestBody CreatePersonalWordRequest request) {
+        return ResponseEntity.ok(personalWordService.update(principal.userUuid(), userVocabId, request));
+    }
+
     @DeleteMapping("/{userVocabId}")
     public ResponseEntity<MessageResponse> remove(@AuthenticationPrincipal AuthenticatedUser principal,
                                                     @PathVariable UUID userVocabId) {
-        reviewService.removeFromNotebook(principal.userUuid(), userVocabId);
+        personalWordService.remove(principal.userUuid(), userVocabId);
         return ResponseEntity.ok(new MessageResponse("Removed from notebook"));
     }
 }
