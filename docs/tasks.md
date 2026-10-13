@@ -589,6 +589,48 @@ Lỗi (error JSON chuẩn, thông điệp tiếng Việt):
 **Review notes:** (orchestrator, 2026-10-13) BE `cb113e5` (mvn 45/45) + FE `5bb0931` (vitest 145/145, build OK) merged into dev/multi-agent. Migration applied to the running DB. API E2E via gateway 12/12 (create 201 custom=true, in learned + review queue, case/space duplicate 409, validation 400, PUT 200, other user PUT/DELETE 404, personal deck hidden from /vocabs/decks, no token 401, delete removes word). Browser E2E `e2e/tests/t13-notebook-add.spec.ts` 2/2 (notebook add/duplicate/edit; dictation click-word → prefilled modal → saved). Doc fix: `docker-compose exec -T` (snap) does not forward stdin, so the migration command now uses `docker exec -i`.
 **Review notes:**
 
+## T14 – Khu quản trị riêng cho admin (Admin console)
+
+**Yêu cầu (người dùng, 2026-10-13):** admin không dùng giao diện học như user; admin chỉ có khu quản trị CRUD. Thêm quản lý **Người dùng**, **Gói Premium & giao dịch**, **sửa thông tin deck** (ngoài Bài học / Từ vựng / Mã kích hoạt đã có).
+Chia: **T14-AUTH** `feat/T14-auth-admin-users`, **T14-SUB** `feat/T14-sub-admin-plans`, **T14-VOC** `feat/T14-voc-deck-update`, **T14-FE** `feat/T14-fe-admin-console` — chạy song song theo hợp đồng dưới.
+
+Quy ước chung: mọi endpoint admin cần Bearer token **và** email thuộc `ADMIN_EMAILS` (server-side, như các AdminGuard hiện có) → không phải admin: **403** `"Bạn không có quyền quản trị"`. Error JSON chuẩn, thông điệp tiếng Việt. Phân trang theo `PageResponse` hiện có (`data`, `page`, `limit`, `total`, `totalPages` — giữ đúng tên field của service đó). Tất cả path đi qua gateway hiện có (`/auth/**`, `/subscriptions/**`, `/vocabs/decks/**` đã được proxy; không sửa gateway).
+
+### T14-AUTH (auth-service)
+- `AdminGuard` cho auth-service (dùng `admin.emails`).
+- `GET /auth/admin/users?q=&status=all|active|locked&page=1&limit=20` → `PageResponse<AdminUserResponse>`; `q` tìm theo email (ILIKE), sắp xếp `created_at DESC`.
+  `AdminUserResponse`: `id`, `email`, `authProvider`, `cefrLevel`, `isActive`, `isAdmin`, `createdAt`, `lastLoginAt`.
+- `GET /auth/admin/users/{id}` → `AdminUserResponse` (404 `"Không tìm thấy người dùng"`).
+- `PATCH /auth/admin/users/{id}` body `{ "isActive": boolean }` → `AdminUserResponse`. Không cho khoá chính mình hoặc tài khoản admin khác → 400 `"Không thể khoá tài khoản quản trị"`.
+  Khi khoá: login (đã có kiểm tra is_active) và **refresh-token** đều trả 403 `"Tài khoản đã bị khoá"`; access token cũ hết hạn tự nhiên (≤ 1 giờ) — ghi rõ trong report.
+- `GET /auth/admin/stats` → `{ totalUsers, activeUsers, lockedUsers, newUsersLast7Days, newUsersLast30Days }` (không tính tài khoản admin).
+- Unit test: guard, search/filter, khoá/mở khoá, chặn khoá admin, refresh bị chặn khi khoá.
+
+### T14-SUB (subscription-service + DB)
+- Migration `scripts/migrations/003_plan_active.sql` (idempotent): `ALTER TABLE plan ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT true; ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP`; sửa `CREATE TABLE plan` trong `init-db.sql` tương ứng. Entity `Plan` thêm `isActive`, `updatedAt`.
+- Public `GET /subscriptions/plans` chỉ trả plan `is_active = true` (giữ nguyên shape cũ). `create-payment`/kích hoạt mã với plan bị tắt → 400 `"Gói này hiện không còn bán"`.
+- `GET /subscriptions/admin/plans` → `AdminPlanResponse[]` (cả gói tắt): `id`, `name`, `durationDays`, `price`, `features` (string[]), `isActive`, `activeSubscribers`, `createdAt`, `updatedAt`.
+- `POST /subscriptions/admin/plans` body `{ id, name, durationDays, price, features: string[], isActive }` → 201. `id` dạng `^[a-z0-9-]{3,50}$`, trùng → 409 `"Mã gói đã tồn tại"`. `price` ≥ 1000, `durationDays` 1–3650, `name` 1–255.
+- `PUT /subscriptions/admin/plans/{id}` cùng body trừ `id` → 200. **Không xoá cứng** plan (đã có subscription/giao dịch tham chiếu) — tắt bằng `isActive=false`.
+- `GET /subscriptions/admin/transactions?status=all|pending|success|failed&method=&q=&from=&to=&page=&limit=` → `PageResponse<AdminTransactionResponse>`: `id`, `userId`, `planId`, `planName`, `amount`, `method`, `status`, `transactionId`, `description`, `createdAt`. `q` khớp `transactionId` hoặc `userId`. `from/to` là ngày `YYYY-MM-DD` (giờ VN).
+- `GET /subscriptions/admin/stats` → `{ activeSubscribers, revenueTotal, revenueLast30Days, successfulTransactions, pendingTransactions, revenueByDay: [{date, amount}] (30 ngày gần nhất, đủ 30 phần tử) }` — doanh thu = tổng `amount` giao dịch `success`, không tính `gift_code`.
+- `POST /subscriptions/admin/user-status` body `{ userIds: UUID[] }` (≤ 100) → `[{ userId, premium: boolean, planId, endAt }]` — để trang Người dùng hiện cột Premium.
+- Xoá cache `premium:*`/plans liên quan sau khi ghi. Unit test cho validation, lọc plan tắt, thống kê doanh thu.
+
+### T14-VOC (vocabulary-service)
+- `PUT /vocabs/decks/{id}` (admin) body `{ name, description, level (A1–C2|null), isProOnly }` → 200 `DeckResponse`. Deck cá nhân (owner_id ≠ null) → 404. Validation: `name` 1–255. Xoá cache `vocab:decks:*`.
+- Unit test.
+
+### T14-FE (frontend)
+- **Tách khu admin**: route group mới `app/(admin)/admin/**` với `AdminShell` riêng (sidebar quản trị: Tổng quan, Người dùng, Bài học, Từ vựng, Gói & giao dịch, Mã kích hoạt; topbar chỉ có tên admin + Đăng xuất; mobile drawer). Di chuyển các trang admin hiện có từ `app/(app)/admin/**` sang, **không** render AppShell học tập (không streak, ôn tập, nâng cấp, review reminder).
+- **Điều hướng theo vai trò**: đăng nhập xong → admin vào `/admin`, user vào `/dashboard`. Admin mở trang học (`(app)` group: dashboard, lessons practice, vocabulary, history, subscription, profile học) → chuyển về `/admin`. User mở `/admin/**` → `/dashboard` + toast (đã có). Trang public `/lessons`, `/pricing` khi admin đăng nhập → `/admin`. Admin vẫn có trang **Tài khoản** `/admin/account` (đổi mật khẩu) thay cho Hồ sơ học tập.
+- **Trang mới**: `/admin` (Tổng quan: thẻ số liệu từ `/auth/admin/stats`, `/subscriptions/admin/stats`, tổng bài học & deck từ các list hiện có; biểu đồ doanh thu 30 ngày bằng SVG thuần), `/admin/users` (tìm kiếm, lọc trạng thái, phân trang, cột Premium từ `user-status`, nút Khoá/Mở khoá có xác nhận), `/admin/plans` (bảng gói: sửa giá/tên/thời hạn/quyền lợi, bật/tắt, tạo gói mới), `/admin/transactions` (lọc trạng thái/phương thức/ngày, tìm mã GD, phân trang), deck: form **Sửa deck** trong `/admin/vocabulary` và `/admin/vocabulary/[deckId]`.
+- types/endpoints: thêm trong khối `// --- T14 additions ---`; dùng `qk` mới trong khối T14 của `queryKeys.ts`.
+- Kiểm tra: tsc / lint / vitest xanh; unit test cho hàm định dạng/doanh thu.
+
+**Status:** TODO
+**Review notes:**
+
 ## Bảng đối chiếu spec → task (kiểm tra phủ 82 mục)
 
 | Module | Mục → Task |
