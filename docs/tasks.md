@@ -7,12 +7,12 @@
 
 | ID | Title | Wave | Depends | Status |
 |---|---|---|---|---|
-| T01 | Hạ tầng, Docker, seed, CI | 1 | – | TODO |
-| T02 | Bảo mật xuyên service + API Gateway + auth-service | 1 | – | TODO |
-| T03 | practice-service: chấm Dictation, Shadowing (S3/Azure + mock), stats | 1 | – | TODO |
-| T04 | content-service: CRUD câu, cache, upload, lưu trữ local | 1 | – | TODO |
-| T05 | vocabulary-service + subscription-service: SM-2, Pro gating, VNPay IPN, mã kích hoạt | 1 | – | TODO |
-| T06 | Frontend core: API/refresh, types contract, primitives, trang lỗi, tooling | 1 | – | TODO |
+| T01 | Hạ tầng, Docker, seed, CI | 1 | – | DONE |
+| T02 | Bảo mật xuyên service + API Gateway + auth-service | 1 | – | DONE-WITH-ISSUES |
+| T03 | practice-service: chấm Dictation, Shadowing (S3/Azure + mock), stats | 1 | – | DONE |
+| T04 | content-service: CRUD câu, cache, upload, lưu trữ local | 1 | – | DONE-WITH-ISSUES |
+| T05 | vocabulary-service + subscription-service: SM-2, Pro gating, VNPay IPN, mã kích hoạt | 1 | – | DONE-WITH-ISSUES |
+| T06 | Frontend core: API/refresh, types contract, primitives, trang lỗi, tooling | 1 | – | DONE-WITH-ISSUES |
 | T07 | Layout & điều hướng (desktop + mobile) | 2 | T06 | TODO |
 | T08 | Lessons + Dictation + màn kết quả | 2 | T06 (E2E: T03, T04) | TODO |
 | T09 | Shadowing frontend (Recorder WAV) | 2 | T06 (E2E: T01, T03) | TODO |
@@ -88,9 +88,11 @@ python3 -c "import yaml;yaml.safe_load(open('.github/workflows/ci.yml'))"
 # E2E (worktree tích hợp): docker-compose down -v && docker-compose up -d --build && docker-compose ps
 ```
 
-**Status:** TODO
+**Status:** DONE
 
 **Review notes:**
+- Review Wave 1 (2026-10-13): all ACs pass. `docker-compose config -q` OK; only 3000/8000 published; `down -v` + `up -d --build` with the user's DB passwords → all services healthy; plans 79k/169k/499k, no lifetime; seed audio `local:seed/...` plays (200 `audio/mpeg`, Range 206); demo codes work; `scripts/vnpay-ipn-test.sh` drives 97/04/00/02/01 correctly.
+- Note (Low, docs): `.env` files that predate T01 keep `your_…` placeholders (e.g. `GOOGLE_CLIENT_ID`). Practice treats `your_…` as missing; auth does not (see T02). Consider telling users in README to blank unused keys.
 
 ---
 
@@ -130,9 +132,13 @@ for s in auth-service content-service practice-service vocabulary-service subscr
 grep -rn "dev_super_secret\|\.keys(" api-gateway services/*/src/main || echo CLEAN
 ```
 
-**Status:** TODO
+**Status:** DONE-WITH-ISSUES
 
 **Review notes:**
+- **Fixed by reviewer (Blocker) – 3350240:** auth-service `JwtService.generate` used `.signWith(key)`, so jjwt picked **HS512** for a ≥ 64-byte `JWT_SECRET` (the user's is 68 chars). The gateway only accepts `algorithms: ['HS256']` (`api-gateway/middleware/auth.js:33`), so every authenticated call got 401 "Invalid or expired token". Repro before fix: `curl -s -XPOST :8000/auth/login -d '{…}' | jq -r .token | cut -d. -f1 | base64 -d` → `{"alg":"HS512"}`; `curl -H "Authorization: Bearer $T" :8000/practice/stats` → 401. Now pinned to `Jwts.SIG.HS256` (`services/auth-service/src/main/java/com/parroto/auth/security/JwtService.java:67-69`) + unit test `alwaysSignsWithHs256EvenForLongSecrets`.
+- After the fix all T02 ACs pass: refresh token as Bearer → 401 at GW and directly at practice-service; logout → old access token 401 on `/practice/stats`, `/vocabs/user/stats`, `/subscriptions/user`, `/auth/profile` (GW) and directly at vocabulary-service; `/internal/**` without / with wrong `X-Internal-Token` → 401, correct token → 200 (from inside the network); GW `/internal` → 404; `/subscriptions/vnpay-ipn` reachable without token; GW exits 1 on empty/short `JWT_SECRET`; no `.keys(`.
+- Open (Medium, not an AC): **logout does not revoke the refresh token.** `AuthService.logout` (`services/auth-service/src/main/java/com/parroto/auth/service/AuthService.java:123-131`) only blacklists the access-token `jti`; `POST /auth/logout` takes no body. Repro: login → logout with Bearer → `curl -XPOST :8000/auth/refresh-token -d '{"refreshToken":"<old>"}'` → 200 with new tokens. Suggest accepting an optional `{refreshToken}` body on logout and blacklisting its `jti` too (FE `authApi.logout` must send it).
+- Open (Low): `GoogleTokenVerifier`/`AppleTokenVerifier` only treat a *blank* client id as "not configured" (`GoogleTokenVerifier.java:36`); a `your_…` placeholder (present in the user's old `.env`) → 401 "Invalid Google token" instead of 503, and FE may show the Google button. Either reuse practice's placeholder rule or blank the value in `.env`.
 
 ---
 
@@ -170,9 +176,10 @@ grep -rn "dev_super_secret\|\.keys(" api-gateway services/*/src/main || echo CLE
 scripts/verify-java.sh practice-service   # hoặc lệnh Java ở architecture §1.1 với <svc>=practice-service
 ```
 
-**Status:** TODO
+**Status:** DONE
 
 **Review notes:**
+- Review Wave 1: all ACs verified E2E via gateway. Dictation perfect answer Easy 60 / Normal 80 / Hard 100; request-upload-url → `storage=local, uploadRequiresAuth=true, uploadMethod=PUT`; PUT WebM → 400, PUT 48 kHz WAV → 400, PUT without Bearer → 401, PUT 16 kHz mono WAV → 204; submit → 201 `scorer=mock` with word scores; owner streams recording (RIFF) 200, other user → 404; `activity?days=90` → 90 entries (today counts attempts), `days=400` → 400; `/practice/attempts` without `lessonId` → 200 with `difficulty`; `/practice/streak` current ≥ 1. No issues found.
 
 ---
 
@@ -205,9 +212,11 @@ scripts/verify-java.sh practice-service   # hoặc lệnh Java ở architecture 
 scripts/verify-java.sh content-service
 ```
 
-**Status:** TODO
+**Status:** DONE-WITH-ISSUES
 
 **Review notes:**
+- Review Wave 1: ACs pass E2E — admin upload 20 MB mp3 → 200 and streams with Range 206; `.exe`/`application/octet-stream` → 400; seed `local:seed/...` → 200 `audio/mpeg`; PUT sentence `endMs` → detail shows new value immediately; `startMs >= endMs` → 400; delete sentence 2/5 → orders 1..4 and list `sentenceCount` 4 immediately; normal user PUT/DELETE sentence and POST lesson → 403. (Tested on a throw-away lesson created by admin, then deleted; seed lessons untouched.)
+- Open (Low): malformed path params give 500 instead of 400/404 — `curl :8000/content/lessons/abc` → 500 "Internal server error". `GlobalExceptionHandler` (`services/content-service/src/main/java/com/parroto/content/exception/GlobalExceptionHandler.java:55`) has no `MethodArgumentTypeMismatchException` / `NoResourceFoundException` mapping (practice-service has one at `GlobalExceptionHandler.java:43`).
 
 ---
 
@@ -249,9 +258,11 @@ scripts/verify-java.sh content-service
 scripts/verify-java.sh vocabulary-service && scripts/verify-java.sh subscription-service
 ```
 
-**Status:** TODO
+**Status:** DONE-WITH-ISSUES
 
 **Review notes:**
+- Review Wave 1: ACs pass E2E — free user adds Pro-deck card → 403; deck cards with Bearer expose `userVocabId`; reviews with q=1/3/4/5 → 200, 2nd Good → interval 6, Again → interval 1 / repetitions 0; review-queue items carry `exampleVi, partOfSpeech, audioUrl, imageUrl`; admin delete card → `cardCount` 3→2; normal user DELETE card / POST deck → 403. Subscription: `PROMO-DEMO1-MONTH` → premium, reuse → 400 "Mã đã được sử dụng", unknown → 404, 2nd code accumulates (119 days); `premium:{userId}` key deleted on activation and Pro card then allowed (201); admin creates 10 unique `PROMO-` codes, `used=true` list shows `usedByEmail`; normal user → 403 on admin endpoints. VNPay via `scripts/vnpay-ipn-test.sh`: bad signature 97, wrong amount 04 (no subscription), valid 00 → premium, replay 02, unknown txn 01.
+- Open (Low): vocabulary-service returns 500 for malformed UUIDs / unmapped routes — `curl :8000/vocabs/decks/xyz/cards` → 500, `curl :8000/vocabs/decks/22222222-2222-2222-2222-222222222201` (no `GET /vocabs/decks/{id}` route) → 500. `GlobalExceptionHandler` (`services/vocabulary-service/src/main/java/com/parroto/vocabulary/exception/GlobalExceptionHandler.java:38`) maps everything unknown to 500; add `MethodArgumentTypeMismatchException` → 400 and `NoResourceFoundException`/`ErrorResponseException` → their own status.
 
 ---
 
@@ -287,9 +298,12 @@ scripts/verify-java.sh vocabulary-service && scripts/verify-java.sh subscription
 scripts/verify-fe.sh   # hoặc lệnh Frontend ở architecture §1.1
 ```
 
-**Status:** TODO
+**Status:** DONE-WITH-ISSUES
 
 **Review notes:**
+- Review Wave 1: `scripts/verify-fe.sh` green (tsc, `next lint` 0 warnings, vitest 25/25 incl. single-flight refresh test). Frontend container: `/`, `/login`, `/lessons` → 200; unknown route → 404 page. Static review of `src/lib` (api.ts refresh queue, `safeNextPath`, `uploadRecording` honouring `uploadRequiresAuth`) found no bugs.
+- Not verified in a browser: refresh-failure redirect and `/login?next=` round-trip (unit tests only).
+- Open (Low, process): `docs/reports/T06.md` is missing (T01–T05 have reports).
 
 ---
 
@@ -533,3 +547,119 @@ scripts/verify-fe.sh
 ## Phase 2+ Backlog
 
 Không thuộc phạm vi các task trên. Danh sách đầy đủ và ưu tiên gợi ý: [`docs/spec.md` §5 Backlog Phase 2+](./spec.md#5-backlog-phase-2-chưa-có-trong-dự-án). Tiền đề bắt buộc trước mọi hạng mục cần bảng/cột mới: thêm **Flyway** cho 5 service (nhóm 0), sau đó (theo spec) Ôn câu sai + bài Pro → Gamification core → sổ từ cá nhân + từ điển → quên mật khẩu → các nhóm còn lại. Gói **Lifetime** (1.849.000đ) cũng thuộc Phase 2 (nhóm 8).
+
+---
+
+## Review Wave 1
+
+> 2026-10-13, Reviewer/Tester on `dev/multi-agent` (HEAD 03ef1ae + fix 3350240). Stack: `docker-compose down -v && docker-compose up -d --build` with the user's `.env` (+ appended `INTERNAL_TOKEN`, `REDIS_URL`, `REDIS_TIMEOUT`, `STORAGE_PROVIDER`, `SPEECH_PROVIDER`, `MEDIA_ROOT`; no AWS/Azure keys → local storage + mock scorer). E2E through the gateway `:8000` with a Python smoke script (104 checks). Full log: `docs/reports/review-wave1.md`.
+
+**Totals:** 100 PASS · 2 FAIL (Medium 1, Low 1) · 1 N/A · 1 blocker FIXED (3350240).
+
+| ID | Check | Result | Detail |
+|---|---|---|---|
+| AUTH-REG | register user A | PASS | 201 |
+| AUTH-REG-B | register user B | PASS | 201 |
+| AUTH-ADMIN | register/login admin@parroto.com | PASS | 200 |
+| AUTH-LOGIN | login user A | PASS | 200 |
+| AUTH-PROFILE | GET /auth/profile | PASS | 200 |
+| AUTH-02-GW | refresh token as Bearer on /practice/stats (gateway) -> 401 | PASS | 401 |
+| AUTH-02-SVC | refresh token as Bearer direct to practice-service -> 401 | PASS | 401 |
+| AUTH-NOTOKEN | no token /practice/stats -> 401 | PASS | 401 |
+| AUTH-04 | login-google with blank GOOGLE_CLIENT_ID -> 503 | N/A | user .env has a `your_…` placeholder, so the service treats Google as configured and answers 401 "Invalid Google token"; blank-id → 503 path checked by code review + unit test only |
+| X-02-AUTH-NOTOKEN | auth /internal/users/<id> without token -> 401 | PASS | 401 |
+| X-02-AUTH-TOKEN | auth /internal/users/<id> with token -> 200 | PASS | 200 |
+| X-02-SUB-NOTOKEN | subscription /internal/... without token -> 401 | PASS | 401 |
+| X-02-SUB-WRONG | subscription /internal/... wrong token -> 401 | PASS | 401 |
+| X-02-GW | gateway does not expose /internal (404) | PASS | 404 |
+| SUB-PLANS | plans = 79000/169000/499000, no lifetime | PASS | 200 [79000, 169000, 499000] |
+| LES-LIST | GET /content/lessons | PASS | 200 n=5 |
+| LES-DETAIL | GET /content/lessons/{id} with sentences | PASS | 200 n=5 |
+| LES-08-AUDIO | seed lesson audio 200 audio/mpeg | PASS | 200 audio/mpeg 81547 |
+| LES-RANGE | audio with Range -> 206 + Content-Range | PASS | 206 bytes 0-99/81547 100 |
+| LES-SENT-AUDIO | seed sentence audio 200 | PASS | 200 audio/mpeg |
+| DIC-07-Easy | dictation perfect Easy -> 60 | PASS | 201 score=60.0 |
+| DIC-07-Normal | dictation perfect Normal -> 80 | PASS | 201 score=80.0 |
+| DIC-07-Hard | dictation perfect Hard -> 100 | PASS | 201 score=100.0 |
+| SHA-URL | request-upload-url storage=local uploadRequiresAuth=true | PASS | 200 {uploadUrl: /practice/shadowing/recordings/c63f4534-398c-4b30-b581-d4ce07b3fcdf, … |
+| SHA-PUT-WEBM | PUT non-WAV -> 400 | PASS | 400 {"error":"\xc4\x90\xe1\xbb\x8bnh d\xe1\xba\xa1ng ghi \xc3\xa2m kh\xc3\xb4ng h\xe1\xb… |
+| SHA-PUT-48K | PUT 48 kHz WAV -> 400 | PASS | 400 {"error":"\xc4\x90\xe1\xbb\x8bnh d\xe1\xba\xa1ng ghi \xc3\xa2m kh\xc3\xb4ng h\xe1\xb… |
+| SHA-PUT-NOAUTH | PUT without Bearer -> 401 | PASS | 401 |
+| SHA-PUT | PUT 16k mono WAV with Bearer -> 204 | PASS | 204  |
+| SHA-SUBMIT | submit shadowing -> scorer=mock with word scores | PASS | 201 scorer=mock score=98.29 |
+| SHA-OWNER | owner streams recording -> 200 audio/wav | PASS | 200 audio/wav |
+| SHA-04 | other user's recording -> 404 | PASS | 404 |
+| PRA-03-90 | activity?days=90 -> 90 entries | PASS | 200 n=90 |
+| PRA-03-TODAY | today's activity counts the attempts | PASS | {date: 2026-10-13, attempts: 4, minutes: 0} |
+| PRA-03-400 | activity?days=400 -> 400 | PASS | 400 |
+| PRA-05 | GET /practice/attempts (no lessonId) 200 + difficulty | PASS | 200 [{attemptId: 8e04ab34-49ca-4457-9048-dc85aa948fd6, lessonId: 11111111-1111-1111… |
+| PRA-STATS | GET /practice/stats 200 | PASS | 200 |
+| PRA-07 | GET /practice/streak 200, current>=1 | PASS | 200 {"currentStreak":1,"lastPracticeDate":"2026-10-13T03:29:35.23608Z"} |
+| VOC-DECKS | GET /vocabs/decks | PASS | 200 n=3 |
+| VOC-CARDS | GET deck cards | PASS | 200 n=8 |
+| VOC-PRO-LIST | Pro deck cards listable (preview) or 403 | PASS | 403 |
+| VOC-ADD | add 4 cards to notebook | PASS | {0: ca910950-35d9-435b-b630-46ce4260233e, 1: 15a63e39-0d85-46c3-b86f-90ceabe82d19, 2: … |
+| VOC-04 | deck cards with Bearer expose userVocabId for learned cards | PASS | n=4 |
+| VOC-01-RATINGS | review ratings 1/3/4/5 all 200 | PASS | {1: 200, 3: 200, 4: 200, 5: 200} |
+| VOC-01-N1 | second Good review -> interval 6 | PASS | {userVocabId: ec554875-58dc-4e81-9ed3-40386680f2c6, nextReviewAt: 2026-10-19T03:29:… |
+| VOC-01-AGAIN | Again resets -> interval 1, repetitions 0 | PASS | {userVocabId: ec554875-58dc-4e81-9ed3-40386680f2c6, nextReviewAt: 2026-10-14T03:29:… |
+| VOC-07 | review-queue 200 with new fields | PASS | {queue: [], totalDueCards: 0, totalCards: 4} |
+| VOC-STATS | vocabs/user/stats 200 | PASS | 200 |
+| SUB-05-ACT | activate demo code -> premium | PASS | 200 {"subscription":{"id":"3022545f-51e6-4a88-871b-0fac41730be6","planId":"plan-1month",… |
+| SUB-USER | subscriptions/user isPremium | PASS | 200 |
+| SUB-05-REUSE | reuse code -> 400 'Mã đã được sử dụng' | PASS | 400 {"error":"M\xc3\xa3 \xc4\x91\xc3\xa3 \xc4\x91\xc6\xb0\xe1\xbb\xa3c s\xe1\xbb\xad d\x… |
+| SUB-05-UNKNOWN | unknown code -> 404 | PASS | 404 |
+| SUB-05-ACCUM | second code accumulates (daysRemaining ~ 30+90) | PASS | 200 119 |
+| ADM-06-403 | normal user create activation codes -> 403 | PASS | 403 |
+| ADM-06-403-LIST | normal user list activation codes -> 403 | PASS | 403 |
+| ADM-03-403-PUT | normal user PUT sentence -> 403 | PASS | 403 |
+| ADM-03-403-DEL | normal user DELETE sentence -> 403 | PASS | 403 |
+| ADM-05-403 | normal user DELETE card -> 403 | PASS | 403 |
+| ADM-07-403 | normal user POST deck -> 403 | PASS | 403 |
+| ADM-LES-403 | normal user POST lesson -> 403 | PASS | 403 |
+| ADM-06-CREATE | admin creates 10 unique codes | PASS | 201 {codes: [{id: 4c55b213-5277-43c3-866a-948ed4a8704a, code: PROMO-ECA9W-MDKNW,… |
+| ADM-06-LIST | list used=true shows usedByEmail | PASS | 200 [{id: d1a6b833-d09a-491e-bd38-deec99b906f4, code: PROMO-DEMO1-MONTH, planId:… |
+| ADM-LES-CREATE | admin creates lesson | PASS | 201 {"id":"c5b314cd-9acb-4e3f-8c09-d56f299391cc","title":"RW1 test 1791862171","sourceUr… |
+| ADM-SENT-ADD | admin adds 5 sentences | PASS | 201 [{"id":"41bf2d1c-490f-4da6-ac75-38a45e369534","sentenceOrder":1,"text":"Sentence 0",… |
+| LES-07-COUNT | list sentenceCount=5 right after add (cache evicted) | PASS | [5] |
+| ADM-03-PUT | admin PUT sentence 200 | PASS | 200 {"id":"41bf2d1c-490f-4da6-ac75-38a45e369534","sentenceOrder":1,"text":"Sentence 0","… |
+| LES-07-PUT | detail shows new endMs immediately | PASS | [{id: 41bf2d1c-490f-4da6-ac75-38a45e369534, sentenceOrder: 1, text: Sentence 0, … |
+| ADM-03-VALID | startMs>=endMs -> 400 | PASS | 400 |
+| ADM-03-DEL | delete sentence 2/5 -> orders 1..4 | PASS | 200 [1, 2, 3, 4] |
+| LES-07-COUNT-DEL | list sentenceCount=4 after delete | PASS | [4] |
+| ADM-04-20MB | admin upload 20MB mp3 -> 200 | PASS | 200 {"audioUrl":"local:lessons/c5b314cd-9acb-4e3f-8c09-d56f299391cc/970801be-8f92-43e5-b… |
+| ADM-04-PLAY | uploaded audio streams with Range 206 | PASS | 206 bytes 0-1023/20971520 |
+| ADM-04-EXE | upload .exe -> 400 | PASS | 400 {"error":"File ph\xe1\xba\xa3i l\xc3\xa0 audio (mp3, m4a, wav, ogg, webm)","status":… |
+| ADM-LES-DEL | admin deletes test lesson | PASS | 200 |
+| ADM-07 | admin creates deck | PASS | 201 {"id":"a58a430b-9270-4273-83d1-093e31132831","name":"RW1 deck 1791862171","descripti… |
+| ADM-05 | delete card -> card_count 3->2 | PASS | card_count 3→2 (verified manually via GET /vocabs/decks; script read a non-existent GET /v… |
+| SUB-PAY | free user create-payment | PASS | 200 {transactionId: 140c46c3-1fcc-40fc-9840-f84c8abd95bf, paymentUrl: https://sandb… |
+| SUB-02-97 | IPN bad signature -> 97 | PASS | tatus=00&vnp_TxnRef=140c46c3-1fcc-40fc-9840-f84c8abd95bf&vnp_SecureHash=0dc42f1ade1ae96747… |
+| SUB-02-04 | IPN wrong amount -> 04 | PASS | tatus=00&vnp_TxnRef=140c46c3-1fcc-40fc-9840-f84c8abd95bf&vnp_SecureHash=d595581db559d8e278… |
+| SUB-02-04-NOSUB | after wrong amount B still not premium | PASS | {"subscription":null,"isPremium":false} |
+| SUB-02-00 | IPN valid -> 00 | PASS | tatus=00&vnp_TxnRef=2210de1c-cb6f-441c-a16d-51622a9b5b6e&vnp_SecureHash=d108dd23b70cfd7541… |
+| SUB-02-02 | IPN replay -> 02 | PASS | tatus=00&vnp_TxnRef=2210de1c-cb6f-441c-a16d-51622a9b5b6e&vnp_SecureHash=25b0e9b82b62c20f8a… |
+| SUB-02-PREM | B premium after IPN | PASS | {"subscription":{"id":"d6541ab8-bc42-4984-ad4d-0adbbcb06cc2","planId":"plan-1month","pla… |
+| SUB-02-01 | IPN unknown txn -> 01 | PASS | tatus=00&vnp_TxnRef=445e8593-75cf-4045-b37f-7c8cf5050c61&vnp_SecureHash=d966258dd796742d9a… |
+| AUTH-03-LOGOUT | logout 200 | PASS | 200 {"message":"Logged out successfully"} |
+| AUTH-03-practice-stats | old token after logout /practice/stats -> 401 | PASS | 401 |
+| AUTH-03-vocabs-user-stats | old token after logout /vocabs/user/stats -> 401 | PASS | 401 |
+| AUTH-03-subscriptions-user | old token after logout /subscriptions/user -> 401 | PASS | 401 |
+| AUTH-03-auth-profile | old token after logout /auth/profile -> 401 | PASS | 401 |
+| AUTH-03-SVC | old token direct to vocabulary-service -> 401 | PASS | 401 |
+| FE- | frontend / -> 200 | PASS | 200 |
+| FE-login | frontend /login -> 200 | PASS | 200 |
+| FE-lessons | frontend /lessons -> 200 | PASS | 200 |
+| FE-404 | frontend unknown route -> 404 page | PASS | 404 |
+| T01-CONFIG | `docker-compose config -q` with updated .env | PASS | |
+| T01-PORTS | only host ports 3000/8000 published | PASS | |
+| T01-UP | `down -v` + `up -d --build`, fresh volume with .env DB passwords → 8 services healthy, frontend up | PASS | |
+| AUTH-JWT-ALG | (run 1) access tokens accepted by gateway | FIXED | every token rejected 401: auth signed HS512 (68-char JWT_SECRET) but GW accepts only HS256 → fixed in 3350240 |
+| SUB-04-EVICT | free user Pro card 403 → `premium:{id}` cached → activate code → key deleted → add Pro card 201 | PASS | |
+| VOC-07-FIELDS | review-queue item has exampleVi/partOfSpeech/audioUrl/imageUrl | PASS | |
+| X-03-GW | gateway image with empty / short JWT_SECRET exits 1 with FATAL log | PASS | |
+| X-06 | no `.keys(` in services/gateway sources | PASS | |
+| T06-VERIFY | `scripts/verify-fe.sh`: tsc, next lint (0 warnings), vitest 25/25 | PASS | |
+| AUTH-03-REFRESH | refresh token after logout rejected | FAIL | not an AC; see T02 notes (Medium) |
+| ERR-UUID | malformed UUID / unmapped route in content & vocabulary → 4xx | FAIL | `GET /content/lessons/abc`, `GET /vocabs/decks/xyz/cards`, `GET /vocabs/decks/{id}` → 500 (Low) |
+
