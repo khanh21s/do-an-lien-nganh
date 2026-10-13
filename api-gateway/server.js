@@ -25,7 +25,11 @@ app.set('trust proxy', 1);
 
 app.use(requestId);
 app.use(requestLogger);
-app.use(helmet());
+// Audio (lesson/sentence) and images are loaded by the frontend origin through <audio>/<img>
+// (no-cors requests). helmet's default `Cross-Origin-Resource-Policy: same-origin` makes the
+// browser block them (ERR_BLOCKED_BY_RESPONSE.NotSameOrigin) because FE and gateway are on
+// different origins, so allow cross-origin embedding; JSON reads stay protected by CORS.
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: FRONTEND_URL, credentials: true }));
 app.use(ipLimiter);
 

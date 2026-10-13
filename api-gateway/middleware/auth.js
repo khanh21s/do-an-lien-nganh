@@ -45,9 +45,9 @@ async function verifyToken(req, res, next) {
   return next();
 }
 
-/** Requires auth for every method except GET (used for browsable-but-admin-writable resources). */
+/** Requires auth for every method except safe ones (GET/HEAD/OPTIONS) — browsable-but-admin-writable resources. */
 function requireAuthForWrites(req, res, next) {
-  if (req.method === 'GET') {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
     return next();
   }
   return verifyToken(req, res, next);
