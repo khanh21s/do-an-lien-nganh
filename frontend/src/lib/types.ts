@@ -601,11 +601,6 @@ export interface CreatePersonalWordInput {
 // --- T14 additions ---
 // Admin console contract (docs/tasks.md "T14"), built in parallel with T14-AUTH/SUB/VOC.
 
-/** Flat page shape, accepted defensively in case a service returns `page/limit/total/totalPages` at the top level. */
-export interface FlatPageResponse<T> extends PageInfo {
-  data: T[];
-}
-
 export type AdminUserStatusFilter = 'all' | 'active' | 'locked';
 
 /** `AdminUserResponse` (auth-service). */

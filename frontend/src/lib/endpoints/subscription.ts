@@ -1,12 +1,10 @@
 import { api } from '@/lib/api';
-import { normalizePage } from '@/lib/page';
 import type {
   ActivationCode,
   AdminPlan,
   AdminPlanInput,
   AdminSubscriptionStats,
   AdminTransaction,
-  FlatPageResponse,
   ListAdminTransactionsParams,
   UpdateAdminPlanInput,
   UserPremiumStatus,
@@ -62,10 +60,8 @@ export const subscriptionApi = {
 
   adminListTransactions: (params: ListAdminTransactionsParams = {}) =>
     api
-      .get<PageResponse<AdminTransaction> | FlatPageResponse<AdminTransaction>>('/subscriptions/admin/transactions', {
-        params,
-      })
-      .then((r) => normalizePage(r.data)),
+      .get<PageResponse<AdminTransaction>>('/subscriptions/admin/transactions', { params })
+      .then((r) => r.data),
 
   adminStats: () => api.get<AdminSubscriptionStats>('/subscriptions/admin/stats').then((r) => r.data),
 

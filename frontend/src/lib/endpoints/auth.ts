@@ -1,11 +1,9 @@
 import { api } from '@/lib/api';
-import { normalizePage } from '@/lib/page';
 import type {
   AdminAuthStats,
   AdminUser,
   AuthResponse,
   ChangePasswordInput,
-  FlatPageResponse,
   ListAdminUsersParams,
   LoginInput,
   MessageResponse,
@@ -53,12 +51,12 @@ export const authApi = {
   /** Admin: users (admins included), `q` matches email, newest first. */
   adminListUsers: (params: ListAdminUsersParams = {}) =>
     api
-      .get<PageResponse<AdminUser> | FlatPageResponse<AdminUser>>('/auth/admin/users', { params })
-      .then((r) => normalizePage(r.data)),
+      .get<PageResponse<AdminUser>>('/auth/admin/users', { params })
+      .then((r) => r.data),
 
   adminGetUser: (id: string) => api.get<AdminUser>(`/auth/admin/users/${id}`).then((r) => r.data),
 
-  /** Admin: lock (`isActive=false`) or unlock a user. Admin accounts → 400. */
+  /** Admin: lock (`isActive=false`) or unlock a user. Locking an admin/self → 400; unlocking is allowed. */
   adminUpdateUser: (id: string, data: UpdateAdminUserInput) =>
     api.patch<AdminUser>(`/auth/admin/users/${id}`, data).then((r) => r.data),
 
