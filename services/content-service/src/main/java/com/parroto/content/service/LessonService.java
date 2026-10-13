@@ -6,15 +6,22 @@ import com.parroto.content.entity.Sentence;
 import com.parroto.content.exception.ApiException;
 import com.parroto.content.repository.LessonRepository;
 import com.parroto.content.repository.SentenceRepository;
+import com.parroto.content.service.storage.AudioFormats;
+import com.parroto.content.service.storage.LessonAudioStorage;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -27,14 +34,14 @@ public class LessonService {
     private final LessonRepository lessonRepository;
     private final SentenceRepository sentenceRepository;
     private final CacheService cacheService;
-    private final S3StorageService s3StorageService;
+    private final LessonAudioStorage audioStorage;
 
     public LessonService(LessonRepository lessonRepository, SentenceRepository sentenceRepository,
-                          CacheService cacheService, S3StorageService s3StorageService) {
+                          CacheService cacheService, LessonAudioStorage audioStorage) {
         this.lessonRepository = lessonRepository;
         this.sentenceRepository = sentenceRepository;
         this.cacheService = cacheService;
-        this.s3StorageService = s3StorageService;
+        this.audioStorage = audioStorage;
     }
 
     @Transactional(readOnly = true)
@@ -92,7 +99,7 @@ public class LessonService {
         // saveAndFlush (not save): the response DTO below reads @CreationTimestamp/@UpdateTimestamp
         // fields, which Hibernate only populates in-memory once the INSERT actually executes.
         lesson = lessonRepository.saveAndFlush(lesson);
-        invalidateListCache();
+        evictLessonCaches(lesson.getId());
         return LessonDetailResponse.from(lesson, List.of());
     }
 
@@ -104,8 +111,12 @@ public class LessonService {
                 throw ApiException.badRequest("Each sentence needs startMs >= 0 and startMs < endMs");
             }
         }
-        int order = sentenceRepository.findByLessonIdOrderBySentenceOrderAsc(lessonId).size() + 1;
-        List<Sentence> toSave = new java.util.ArrayList<>();
+        int order = sentenceRepository.findByLessonIdOrderBySentenceOrderAsc(lessonId).stream()
+                .map(Sentence::getSentenceOrder)
+                .filter(Objects::nonNull)
+                .max(Integer::compare)
+                .orElse(0) + 1;
+        List<Sentence> toSave = new ArrayList<>();
         for (SentenceInput input : request.sentences()) {
             toSave.add(Sentence.builder()
                     .lesson(lesson)
@@ -120,7 +131,7 @@ public class LessonService {
                     .build());
         }
         List<Sentence> saved = sentenceRepository.saveAll(toSave);
-        cacheService.invalidateByPattern("lesson:" + lessonId);
+        evictLessonCaches(lessonId);
         return saved.stream().map(SentenceResponse::from).collect(Collectors.toList());
     }
 
@@ -140,8 +151,7 @@ public class LessonService {
             lesson.setCefrLevel(request.cefrLevel());
         }
         lesson = lessonRepository.saveAndFlush(lesson);
-        invalidateListCache();
-        cacheService.invalidateByPattern("lesson:" + id);
+        evictLessonCaches(id);
         List<SentenceResponse> sentences = sentenceRepository.findByLessonIdOrderBySentenceOrderAsc(id).stream()
                 .map(SentenceResponse::from).collect(Collectors.toList());
         return LessonDetailResponse.from(lesson, sentences);
@@ -152,23 +162,98 @@ public class LessonService {
         Lesson lesson = findActiveLesson(id);
         lesson.setIsDeleted(true);
         lessonRepository.save(lesson);
-        invalidateListCache();
-        cacheService.invalidateByPattern("lesson:" + id);
+        evictLessonCaches(id);
+    }
+
+    /**
+     * ADM-03: partial update of a sentence that must belong to the lesson (otherwise 404).
+     * Changing {@code sentenceOrder} moves the sentence and renumbers the lesson 1..N.
+     */
+    @Transactional
+    public SentenceResponse updateSentence(UUID lessonId, UUID sentenceId, UpdateSentenceRequest request) {
+        findActiveLesson(lessonId);
+        List<Sentence> ordered = sentenceRepository.findByLessonIdOrderBySentenceOrderAsc(lessonId);
+        Sentence target = findInLesson(ordered, sentenceId);
+
+        if (request.text() != null) {
+            if (request.text().isBlank()) {
+                throw ApiException.badRequest("Nội dung câu không được để trống");
+            }
+            target.setText(request.text().trim());
+        }
+        if (request.ipa() != null) {
+            target.setIpa(blankToNull(request.ipa()));
+        }
+        if (request.translationVi() != null) {
+            target.setTranslationVi(blankToNull(request.translationVi()));
+        }
+        if (request.audioUrl() != null) {
+            target.setAudioUrl(blankToNull(request.audioUrl()));
+        }
+        if (request.imageUrl() != null) {
+            target.setImageUrl(blankToNull(request.imageUrl()));
+        }
+        Integer startMs = request.startMs() != null ? request.startMs() : target.getStartMs();
+        Integer endMs = request.endMs() != null ? request.endMs() : target.getEndMs();
+        if (startMs != null && endMs != null && startMs >= endMs) {
+            throw ApiException.badRequest("startMs phải nhỏ hơn endMs");
+        }
+        target.setStartMs(startMs);
+        target.setEndMs(endMs);
+
+        if (request.sentenceOrder() != null) {
+            sentenceRepository.saveAll(SentenceOrdering.move(ordered, target, request.sentenceOrder()));
+        } else {
+            sentenceRepository.save(target);
+        }
+        evictLessonCaches(lessonId);
+        return SentenceResponse.from(target);
+    }
+
+    /** ADM-03: deletes a sentence of the lesson and renumbers the remaining ones 1..N in the same transaction. */
+    @Transactional
+    public void deleteSentence(UUID lessonId, UUID sentenceId) {
+        findActiveLesson(lessonId);
+        List<Sentence> ordered = sentenceRepository.findByLessonIdOrderBySentenceOrderAsc(lessonId);
+        Sentence target = findInLesson(ordered, sentenceId);
+        sentenceRepository.delete(target);
+        sentenceRepository.flush();
+        sentenceRepository.saveAll(SentenceOrdering.without(ordered, target));
+        evictLessonCaches(lessonId);
     }
 
     @Transactional
-    public UploadAudioResponse uploadLessonAudio(UUID id, org.springframework.web.multipart.MultipartFile file, Integer duration) {
+    public UploadAudioResponse uploadLessonAudio(UUID id, MultipartFile file, Integer duration) {
+        AudioFormats.validateUpload(file);
+        if (duration != null && duration < 0) {
+            throw ApiException.badRequest("duration phải >= 0");
+        }
         Lesson lesson = findActiveLesson(id);
-        s3StorageService.deleteByUrl(lesson.getAudioUrl());
-        String url = s3StorageService.uploadAudio(file, "lessons/" + id);
+        String oldUrl = lesson.getAudioUrl();
+        String url = audioStorage.store(file, "lessons/" + id);
         lesson.setAudioUrl(url);
         if (duration != null) {
             lesson.setDuration(duration);
         }
         lessonRepository.save(lesson);
-        cacheService.invalidateByPattern("lesson:" + id);
-        invalidateListCache();
+        evictLessonCaches(id);
+        if (oldUrl != null && !oldUrl.equals(url)) {
+            // Remove the replaced file only once the new URL is committed.
+            afterCommit(() -> audioStorage.delete(oldUrl));
+        }
         return new UploadAudioResponse(url, lesson.getDuration());
+    }
+
+    /**
+     * LES-07: drops {@code lesson:{id}} and every {@code lessons:list:*} page (sentence counts, titles…).
+     * Search results are not cached, so there is no search key to evict. Runs after commit when a
+     * transaction is active so a concurrent read cannot re-cache pre-commit data.
+     */
+    public void evictLessonCaches(UUID lessonId) {
+        afterCommit(() -> {
+            cacheService.invalidateByPattern("lesson:" + lessonId);
+            cacheService.invalidateByPattern("lessons:list:*");
+        });
     }
 
     @Transactional(readOnly = true)
@@ -181,8 +266,24 @@ public class LessonService {
         return lesson;
     }
 
-    private void invalidateListCache() {
-        cacheService.invalidateByPattern("lessons:list:*");
+    private static Sentence findInLesson(List<Sentence> ordered, UUID sentenceId) {
+        return ordered.stream()
+                .filter(s -> sentenceId.equals(s.getId()))
+                .findFirst()
+                .orElseThrow(() -> ApiException.notFound("Không tìm thấy câu trong bài học"));
+    }
+
+    private static void afterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 
     private static String blankToNull(String s) {

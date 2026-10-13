@@ -62,6 +62,24 @@ public class LessonController {
         return ResponseEntity.status(HttpStatus.CREATED).body(lessonService.addSentences(id, request));
     }
 
+    @PutMapping("/{id}/sentences/{sentenceId}")
+    public ResponseEntity<SentenceResponse> updateSentence(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                           @PathVariable UUID id,
+                                                           @PathVariable UUID sentenceId,
+                                                           @Valid @RequestBody UpdateSentenceRequest request) {
+        adminGuard.requireAdmin(principal);
+        return ResponseEntity.ok(lessonService.updateSentence(id, sentenceId, request));
+    }
+
+    @DeleteMapping("/{id}/sentences/{sentenceId}")
+    public ResponseEntity<MessageResponse> deleteSentence(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                          @PathVariable UUID id,
+                                                          @PathVariable UUID sentenceId) {
+        adminGuard.requireAdmin(principal);
+        lessonService.deleteSentence(id, sentenceId);
+        return ResponseEntity.ok(new MessageResponse("Đã xoá câu"));
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<LessonDetailResponse> update(@AuthenticationPrincipal AuthenticatedUser principal,
                                                          @PathVariable UUID id,

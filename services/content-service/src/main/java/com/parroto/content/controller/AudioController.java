@@ -8,7 +8,7 @@ import com.parroto.content.repository.SentenceRepository;
 import com.parroto.content.security.AdminGuard;
 import com.parroto.content.security.AuthenticatedUser;
 import com.parroto.content.service.LessonService;
-import com.parroto.content.service.S3StorageService;
+import com.parroto.content.service.storage.LessonAudioStorage;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -22,27 +22,27 @@ public class AudioController {
 
     private final LessonService lessonService;
     private final SentenceRepository sentenceRepository;
-    private final S3StorageService s3StorageService;
+    private final LessonAudioStorage audioStorage;
     private final AdminGuard adminGuard;
 
     public AudioController(LessonService lessonService, SentenceRepository sentenceRepository,
-                            S3StorageService s3StorageService, AdminGuard adminGuard) {
+                            LessonAudioStorage audioStorage, AdminGuard adminGuard) {
         this.lessonService = lessonService;
         this.sentenceRepository = sentenceRepository;
-        this.s3StorageService = s3StorageService;
+        this.audioStorage = audioStorage;
         this.adminGuard = adminGuard;
     }
 
     @GetMapping("/lessons/{id}/audio")
     public void streamLessonAudio(@PathVariable UUID id, HttpServletRequest request, HttpServletResponse response) {
         Lesson lesson = lessonService.findActiveLesson(id);
-        s3StorageService.stream(lesson.getAudioUrl(), request.getHeader("Range"), response);
+        audioStorage.stream(lesson.getAudioUrl(), request.getHeader("Range"), response);
     }
 
     @GetMapping("/lessons/{id}/audio/download")
     public void downloadLessonAudio(@PathVariable UUID id, HttpServletResponse response) {
         Lesson lesson = lessonService.findActiveLesson(id);
-        s3StorageService.download(lesson.getAudioUrl(), response);
+        audioStorage.download(lesson.getAudioUrl(), response);
     }
 
     @PostMapping(value = "/lessons/{id}/upload-audio", consumes = "multipart/form-data")
@@ -61,6 +61,6 @@ public class AudioController {
         if (sentence.getAudioUrl() == null) {
             throw ApiException.notFound("Sentence has no dedicated audio file");
         }
-        s3StorageService.stream(sentence.getAudioUrl(), request.getHeader("Range"), response);
+        audioStorage.stream(sentence.getAudioUrl(), request.getHeader("Range"), response);
     }
 }
