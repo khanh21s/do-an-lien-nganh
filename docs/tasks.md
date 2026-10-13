@@ -585,7 +585,8 @@ Lỗi (error JSON chuẩn, thông điệp tiếng Việt):
 - [ ] Thành công → invalidate `learnedWordsAll`, `vocabStats`, `reviewQueue`.
 - [ ] tsc / lint / vitest xanh.
 
-**Status:** TODO
+**Status:** DONE
+**Review notes:** (orchestrator, 2026-10-13) BE `cb113e5` (mvn 45/45) + FE `5bb0931` (vitest 145/145, build OK) merged into dev/multi-agent. Migration applied to the running DB. API E2E via gateway 12/12 (create 201 custom=true, in learned + review queue, case/space duplicate 409, validation 400, PUT 200, other user PUT/DELETE 404, personal deck hidden from /vocabs/decks, no token 401, delete removes word). Browser E2E `e2e/tests/t13-notebook-add.spec.ts` 2/2 (notebook add/duplicate/edit; dictation click-word → prefilled modal → saved). Doc fix: `docker-compose exec -T` (snap) does not forward stdin, so the migration command now uses `docker exec -i`.
 **Review notes:**
 
 ## Bảng đối chiếu spec → task (kiểm tra phủ 82 mục)

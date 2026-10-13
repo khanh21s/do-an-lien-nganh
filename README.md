@@ -104,7 +104,7 @@ of an empty Postgres volume. Later schema changes ship as idempotent scripts in
 `scripts/migrations/` (safe to re-run); apply them in order, e.g. T13 (personal words in the
 notebook, `vocab_deck.owner_id`), then restart the service (`ddl-auto: validate` needs the column):
 ```bash
-docker-compose exec -T postgres psql -U parroto -d vocabulary_db < scripts/migrations/001_personal_vocab.sql
+docker exec -i parroto-postgres psql -U parroto -d vocabulary_db -v ON_ERROR_STOP=1 < scripts/migrations/001_personal_vocab.sql
 docker-compose restart vocabulary-service
 ```
 
