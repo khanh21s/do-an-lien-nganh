@@ -26,9 +26,12 @@ server:
   port: ${SERVER_PORT:8001}
 
 jwt:
-  secret: ${JWT_SECRET:dev_change_this_in_production_use_strong_random_key_minimum_32_chars}
+  secret: ${JWT_SECRET:}
   expiry-seconds: ${JWT_EXPIRY_SECONDS:3600}
   refresh-expiry-seconds: ${JWT_REFRESH_EXPIRY_SECONDS:604800}
+
+internal:
+  token: ${INTERNAL_TOKEN:}
 
 oauth:
   google:
