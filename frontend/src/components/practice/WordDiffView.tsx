@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { cleanClickedWord } from '@/components/vocab/addWordForm';
 import type { WordScore } from '@/lib/types';
 
 /**
@@ -10,12 +11,15 @@ export function WordDiffView({
   className,
   showLegend = true,
   hideWrong = false,
+  onWordClick,
 }: {
   words: WordScore[];
   className?: string;
   showLegend?: boolean;
   /** Mask wrong words (e.g. "•••") so the learner can retry without seeing the answer. */
   hideWrong?: boolean;
+  /** T13: makes every visible (unmasked) word a button, e.g. to add it to the notebook. */
+  onWordClick?: (word: string) => void;
 }) {
   if (!words?.length) return null;
   const sorted = words.slice().sort((a, b) => a.position - b.position);
@@ -24,21 +28,43 @@ export function WordDiffView({
   return (
     <div className={className}>
       <p className="flex flex-wrap gap-x-1.5 gap-y-2 text-lg leading-relaxed" aria-label="Kết quả từng từ">
-        {sorted.map((w) => (
-          <span
-            key={w.position}
-            className={clsx(
+        {sorted.map((w) => {
+          const masked = !w.isCorrect && hideWrong;
+          const label = w.expected || w.word;
+          const clickWord = onWordClick && !masked ? cleanClickedWord(label) : '';
+          const content = (
+            <>
+              {masked ? '•'.repeat(Math.min(8, Math.max(2, label.length))) : label}
+              {!w.isCorrect && <span className="sr-only"> (sai)</span>}
+            </>
+          );
+          const cls = clsx(
               'rounded px-1.5',
               w.isCorrect
                 ? 'bg-green-100 text-green-800'
                 : 'bg-red-100 text-red-800 underline decoration-red-400 decoration-wavy underline-offset-4'
-            )}
-            title={w.isCorrect ? 'Đúng' : hideWrong ? 'Sai' : `Sai – đáp án: ${w.expected || w.word}`}
-          >
-            {!w.isCorrect && hideWrong ? '•'.repeat(Math.min(8, Math.max(2, (w.expected || w.word).length))) : w.expected || w.word}
-            {!w.isCorrect && <span className="sr-only"> (sai)</span>}
-          </span>
-        ))}
+          );
+          const title = w.isCorrect ? 'Đúng' : hideWrong ? 'Sai' : `Sai – đáp án: ${label}`;
+          return clickWord ? (
+            <button
+              key={w.position}
+              type="button"
+              onClick={() => onWordClick?.(clickWord)}
+              aria-label={`Thêm '${clickWord}' vào sổ tay`}
+              title={`${title} · Bấm để thêm vào sổ tay`}
+              className={clsx(
+                cls,
+                'cursor-pointer transition-shadow hover:ring-2 hover:ring-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'
+              )}
+            >
+              {content}
+            </button>
+          ) : (
+            <span key={w.position} className={cls} title={title}>
+              {content}
+            </span>
+          );
+        })}
       </p>
       {showLegend && (
         <p className="mt-2 text-xs text-slate-500">
