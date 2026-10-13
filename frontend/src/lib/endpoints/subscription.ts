@@ -1,5 +1,16 @@
 import { api } from '@/lib/api';
-import type { CreatePaymentResult, PageResponse, Plan, Transaction, UserSubscription } from '@/lib/types';
+import type {
+  ActivationCode,
+  CreateActivationCodesInput,
+  CreateActivationCodesResult,
+  CreatePaymentResult,
+  ListActivationCodesParams,
+  PageParams,
+  PageResponse,
+  Plan,
+  Transaction,
+  UserSubscription,
+} from '@/lib/types';
 
 export const subscriptionApi = {
   listPlans: () => api.get<{ plans: Plan[] }>('/subscriptions/plans').then((r) => r.data.plans),
@@ -12,6 +23,19 @@ export const subscriptionApi = {
   activateCode: (code: string) =>
     api.post<UserSubscription>('/subscriptions/activate-code', { code }).then((r) => r.data),
 
-  getTransactions: (params: { page?: number; limit?: number } = {}) =>
+  getTransactions: (params: PageParams = {}) =>
     api.get<PageResponse<Transaction>>('/subscriptions/transactions', { params }).then((r) => r.data),
+
+  /** Admin (NEW): generate 1–500 codes for a plan. */
+  createActivationCodes: (data: CreateActivationCodesInput) =>
+    api.post<CreateActivationCodesResult>('/subscriptions/admin/activation-codes', data).then((r) => r.data),
+
+  /** Admin (NEW): `used` omitted → all codes. */
+  listActivationCodes: (params: ListActivationCodesParams = {}) =>
+    api
+      .get<PageResponse<ActivationCode>>('/subscriptions/admin/activation-codes', { params })
+      .then((r) => r.data),
+
+  // --- T12 additions ---
+  // --- end T12 ---
 };

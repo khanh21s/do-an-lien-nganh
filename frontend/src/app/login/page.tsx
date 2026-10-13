@@ -4,28 +4,50 @@ import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { FullPageSpinner } from '@/components/ui/Spinner';
+import { useNextPath } from '@/hooks/useNextPath';
 import { apiErrorMessage } from '@/lib/api';
 import { authApi } from '@/lib/endpoints/auth';
+import type { AuthResponse } from '@/lib/types';
 import { useAuthStore } from '@/store/auth-store';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FormEvent, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<FullPageSpinner />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const { next, rawNext } = useNextPath();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  const token = useAuthStore((s) => s.token);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // AUTH-05: already signed in → go straight to `next` (or /dashboard).
+  useEffect(() => {
+    if (hasHydrated && token) router.replace(next);
+  }, [hasHydrated, token, next, router]);
+
+  function onAuthenticated(res: AuthResponse) {
+    setAuth({ userId: res.userId, email: res.email, cefrLevel: res.cefrLevel }, res.token, res.refreshToken);
+    router.replace(next);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await authApi.login({ email, password });
-      setAuth({ userId: res.userId, email: res.email, cefrLevel: res.cefrLevel }, res.token, res.refreshToken);
-      router.replace('/dashboard');
+      onAuthenticated(await authApi.login({ email, password }));
     } catch (err) {
       toast.error(apiErrorMessage(err, 'Email hoặc mật khẩu không đúng.'));
     } finally {
@@ -35,13 +57,13 @@ export default function LoginPage() {
 
   async function handleGoogleToken(idToken: string) {
     try {
-      const res = await authApi.loginGoogle(idToken);
-      setAuth({ userId: res.userId, email: res.email, cefrLevel: res.cefrLevel }, res.token, res.refreshToken);
-      router.replace('/dashboard');
+      onAuthenticated(await authApi.loginGoogle(idToken));
     } catch (err) {
       toast.error(apiErrorMessage(err, 'Đăng nhập Google thất bại.'));
     }
   }
+
+  const registerHref = rawNext ? `/register?next=${encodeURIComponent(rawNext)}` : '/register';
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-brand-50 px-4">
@@ -52,6 +74,7 @@ export default function LoginPage() {
             type="email"
             label="Email"
             required
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="ban@example.com"
@@ -60,6 +83,7 @@ export default function LoginPage() {
             type="password"
             label="Mật khẩu"
             required
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
@@ -69,16 +93,12 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <div className="my-4 flex items-center gap-2 text-xs text-slate-400">
-          <div className="h-px flex-1 bg-slate-200" />
-          hoặc
-          <div className="h-px flex-1 bg-slate-200" />
-        </div>
-        <GoogleSignInButton onToken={handleGoogleToken} />
+        {/* AUTH-04: the button renders nothing when NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured. */}
+        <GoogleSignInButton onToken={handleGoogleToken} withDivider />
 
         <p className="mt-6 text-center text-sm text-slate-600">
           Chưa có tài khoản?{' '}
-          <Link href="/register" className="font-medium text-brand-600 hover:underline">
+          <Link href={registerHref} className="font-medium text-brand-600 hover:underline">
             Đăng ký
           </Link>
         </p>
