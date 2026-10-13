@@ -90,24 +90,83 @@ function cleanTyped(value: string | undefined): string {
   return (value ?? '').replace(/\s+/g, '');
 }
 
+// ASCII punctuation, exactly what the BE's `\p{Punct}` strips.
+const ASCII_PUNCT = /[!-/:-@[-`{-~]/g;
+
+/** How the BE splits a piece of text into graded words (ASCII punctuation → space). */
+export function beSplit(text: string): string[] {
+  return text.replace(ASCII_PUNCT, ' ').split(/\s+/).filter(Boolean);
+}
+
 /**
- * Builds `userInput` for Easy/Normal (DIC-06/DIC-08): pre-filled words + typed words, one token per
- * sentence word. Revealed or empty positions become `MISSING_WORD_TOKEN` (graded as wrong).
+ * Makes a typed word occupy exactly `parts` BE positions (e.g. "don't" is graded as "don" + "t"):
+ * missing parts are padded with `MISSING_WORD_TOKEN`, extra parts are glued onto the last one.
+ * This keeps every following word aligned with the reference.
+ */
+function alignToParts(typed: string, parts: number): string {
+  const got = beSplit(typed);
+  if (got.length === parts) return typed;
+  if (got.length === 0) return Array(parts).fill(MISSING_WORD_TOKEN).join(' ');
+  if (got.length < parts) return [...got, ...Array(parts - got.length).fill(MISSING_WORD_TOKEN)].join(' ');
+  return [...got.slice(0, parts - 1), got.slice(parts - 1).join('')].join(' ');
+}
+
+/**
+ * Builds `userInput` for Easy/Normal (DIC-06/DIC-08): the sentence with pre-filled words kept and
+ * blanks replaced by what was typed (punctuation chunks are sent verbatim so the BE sees the same
+ * word positions). Revealed or empty blanks become `MISSING_WORD_TOKEN` (graded as wrong).
+ * `mask`, `typed` and `revealed` are indexed by `DictationToken.wordIndex`.
  */
 export function composeUserInput(
-  words: readonly string[],
+  tokens: readonly DictationToken[],
   mask: readonly WordCell[],
   typed: readonly (string | undefined)[],
   revealed: ReadonlySet<number>
 ): string {
-  return words
-    .map((word, i) => {
-      if (mask[i] === 'prefilled') return word;
-      if (revealed.has(i)) return MISSING_WORD_TOKEN;
-      const value = cleanTyped(typed[i]);
-      return value || MISSING_WORD_TOKEN;
+  return tokens
+    .map((t) => {
+      if (t.wordIndex < 0) return t.prefix;
+      const i = t.wordIndex;
+      let core: string;
+      if (mask[i] === 'prefilled') {
+        core = t.word;
+      } else {
+        const parts = Math.max(1, beSplit(t.word).length);
+        const value = revealed.has(i) ? '' : cleanTyped(typed[i]);
+        core = alignToParts(value, parts);
+      }
+      return `${t.prefix}${core}${t.suffix}`;
     })
     .join(' ');
+}
+
+/**
+ * BE word positions covered by each sentence word (indexed by `wordIndex`), used to colour the
+ * blanks after grading: "well-known," → two positions, "—" → its own position, "..." → none.
+ */
+export function bePositionsByWord(tokens: readonly DictationToken[]): number[][] {
+  const out: number[][] = [];
+  let p = 0;
+  for (const t of tokens) {
+    const count = beSplit(`${t.prefix}${t.word}${t.suffix}`).length;
+    if (t.wordIndex >= 0) out[t.wordIndex] = Array.from({ length: count }, (_, k) => p + k);
+    p += count;
+  }
+  return out;
+}
+
+/** Per-word correctness from the BE `wordScores` (`null` when unknown). */
+export function wordCorrectness(
+  tokens: readonly DictationToken[],
+  wordScores: readonly { position: number; isCorrect: boolean }[]
+): (boolean | null)[] {
+  const byPos = new Map(wordScores.map((w) => [w.position, w.isCorrect]));
+  return bePositionsByWord(tokens).map((positions) => {
+    if (!positions.length) return null;
+    const flags = positions.map((pos) => byPos.get(pos));
+    if (flags.some((f) => f === undefined)) return null;
+    return flags.every(Boolean);
+  });
 }
 
 /** Splits free text (Hard mode textarea) into word tokens. */

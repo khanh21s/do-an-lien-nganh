@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MISSING_WORD_TOKEN,
+  bePositionsByWord,
   blankMask,
   composeHardInput,
   composeUserInput,
@@ -11,6 +12,7 @@ import {
   scoreLabel,
   tokenize,
   unrevealedBlanks,
+  wordCorrectness,
   wordsOf,
 } from './dictation';
 
@@ -79,12 +81,13 @@ describe('blankMask', () => {
 });
 
 describe('composeUserInput', () => {
-  const words = wordsOf(tokenize(TEN));
+  const tokens = tokenize(TEN);
+  const words = wordsOf(tokens);
 
   it('Easy, all blanks correct → equals the sentence (ignoring case and punctuation)', () => {
     const mask = blankMask(words.length, 'Easy');
     const typed = words.map((w, i) => (mask[i] === 'blank' ? w.toUpperCase() : ''));
-    const input = composeUserInput(words, mask, typed, new Set());
+    const input = composeUserInput(tokens, mask, typed, new Set());
     expect(beNormalize(input)).toEqual(beNormalize(TEN));
   });
 
@@ -92,21 +95,51 @@ describe('composeUserInput', () => {
     const mask = blankMask(words.length, 'Normal');
     const typed = [...words];
     typed[2] = '';
-    const input = composeUserInput(words, mask, typed, new Set([1]));
+    const input = composeUserInput(tokens, mask, typed, new Set([1]));
     const sent = beNormalize(input);
     expect(sent).toHaveLength(words.length);
-    expect(sent[1]).toBe(MISSING_WORD_TOKEN.toLowerCase());
-    expect(sent[2]).toBe(MISSING_WORD_TOKEN.toLowerCase());
+    expect(sent[1]).toBe(MISSING_WORD_TOKEN);
+    expect(sent[2]).toBe(MISSING_WORD_TOKEN);
     expect(sent[3]).toBe('travel');
   });
 
   it('strips whitespace typed inside a box', () => {
-    const mask = blankMask(2, 'Hard');
-    expect(composeUserInput(['a', 'b'], mask, [' a ', 'b c'], new Set())).toBe('a bc');
+    const t = tokenize('a b');
+    expect(composeUserInput(t, blankMask(2, 'Hard'), [' a ', 'b c'], new Set())).toBe('a bc');
+  });
+
+  it('keeps BE positions aligned for apostrophes, dashes and curly quotes', () => {
+    const text = '“Don’t” we — well-known people, don\'t go!';
+    const t = tokenize(text);
+    const w = wordsOf(t);
+    const mask = blankMask(w.length, 'Hard');
+    // User drops the apostrophes and hyphen: every following word must stay aligned.
+    const typed = ['Don’t', 'we', 'wellknown', 'people', 'dont', 'go'];
+    const sent = beNormalize(composeUserInput(t, mask, typed, new Set()));
+    const ref = beNormalize(text);
+    expect(sent).toHaveLength(ref.length);
+    expect(sent[sent.length - 1]).toBe('go');
+    expect(sent[0]).toBe(ref[0]);
   });
 
   it('placeholder survives BE punctuation stripping', () => {
     expect(beNormalize(MISSING_WORD_TOKEN)).toEqual([MISSING_WORD_TOKEN]);
+  });
+});
+
+describe('wordCorrectness', () => {
+  it('maps BE positions back to sentence words', () => {
+    const t = tokenize('Well-known — people, go!');
+    expect(bePositionsByWord(t)).toEqual([[0, 1], [3], [4]]);
+    const scores = [
+      { position: 0, isCorrect: true },
+      { position: 1, isCorrect: false },
+      { position: 2, isCorrect: true },
+      { position: 3, isCorrect: true },
+      { position: 4, isCorrect: true },
+    ];
+    expect(wordCorrectness(t, scores)).toEqual([false, true, true]);
+    expect(wordCorrectness(t, [])).toEqual([null, null, null]);
   });
 });
 
