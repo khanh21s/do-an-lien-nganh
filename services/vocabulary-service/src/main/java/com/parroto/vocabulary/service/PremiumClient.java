@@ -37,7 +37,7 @@ public class PremiumClient {
     public PremiumClient(RestTemplate restTemplate,
                           @Value("${services.subscription-service-url}") String subscriptionServiceUrl,
                           CacheService cacheService,
-                          @Value("${internal.token:}") String internalToken) {
+                          @Value("${internal.token}") String internalToken) {
         this.restTemplate = restTemplate;
         this.subscriptionServiceUrl = subscriptionServiceUrl;
         this.cacheService = cacheService;

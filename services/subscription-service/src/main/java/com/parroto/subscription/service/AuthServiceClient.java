@@ -32,7 +32,7 @@ public class AuthServiceClient {
 
     public AuthServiceClient(RestTemplate restTemplate,
                               @Value("${services.auth-service-url}") String authServiceUrl,
-                              @Value("${internal.token:}") String internalToken) {
+                              @Value("${internal.token}") String internalToken) {
         this.restTemplate = restTemplate;
         this.authServiceUrl = authServiceUrl;
         this.internalToken = internalToken;
