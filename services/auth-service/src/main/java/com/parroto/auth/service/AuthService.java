@@ -18,6 +18,8 @@ import java.util.UUID;
 @Service
 public class AuthService {
 
+    public static final String ACCOUNT_LOCKED = "Tài khoản đã bị khoá";
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -61,9 +63,7 @@ public class AuthService {
         if (user.getPasswordHash() == null || !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             throw ApiException.unauthorized("Invalid email or password");
         }
-        if (!Boolean.TRUE.equals(user.getIsActive())) {
-            throw ApiException.unauthorized("Account has been deactivated");
-        }
+        ensureNotLocked(user);
         user.setLastLoginAt(OffsetDateTime.now());
         userRepository.save(user);
         return issueTokens(user);
@@ -78,6 +78,7 @@ public class AuthService {
                         .authProvider("google")
                         .cefrLevel("B1")
                         .build()));
+        ensureNotLocked(user);
         user.setLastLoginAt(OffsetDateTime.now());
         userRepository.save(user);
         return issueTokens(user);
@@ -95,6 +96,7 @@ public class AuthService {
                         .authProvider("apple")
                         .cefrLevel("B1")
                         .build()));
+        ensureNotLocked(user);
         user.setLastLoginAt(OffsetDateTime.now());
         userRepository.save(user);
         return issueTokens(user);
@@ -116,6 +118,8 @@ public class AuthService {
         }
         User user = userRepository.findById(UUID.fromString(claims.getSubject()))
                 .orElseThrow(() -> ApiException.unauthorized("User no longer exists"));
+        // T14: a locked account cannot obtain new tokens (its current access token simply expires, <= 1h).
+        ensureNotLocked(user);
         // Rotation: the old refresh token is immediately revoked once used.
         blacklistService.blacklist(claims.getId(), jwtService.remainingTtlSeconds(claims));
         return issueTokens(user);
@@ -155,6 +159,17 @@ public class AuthService {
             return jwtService.parse(token);
         } catch (JwtException e) {
             return null;
+        }
+    }
+
+    /**
+     * T14: locked (is_active = false, set by an admin or by self-deactivation) accounts get 403 on login
+     * (password, Google, Apple) and on refresh-token. Checked after credentials, so the lock state is not
+     * revealed to someone who does not know the password.
+     */
+    static void ensureNotLocked(User user) {
+        if (!Boolean.TRUE.equals(user.getIsActive())) {
+            throw ApiException.forbidden(ACCOUNT_LOCKED);
         }
     }
 
