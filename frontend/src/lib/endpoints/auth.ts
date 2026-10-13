@@ -23,7 +23,11 @@ export const authApi = {
   refreshToken: (refreshToken: string) =>
     api.post<AuthResponse>('/auth/refresh-token', { refreshToken }).then((r) => r.data),
 
-  logout: () => api.post<MessageResponse>('/auth/logout').then((r) => r.data),
+  /** Revokes the access token (Bearer) and, when given, the refresh token too. */
+  logout: (refreshToken?: string | null) =>
+    api
+      .post<MessageResponse>('/auth/logout', refreshToken ? { refreshToken } : undefined)
+      .then((r) => r.data),
 
   getProfile: () => api.get<ProfileResponse>('/auth/profile').then((r) => r.data),
 

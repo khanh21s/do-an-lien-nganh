@@ -22,7 +22,8 @@ export function useLogout() {
   const logout = useCallback(async () => {
     setLoggingOut(true);
     try {
-      await authApi.logout();
+      // Send the stored refresh token so the server revokes it as well.
+      await authApi.logout(useAuthStore.getState().refreshToken);
     } catch {
       // ignore: local state is cleared regardless
     } finally {
