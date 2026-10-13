@@ -1,12 +1,12 @@
 # Hướng dẫn chạy dự án Parroto
 
-Tài liệu này hướng dẫn từng bước để chạy toàn bộ hệ thống Parroto (5 microservice backend + API Gateway + frontend) trên máy local bằng Docker.
+Tài liệu này hướng dẫn từng bước để chạy toàn bộ hệ thống Parroto (5 microservice backend + API Gateway + frontend) trên máy local bằng Docker. Hệ thống chạy được trọn vẹn ở **chế độ demo (mock)** — không cần key AWS, Azure, Google hay VNPay.
 
 ## 1. Yêu cầu hệ thống
 
-- **Docker Desktop** (đã bật Docker Compose v2) — https://www.docker.com/products/docker-desktop
+- **Docker** + Docker Compose (`docker-compose` hoặc `docker compose`) — https://www.docker.com/products/docker-desktop
 - Tối thiểu **4GB RAM** dành cho Docker (khuyến nghị 6-8GB vì có 5 service Java + Postgres + Redis + Node)
-- Cổng trống trên máy: `3000`, `5432`, `6379`, `8000`, `8001`-`8005`
+- Cổng trống trên máy: `3000` (frontend) và `8000` (API Gateway). Các cổng khác chỉ dùng bên trong mạng Docker.
 - (Chỉ cần nếu muốn chạy frontend riêng ở chế độ dev, không bắt buộc) **Node.js 20+**
 
 Không cần cài Java hay Maven — quá trình build chạy hoàn toàn bên trong Docker.
@@ -27,28 +27,40 @@ Sao chép file mẫu:
 cp .env.example .env
 ```
 
-Mặc định `.env` đã chạy được ngay (JWT, database, admin email đều có giá trị sẵn). Các tích hợp ngoài sau đây **không bắt buộc** để chạy thử — nếu để trống, tính năng liên quan sẽ báo lỗi rõ ràng (503/502) khi được gọi, còn lại toàn bộ hệ thống vẫn hoạt động bình thường:
+**Bắt buộc** — hai biến bí mật sau không có giá trị mặc định trong `docker-compose.yml`. File mẫu có sẵn giá trị *chỉ dùng cho dev*; hãy thay bằng chuỗi ngẫu nhiên của bạn:
+
+| Biến | Yêu cầu | Lệnh tạo |
+|---|---|---|
+| `JWT_SECRET` | ≥ 32 ký tự, dùng chung cho gateway + 5 service | `openssl rand -base64 48` |
+| `INTERNAL_TOKEN` | ≥ 32 ký tự, xác thực gọi nội bộ giữa các service (`/internal/**`) | `openssl rand -hex 32` |
+
+Thiếu một trong hai biến này, `docker-compose` sẽ dừng ngay với thông báo rõ ràng, ví dụ:
+`required variable JWT_SECRET is missing a value: JWT_SECRET is required ...`
+
+Các tích hợp ngoài sau đây **không bắt buộc** — để trống thì hệ thống tự chuyển sang chế độ mock hoặc tắt tính năng đó:
 
 | Biến | Tính năng liên quan | Nếu để trống |
 |---|---|---|
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Đăng nhập Google | Nút "Đăng nhập Google" tự ẩn trên frontend |
-| `APPLE_CLIENT_ID` / `APPLE_CLIENT_SECRET` | Đăng nhập Apple | Bỏ qua |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` + phần S3 | Upload/phát audio bài học, ghi âm Shadowing | Lỗi khi tải/phát audio |
-| `AZURE_SPEECH_KEY` / `AZURE_SPEECH_REGION` | Chấm điểm phát âm Shadowing | Lỗi khi nộp bài Shadowing |
-| `VNPAY_API_KEY` / `VNPAY_SECRET` / `VNPAY_MERCHANT_ID` | Thanh toán VNPay | Không tạo được link thanh toán thật (vẫn dùng được "Kích hoạt bằng mã") |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Lưu audio bài học, bản ghi Shadowing | **Chế độ mock**: lưu file local trong volume `media_data` |
+| `AZURE_SPEECH_KEY` / `AZURE_SPEECH_REGION` | Chấm phát âm Shadowing | **Chế độ mock**: điểm mô phỏng (badge "Chế độ demo – điểm mô phỏng") |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Đăng nhập Google | Nút "Đăng nhập Google" tự ẩn; API trả 503 "chưa cấu hình" |
+| `APPLE_CLIENT_ID` | Đăng nhập Apple | API trả 503 "chưa cấu hình" |
+| `VNPAY_API_KEY` / `VNPAY_SECRET` / `VNPAY_MERCHANT_ID` | Thanh toán VNPay | Không thanh toán thật được (vẫn dùng được "Kích hoạt bằng mã") |
 | `MAIL_HOST` / `MAIL_USERNAME` / `MAIL_PASSWORD` | Gửi email | Bỏ qua, chỉ ghi log |
 
-Nếu chỉ muốn chạy thử các luồng chính (đăng ký, học Dictation, ôn từ vựng, xem gói Premium), **không cần chỉnh gì thêm** trong `.env`.
+Chọn chế độ tường minh (tuỳ chọn): `STORAGE_PROVIDER=auto|s3|local`, `SPEECH_PROVIDER=auto|azure|mock` (mặc định `auto`: có key thì dùng dịch vụ thật, không có thì mock). Ép `s3`/`azure` mà thiếu key → service dừng khi khởi động kèm log rõ ràng.
 
 > ⚠️ Biến `VNPAY_RETURN_URL` phải trỏ về `http://localhost:8000/subscriptions/payment-callback` (đúng là API Gateway, **không phải** một trang frontend) — giá trị này đã được cấu hình sẵn, không sửa nếu không chắc chắn.
+
+> Mật khẩu database của từng service (`AUTH_DB_PASSWORD`, `CONTENT_DB_PASSWORD`, …) được script `initdb/00-roles.sh` dùng để tạo role ở **lần khởi động đầu tiên** (volume Postgres còn trống). Muốn đổi sau đó: `docker-compose down -v` rồi chạy lại (mất dữ liệu), hoặc tự `ALTER ROLE ... PASSWORD` trong psql.
 
 ## 4. Khởi động toàn bộ hệ thống
 
 ```bash
-docker-compose up -d
+docker-compose up -d --build
 ```
 
-Lần đầu chạy sẽ build 6 image (5 service Java + frontend) và tải 2 image có sẵn (Postgres, Redis) — mất khoảng **5-10 phút** tuỳ máy. Các lần sau sẽ nhanh hơn nhiều nhờ cache.
+Lần đầu chạy sẽ build 7 image (5 service Java + gateway + frontend) và tải 2 image có sẵn (Postgres, Redis) — mất khoảng **5-10 phút** tuỳ máy. Các lần sau sẽ nhanh hơn nhiều nhờ cache.
 
 Theo dõi tiến trình khởi động:
 
@@ -81,9 +93,10 @@ docker-compose logs -f
 
 ```bash
 curl http://localhost:8000/health
+curl http://localhost:8000/subscriptions/plans     # 3 gói: 79.000đ / 169.000đ / 499.000đ
 ```
 
-Kết quả mong đợi: `{"status":"OK","timestamp":"..."}`
+Kết quả mong đợi cho `/health`: `{"status":"OK","timestamp":"..."}`
 
 ## 6. Truy cập ứng dụng
 
@@ -93,28 +106,34 @@ Mở trình duyệt tại:
 
 Từ đây có thể:
 1. Bấm **Đăng ký** → tạo tài khoản mới (email bất kỳ, mật khẩu tối thiểu 8 ký tự)
-2. Vào **Bài học** để xem 5 bài học mẫu có sẵn (A1-B2, đủ câu + IPA + dịch tiếng Việt — dữ liệu mẫu nằm trong `init-db.sql`, phần "SEED DATA")
-3. Thử **Dictation** trên một câu bất kỳ — chấm điểm hoạt động đầy đủ ngay cả khi chưa cấu hình audio thật
-4. Vào **Bộ từ vựng** để xem 3 bộ từ mẫu (giao tiếp, du lịch, công việc) → thêm từ vào sổ tay → **Ôn tập từ vựng** để thử thuật toán SM-2
-5. Vào **Gói Premium** để xem danh sách gói (thanh toán VNPay cần cấu hình thật ở bước 3 mới hoạt động đầy đủ)
+2. Vào **Bài học** để xem 5 bài học mẫu (A1-B2, đủ câu + IPA + dịch tiếng Việt) — **có audio thật** (giọng đọc tổng hợp TTS, file trong `media/seed/`)
+3. Thử **Dictation** và **Shadowing** trên một câu bất kỳ (Shadowing chấm bằng Azure nếu có key, nếu không thì điểm mô phỏng)
+4. Vào **Bộ từ vựng** để xem 3 bộ từ mẫu (giao tiếp, du lịch, công việc – bộ thứ ba chỉ dành cho Pro) → thêm từ vào sổ tay → **Ôn tập từ vựng** để thử thuật toán SM-2
+5. Vào **Gói Premium** để xem 3 gói (1 tháng 79.000đ, 3 tháng 169.000đ, 1 năm 499.000đ) và kích hoạt Premium bằng mã demo bên dưới
+
+### Mã kích hoạt demo
+
+Mỗi mã dùng được **một lần**, hạn đến 31/12/2027:
+
+| Mã | Gói |
+|---|---|
+| `PROMO-DEMO1-MONTH` | 1 tháng Premium |
+| `PROMO-DEMO3-MONTH` | 3 tháng Premium |
+| `PROMO-DEMOY-EARLY` | 1 năm Premium |
+
+Dùng hết mã thì reset dữ liệu (`docker-compose down -v && docker-compose up -d`) hoặc tạo thêm mã ở trang Admin `/admin/activation-codes`.
 
 ### Tài khoản Admin
 
-Để thử các trang quản trị (`/admin/lessons`, `/admin/vocabulary`), đăng ký một tài khoản bằng đúng email đã khai trong `ADMIN_EMAILS` của `.env` (mặc định là `admin@parroto.com`). Tài khoản này sẽ tự động có quyền tạo/sửa/xoá bài học và bộ từ vựng — không cần cấu hình gì thêm.
+Quyền admin được xác định bằng biến `ADMIN_EMAILS` trong `.env` (danh sách email, cách nhau bằng dấu phẩy; mặc định `admin@parroto.com`). Không có tài khoản admin seed sẵn — chỉ cần **đăng ký** tài khoản với email `admin@parroto.com` (mật khẩu tuỳ ý) tại http://localhost:3000/register. Sau khi đăng nhập, menu **Quản trị** (bài học, từ vựng, mã kích hoạt) sẽ xuất hiện.
 
-### Những phần cần API key thật mới hoạt động đầy đủ
-
-Với `.env` mặc định (chưa điền API key thật), các phần sau **sẽ báo lỗi khi thử — đây là điều bình thường, không phải lỗi hệ thống**:
-
-| Tính năng | Vì sao chưa chạy được | Cần cấu hình |
-|---|---|---|
-| Nghe audio bài học/câu | Audio được lưu trữ và stream qua AWS S3 thật | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, bucket S3 thật |
-| Shadowing (ghi âm + chấm phát âm) | Cần upload bản ghi lên S3 rồi gọi Azure Speech để chấm điểm | Cả AWS S3 lẫn `AZURE_SPEECH_KEY` |
-| Đăng nhập Google/Apple | Cần Client ID thật từ Google/Apple Console | `GOOGLE_CLIENT_ID`, `APPLE_CLIENT_ID` (nút đăng nhập Google sẽ tự ẩn nếu chưa cấu hình) |
-| Thanh toán VNPay (nút "Thanh toán qua VNPay") | Cần tài khoản merchant VNPay sandbox thật | `VNPAY_MERCHANT_ID`, `VNPAY_SECRET` |
-| Gửi email (quên mật khẩu, thông báo) | Cần SMTP thật | `MAIL_HOST`, `MAIL_USERNAME`, `MAIL_PASSWORD` |
-
-Các tính năng **không** phụ thuộc API ngoài, chạy đầy đủ ngay từ đầu: đăng ký/đăng nhập email-password, Dictation (chấm điểm text), toàn bộ luồng Từ vựng SRS, quản trị bài học/từ vựng (Admin), xem gói Premium, kích hoạt Premium bằng mã (`activate-code`, không qua VNPay).
+Thêm admin khác:
+```bash
+# trong .env
+ADMIN_EMAILS=admin@parroto.com,giaovien@example.com
+# áp dụng lại cấu hình
+docker-compose up -d
+```
 
 ## 7. Các lệnh thường dùng
 
@@ -129,7 +148,7 @@ docker-compose up -d --build vocabulary-service
 # Dừng toàn bộ hệ thống (giữ lại dữ liệu database)
 docker-compose down
 
-# Dừng và xoá luôn dữ liệu database/redis (reset sạch)
+# Dừng và xoá luôn dữ liệu database/redis/media (reset sạch)
 docker-compose down -v
 
 # Truy cập trực tiếp Postgres
@@ -138,7 +157,53 @@ docker-compose exec postgres psql -U parroto -d auth_db
 
 # Truy cập Redis CLI
 docker-compose exec redis redis-cli
+
+# Kiểm tra code (chạy trong Docker, không cần Node/Maven trên máy)
+scripts/verify-fe.sh                     # frontend: tsc, lint, vitest
+scripts/verify-gw.sh                     # API gateway
+scripts/verify-java.sh content-service   # một service Java (bỏ tham số = cả 5)
 ```
+
+### Mở cổng nội bộ khi cần debug
+
+Mặc định chỉ cổng `3000` và `8000` được mở ra máy host. Muốn gọi thẳng service (8001–8005), Postgres (5432) hay Redis (6379) từ máy mình:
+
+```bash
+cp docker-compose.override.yml.example docker-compose.override.yml   # file này bị git ignore
+docker-compose up -d
+```
+
+Các cổng chỉ bind vào `127.0.0.1`. Không dùng file override này khi triển khai thật.
+
+### Chuẩn hoá điểm cũ > 100
+
+Từ Phase 1, điểm luyện tập luôn nằm trong 0–100. Nếu database đã có dữ liệu cũ với điểm > 100, chạy một lần (thủ công):
+
+```bash
+docker-compose exec postgres psql -U parroto -d practice_db \
+  -c "UPDATE practice_attempt SET score = LEAST(score, 100) WHERE score > 100;"
+```
+
+### Thử IPN của VNPay trên máy local
+
+VNPay không gọi được `localhost`, nên dùng script giả lập request IPN có chữ ký HMAC-SHA512 (cùng thuật toán với service, khoá `VNPAY_SECRET` trong `.env` — giá trị mẫu là đủ):
+
+```bash
+# 1. Đăng nhập, tạo giao dịch -> lấy "transactionId"
+curl -s -X POST http://localhost:8000/subscriptions/create-payment \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"planId":"plan-1month"}'
+
+# 2. Gửi IPN có chữ ký
+scripts/vnpay-ipn-test.sh <transactionId> 79000                 # RspCode 00 -> kích hoạt Premium
+scripts/vnpay-ipn-test.sh <transactionId> 79000                 # gọi lại -> RspCode 02 (đã xử lý)
+scripts/vnpay-ipn-test.sh <transactionIdKhac> 1000              # sai số tiền -> RspCode 04, giao dịch failed
+BAD_SIGNATURE=1 scripts/vnpay-ipn-test.sh <transactionId> 79000 # sai chữ ký -> RspCode 97
+```
+
+### Redis và danh sách token đã đăng xuất (fail-open)
+
+Khi đăng xuất, token được đưa vào blacklist trên Redis và bị từ chối ở gateway + các service. Nếu Redis ngừng hoạt động, bước kiểm tra blacklist được **bỏ qua** (ghi log `WARN`) để hệ thống vẫn chạy — token đã đăng xuất có thể dùng tiếp đến khi hết hạn. Đây là đánh đổi có chủ đích cho bản demo. Các service Java dùng timeout Redis 2 giây (`REDIS_TIMEOUT`) để không bị treo khi Redis chậm.
 
 ## 8. Chạy frontend riêng ở chế độ dev (hot reload)
 
@@ -161,24 +226,27 @@ Frontend sẽ chạy tại `http://localhost:3000` với hot reload, vẫn gọi
 
 ## 9. Xử lý sự cố thường gặp
 
+**`docker-compose` báo `required variable JWT_SECRET (hoặc INTERNAL_TOKEN) is missing a value`:**
+Chưa có file `.env` hoặc thiếu biến — xem mục 3.
+
 **Container báo `unhealthy` mãi không lên:**
 ```bash
 docker-compose logs <tên-service>
 ```
-Kiểm tra dòng lỗi cuối cùng — thường do Postgres chưa sẵn sàng khi service khởi động (đợi thêm) hoặc sai mật khẩu database trong `.env`.
+Kiểm tra dòng lỗi cuối cùng — thường do Postgres chưa sẵn sàng khi service khởi động (đợi thêm), `JWT_SECRET`/`INTERNAL_TOKEN` ngắn hơn 32 ký tự, hoặc mật khẩu database trong `.env` đã đổi sau khi volume Postgres được tạo (xem lưu ý ở mục 3).
 
 **Lỗi `port is already allocated`:**
-Một chương trình khác đang dùng cổng đó. Tắt chương trình đó, hoặc đổi mapping cổng trong `docker-compose.yml` (ví dụ `"3001:3000"` cho frontend).
+Một chương trình khác đang dùng cổng `3000` hoặc `8000`. Tắt chương trình đó, hoặc đổi mapping cổng trong `docker-compose.yml` (ví dụ `"3001:3000"` cho frontend).
 
 **Muốn reset toàn bộ dữ liệu về ban đầu:**
 ```bash
 docker-compose down -v
 docker-compose up -d
 ```
-Lệnh `down -v` xoá cả volume Postgres/Redis, lần `up -d` tiếp theo sẽ chạy lại `init-db.sql` (kèm dữ liệu mẫu) từ đầu.
+Lệnh `down -v` xoá cả volume Postgres/Redis/media, lần `up -d` tiếp theo sẽ chạy lại `initdb/00-roles.sh` + `init-db.sql` (kèm dữ liệu mẫu) từ đầu.
 
-**Danh sách bài học/bộ từ vựng trống hoặc thiếu dữ liệu mẫu:**
-Chỉ xảy ra nếu bạn đã chạy `docker-compose up` từ **trước** khi dữ liệu mẫu được thêm vào `init-db.sql` — vì Postgres chỉ chạy file khởi tạo này **một lần duy nhất** (lúc volume `postgres_data` còn trống). Reset lại bằng lệnh ở mục trên (`down -v` rồi `up -d`) để dữ liệu mẫu được nạp lại.
+**Danh sách bài học/bộ từ vựng trống, giá gói cũ hoặc audio bài mẫu không phát:**
+Postgres chỉ chạy script khởi tạo **một lần duy nhất** (lúc volume `postgres_data` còn trống). Nếu volume được tạo từ phiên bản cũ, reset lại bằng lệnh ở mục trên (`down -v` rồi `up -d`).
 
 **Sửa code Java nhưng chạy `docker-compose up -d` không thấy thay đổi:**
 Phải thêm cờ `--build` để Docker build lại image:
@@ -191,16 +259,16 @@ Kiểm tra `NEXT_PUBLIC_API_URL` trỏ đúng `http://localhost:8000` (không ph
 
 ## 10. Tổng quan cổng dịch vụ
 
-| Service | Cổng | Ghi chú |
+| Service | Cổng | Mở ra máy host? |
 |---|---|---|
-| Frontend | 3000 | Next.js, giao diện chính |
-| API Gateway | 8000 | Điểm vào duy nhất cho frontend |
-| auth-service | 8001 | Có thể gọi thẳng để debug |
-| content-service | 8002 | |
-| practice-service | 8003 | |
-| vocabulary-service | 8004 | |
-| subscription-service | 8005 | |
-| PostgreSQL | 5432 | |
-| Redis | 6379 | |
+| Frontend | 3000 | Có — giao diện chính |
+| API Gateway | 8000 | Có — điểm vào duy nhất cho frontend |
+| auth-service | 8001 | Không (chỉ khi dùng `docker-compose.override.yml`) |
+| content-service | 8002 | Không (như trên) |
+| practice-service | 8003 | Không (như trên) |
+| vocabulary-service | 8004 | Không (như trên) |
+| subscription-service | 8005 | Không (như trên) |
+| PostgreSQL | 5432 | Không (như trên) |
+| Redis | 6379 | Không (như trên) |
 
-Xem thêm kiến trúc tổng thể và danh sách tính năng đã hoàn thiện tại [README.md](README.md).
+Xem thêm kiến trúc tổng thể và danh sách tính năng tại [README.md](README.md).
