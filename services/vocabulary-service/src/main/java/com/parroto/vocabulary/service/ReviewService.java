@@ -23,12 +23,14 @@ public class ReviewService {
     private final UserVocabRepository userVocabRepository;
     private final VocabCardRepository cardRepository;
     private final SM2Calculator sm2Calculator;
+    private final PremiumClient premiumClient;
 
     public ReviewService(UserVocabRepository userVocabRepository, VocabCardRepository cardRepository,
-                          SM2Calculator sm2Calculator) {
+                          SM2Calculator sm2Calculator, PremiumClient premiumClient) {
         this.userVocabRepository = userVocabRepository;
         this.cardRepository = cardRepository;
         this.sm2Calculator = sm2Calculator;
+        this.premiumClient = premiumClient;
     }
 
     @Transactional(readOnly = true)
@@ -103,6 +105,10 @@ public class ReviewService {
         }
         VocabCard card = cardRepository.findById(request.cardId())
                 .orElseThrow(() -> ApiException.notFound("Card not found"));
+        if (card.getDeck() != null && Boolean.TRUE.equals(card.getDeck().getIsProOnly())
+                && !premiumClient.isPremium(userId.toString())) {
+            throw ApiException.forbidden("Bộ từ Pro – nâng cấp Premium để học");
+        }
 
         UserVocab userVocab = UserVocab.builder()
                 .userId(userId)
