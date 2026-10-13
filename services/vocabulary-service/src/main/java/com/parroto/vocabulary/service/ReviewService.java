@@ -50,11 +50,12 @@ public class ReviewService {
         SM2Calculator.Sm2Result result = sm2Calculator.calculate(
                 userVocab.getRepetitions(), userVocab.getIntervalDays(), userVocab.getEaseFactor(), request.quality());
 
+        OffsetDateTime now = OffsetDateTime.now();
         userVocab.setIntervalDays(result.interval());
         userVocab.setEaseFactor(result.easeFactor());
-        userVocab.setRepetitions(userVocab.getRepetitions() + 1);
-        userVocab.setLastReviewAt(OffsetDateTime.now());
-        userVocab.setNextReviewAt(OffsetDateTime.now().plusDays(result.interval()));
+        userVocab.setRepetitions(result.repetitions());
+        userVocab.setLastReviewAt(now);
+        userVocab.setNextReviewAt(now.plusDays(result.interval()));
         userVocab.setQuality(request.quality());
         userVocab = userVocabRepository.save(userVocab);
 
@@ -64,7 +65,7 @@ public class ReviewService {
                 .easeFactor(userVocab.getEaseFactor().doubleValue())
                 .interval(result.interval())
                 .repetitions(userVocab.getRepetitions())
-                .message(messageFor(result.interval()))
+                .message(messageFor(request.quality(), result.interval()))
                 .build();
     }
 
@@ -133,7 +134,13 @@ public class ReviewService {
         userVocabRepository.delete(userVocab);
     }
 
-    private String messageFor(int intervalDays) {
+    static String messageFor(int quality, int intervalDays) {
+        if (quality < 3) {
+            return "Đừng lo! Thẻ sẽ được ôn lại sau %d ngày.".formatted(intervalDays);
+        }
+        if (intervalDays <= 1) {
+            return "Tốt! Ôn lại vào ngày mai.";
+        }
         return "Tốt lắm! Ôn lại trong %d ngày.".formatted(intervalDays);
     }
 
