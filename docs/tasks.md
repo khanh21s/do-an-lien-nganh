@@ -628,7 +628,8 @@ Quy ước chung: mọi endpoint admin cần Bearer token **và** email thuộc 
 - types/endpoints: thêm trong khối `// --- T14 additions ---`; dùng `qk` mới trong khối T14 của `queryKeys.ts`.
 - Kiểm tra: tsc / lint / vitest xanh; unit test cho hàm định dạng/doanh thu.
 
-**Status:** TODO
+**Status:** DONE
+**Review notes:** (orchestrator, 2026-10-13) Merged T14-AUTH `4015fd0` (mvn 51/51), T14-SUB `e9746ed` (mvn 50/50, migration 003 applied to the running DB), T14-VOC `1f9e7c2` (mvn 50/50), T14-FE `037ad94` (vitest 173/173, build OK). Paged admin responses use the existing nested `{data, pagination}` shape; plan/user-status validation answers 422 (Bean Validation) — FE shows the backend text for 400/422. API smoke via gateway OK (stats, users, plans, transactions, deck PUT, non-admin 403). Browser E2E `e2e/tests/admin-console.spec.ts` 2/2 (admin lands on /admin with no learner UI; /dashboard, /vocabulary, /lessons redirect to /admin; lock → login 403 "Tài khoản đã bị khoá" → unlock; admin not lockable; plan off hides it from /subscriptions/plans, on again; transactions page; non-admin /admin → /dashboard). Learner regression E2E 4/4. Known: access tokens issued before a lock stay valid until expiry (≤ 1 h).
 **Review notes:**
 
 ## Bảng đối chiếu spec → task (kiểm tra phủ 82 mục)

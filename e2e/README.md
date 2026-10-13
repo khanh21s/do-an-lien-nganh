@@ -14,3 +14,10 @@ ADMIN_PASSWORD='<ADMIN_PASSWORD from .env>' DEMO_CODE=PROMO-DEMO1-MONTH e2e/run.
 - Between the two phases `run.sh` makes the new user's cards due via `psql` so the review queue is not empty.
 - Outputs (git-ignored): `screenshots/`, `test-results/`, `console-errors.json`.
 - The project lives in the repo (not `/tmp`) because the snap Docker daemon cannot bind-mount `/tmp`.
+
+`tests/admin-console.spec.ts` logs in through the UI as the seeded admin, so pass the admin credentials from `.env`:
+```bash
+set -a; . ./.env; set +a
+docker run --rm --network host --ipc=host -u "$(id -u):$(id -g)" -e HOME=/tmp -e ADMIN_EMAIL -e ADMIN_PASSWORD \
+  -v "$PWD/e2e":/work -w /work mcr.microsoft.com/playwright:v1.47.2-jammy npx playwright test admin-console
+```
