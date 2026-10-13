@@ -1,3 +1,4 @@
+import { PublicHeader } from '@/components/layout/PublicHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import Link from 'next/link';
@@ -12,23 +13,7 @@ const FEATURES = [
 export default function LandingPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-brand-50 to-white">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-        <span className="text-xl font-bold text-brand-600">Parroto</span>
-        <nav className="flex items-center gap-4">
-          <Link href="/lessons" className="text-sm font-medium text-slate-600 hover:text-slate-900">
-            Bài học
-          </Link>
-          <Link href="/pricing" className="text-sm font-medium text-slate-600 hover:text-slate-900">
-            Bảng giá
-          </Link>
-          <Link href="/login" className="text-sm font-medium text-slate-600 hover:text-slate-900">
-            Đăng nhập
-          </Link>
-          <Link href="/register">
-            <Button size="sm">Bắt đầu miễn phí</Button>
-          </Link>
-        </nav>
-      </header>
+      <PublicHeader />
 
       <section className="mx-auto max-w-4xl px-6 py-20 text-center">
         <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
