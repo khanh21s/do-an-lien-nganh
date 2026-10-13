@@ -107,6 +107,12 @@ notebook, `vocab_deck.owner_id`), then restart the service (`ddl-auto: validate`
 docker exec -i parroto-postgres psql -U parroto -d vocabulary_db -v ON_ERROR_STOP=1 < scripts/migrations/001_personal_vocab.sql
 docker-compose restart vocabulary-service
 ```
+T14 (admin plan management: `plan.is_active`, `plan.updated_at`) — apply before starting the
+new subscription-service:
+```bash
+docker exec -i parroto-postgres psql -U parroto -d subscription_db -v ON_ERROR_STOP=1 < scripts/migrations/003_plan_active.sql
+docker-compose restart subscription-service
+```
 
 **B2 vocabulary deck** — the free public deck "Từ vựng B2 thiết yếu" (734 cards: word, part of
 speech, Vietnamese meaning, IPA, example + translation) comes from `data/vocab/b2-essential.tsv`.
