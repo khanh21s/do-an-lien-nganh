@@ -7,8 +7,10 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -58,8 +60,7 @@ public class VNPayService {
         params.put("vnp_IpAddr", ipAddress == null || ipAddress.isBlank() ? "127.0.0.1" : ipAddress);
         params.put("vnp_CreateDate", LocalDateTime.now().format(DATE_FORMAT));
 
-        String hashData = buildHashData(params);
-        String secureHash = hmacSha512(hashSecret, hashData);
+        String secureHash = sign(params);
 
         StringBuilder query = new StringBuilder(payUrl).append('?').append(buildQueryString(params));
         query.append("&vnp_SecureHash=").append(secureHash);
@@ -67,23 +68,37 @@ public class VNPayService {
     }
 
     /**
+     * Pure signature check (SUB-01): recomputes HMAC-SHA512 over every {@code vnp_*} parameter
+     * except {@code vnp_SecureHash}/{@code vnp_SecureHashType} and compares in constant time.
+     *
      * @param params all query parameters VNPay sent back, including vnp_SecureHash
      */
-    public boolean verifyCallback(Map<String, String> params) {
-        if (!isConfigured()) {
+    public boolean verifySignature(Map<String, String> params) {
+        if (!isConfigured() || params == null) {
             return false;
         }
         String receivedHash = params.get("vnp_SecureHash");
-        if (receivedHash == null) {
+        if (receivedHash == null || receivedHash.isBlank()) {
             return false;
         }
-        Map<String, String> toVerify = new TreeMap<>(params);
-        toVerify.remove("vnp_SecureHash");
-        toVerify.remove("vnp_SecureHashType");
+        String computedHash = sign(params);
+        return MessageDigest.isEqual(
+                computedHash.getBytes(StandardCharsets.US_ASCII),
+                receivedHash.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.US_ASCII));
+    }
 
-        String hashData = buildHashData(toVerify);
-        String computedHash = hmacSha512(hashSecret, hashData);
-        return computedHash.equalsIgnoreCase(receivedHash);
+    /**
+     * Computes the hex HMAC-SHA512 VNPay signature of {@code params} (only {@code vnp_*} keys,
+     * sorted, excluding the hash fields themselves). Used to sign outgoing URLs and in tests.
+     */
+    public String sign(Map<String, String> params) {
+        Map<String, String> toSign = new TreeMap<>();
+        params.forEach((k, v) -> {
+            if (k != null && k.startsWith("vnp_") && !"vnp_SecureHash".equals(k) && !"vnp_SecureHashType".equals(k)) {
+                toSign.put(k, v);
+            }
+        });
+        return hmacSha512(hashSecret, buildHashData(toSign));
     }
 
     private String buildHashData(Map<String, String> sortedParams) {
