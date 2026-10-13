@@ -32,7 +32,8 @@ async function verifyToken(req, res, next) {
     return sendError(res, 401, 'Invalid or expired token', req.requestId);
   }
 
-  if (!payload || typeof payload !== 'object' || payload.type !== 'access') {
+  // Tokens without a jti can't be revoked, so they are rejected (same rule as the Java services).
+  if (!payload || typeof payload !== 'object' || payload.type !== 'access' || !payload.jti) {
     return sendError(res, 401, 'Invalid or expired token', req.requestId);
   }
 
