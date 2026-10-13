@@ -572,3 +572,28 @@ export interface DeckCardsParams extends PageParams {
   searchWord?: string;
 }
 // --- end T12 ---
+
+// --- T13 additions ---
+/**
+ * VOC-NB-ADD: `LearnedWordResponse` fields added by T13-BE (declaration merging keeps the base
+ * interface untouched). Optional so responses without them still type-check.
+ */
+export interface LearnedWord {
+  /** True when the card lives in the user's personal deck (a word the user added). */
+  custom?: boolean;
+  ipa?: string | null;
+  partOfSpeech?: string | null;
+  example?: string | null;
+  exampleVi?: string | null;
+}
+
+/** Body of `POST /vocabs/user/words` and `PUT /vocabs/user/words/{userVocabId}` (`CreatePersonalWordRequest`). */
+export interface CreatePersonalWordInput {
+  word: string;
+  meaning: string;
+  ipa?: string | null;
+  partOfSpeech?: string | null;
+  example?: string | null;
+  exampleVi?: string | null;
+}
+// --- end T13 ---

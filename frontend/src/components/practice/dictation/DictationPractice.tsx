@@ -6,6 +6,7 @@ import { DICTATION_SHORTCUTS, ShortcutHelp } from '@/components/practice/Shortcu
 import { WordDiffView } from '@/components/practice/WordDiffView';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { AddWordModal } from '@/components/vocab/AddWordModal';
 import { useHotkeys, type HotkeyBinding } from '@/hooks/useHotkeys';
 import { usePracticeNav } from '@/hooks/usePracticeNav';
 import { useSentenceAudio } from '@/hooks/useSentenceAudio';
@@ -30,6 +31,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { AddableSentence } from './AddableSentence';
 import { DifficultyPopover } from './DifficultyPopover';
 import { playCorrectFeedback } from './feedback';
 import { DICTATION_INPUT_ATTR, WordBlanks } from './WordBlanks';
@@ -81,6 +83,9 @@ export function DictationPractice({
   const [result, setResult] = useState<DictationAttemptResult | null>(null);
   const [correctness, setCorrectness] = useState<(boolean | null)[] | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
+  // T13: word picked from the answer / feedback → AddWordModal (page shortcuts pause while it is open).
+  const [wordToAdd, setWordToAdd] = useState<string | null>(null);
+  const closeAddWord = useCallback(() => setWordToAdd(null), []);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const isCorrect = result?.accuracy === 100;
@@ -358,7 +363,7 @@ export function DictationPractice({
               </p>
             </div>
           </div>
-          <WordDiffView words={result.wordScores} hideWrong={!isCorrect && !showAnswer} />
+          <WordDiffView words={result.wordScores} hideWrong={!isCorrect && !showAnswer} onWordClick={setWordToAdd} />
           {!isCorrect && !showAnswer && (
             <button
               type="button"
@@ -369,12 +374,23 @@ export function DictationPractice({
             </button>
           )}
           <div className="rounded-xl bg-slate-50 p-3 text-sm">
-            {(isCorrect || showAnswer) && <p className="font-medium text-slate-900">{sentence.text}</p>}
+            {(isCorrect || showAnswer) && <AddableSentence text={sentence.text} onPick={setWordToAdd} />}
             {sentence.ipa && <p className="mt-1 text-slate-500">/{sentence.ipa.replace(/^\/|\/$/g, '')}/</p>}
             {sentence.translationVi && <p className="mt-1 text-slate-600">🇻🇳 {sentence.translationVi}</p>}
           </div>
+          <p className="-mt-2 text-xs text-slate-400">💡 Bấm vào một từ để thêm vào sổ tay.</p>
         </Card>
       )}
+
+      <AddWordModal
+        open={wordToAdd !== null}
+        onClose={closeAddWord}
+        prefill={
+          wordToAdd !== null
+            ? { word: wordToAdd, example: sentence.text, exampleVi: sentence.translationVi ?? null }
+            : null
+        }
+      />
     </div>
   );
 }

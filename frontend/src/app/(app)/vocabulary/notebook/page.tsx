@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pagination } from '@/components/ui/Pagination';
 import { FullPageSpinner } from '@/components/ui/Spinner';
+import { AddWordModal } from '@/components/vocab/AddWordModal';
 import { pronounce } from '@/components/vocab/pronounce';
 import { formatDateTime } from '@/components/vocab/format';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -34,6 +35,12 @@ export default function VocabNotebookPage() {
   const page = pageState.q === debouncedSearch ? pageState.page : 1;
   const setPage = (p: number) => setPageState({ q: debouncedSearch, page: p });
   const [pendingDelete, setPendingDelete] = useState<NotebookWord | null>(null);
+  // T13: "+ Thêm từ" (create) or ✎ on a custom word (edit).
+  const [wordModal, setWordModal] = useState<{ open: boolean; editing: NotebookWord | null }>({
+    open: false,
+    editing: null,
+  });
+  const openAdd = () => setWordModal({ open: true, editing: null });
 
   const params = { page, limit: PAGE_SIZE, searchWord: debouncedSearch || undefined };
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
@@ -70,12 +77,17 @@ export default function VocabNotebookPage() {
           <h1 className="text-2xl font-bold text-slate-900">Sổ tay từ vựng</h1>
           {data && <p className="mt-1 text-sm text-slate-500">{data.pagination.total} từ</p>}
         </div>
-        <Link
-          href="/vocabulary/review"
-          className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-white hover:bg-brand-700"
-        >
-          Ôn tập
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" className="min-h-[44px]" onClick={openAdd}>
+            + Thêm từ
+          </Button>
+          <Link
+            href="/vocabulary/review"
+            className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-white hover:bg-brand-700"
+          >
+            Ôn tập
+          </Link>
+        </div>
       </div>
       <div className="mt-4 max-w-sm">
         <Input
@@ -94,13 +106,26 @@ export default function VocabNotebookPage() {
       ) : words.length === 0 ? (
         <Card className="mt-6 text-center">
           {debouncedSearch ? (
-            <p className="text-slate-500">Không tìm thấy từ nào khớp &ldquo;{debouncedSearch}&rdquo;.</p>
+            <>
+              <p className="text-slate-500">Không tìm thấy từ nào khớp &ldquo;{debouncedSearch}&rdquo;.</p>
+              <Button variant="secondary" className="mt-3 min-h-[44px]" onClick={openAdd}>
+                + Thêm từ mới
+              </Button>
+            </>
           ) : (
             <>
               <p className="text-slate-500">Sổ tay của bạn còn trống.</p>
-              <Link href="/vocabulary" className="mt-3 inline-block text-sm font-medium text-brand-600 hover:underline">
-                Học một bộ từ vựng
-              </Link>
+              <p className="mt-1 text-sm text-slate-400">
+                Tự thêm từ bạn gặp khi luyện nghe, hoặc học một bộ từ vựng có sẵn.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                <Button className="min-h-[44px]" onClick={openAdd}>
+                  + Thêm từ đầu tiên
+                </Button>
+                <Link href="/vocabulary" className="text-sm font-medium text-brand-600 hover:underline">
+                  Học một bộ từ vựng
+                </Link>
+              </div>
             </>
           )}
         </Card>
@@ -108,12 +133,24 @@ export default function VocabNotebookPage() {
         <>
           <div className={`mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 ${isFetching ? 'opacity-70' : ''}`}>
             {words.map((word) => (
-              <WordCard key={word.userVocabId} word={word} onDelete={() => setPendingDelete(word)} />
+              <WordCard
+                key={word.userVocabId}
+                word={word}
+                onDelete={() => setPendingDelete(word)}
+                onEdit={() => setWordModal({ open: true, editing: word })}
+              />
             ))}
           </div>
           <Pagination page={page} totalPages={totalPages} onChange={setPage} className="mt-6" />
         </>
       )}
+
+      <AddWordModal
+        open={wordModal.open}
+        editing={wordModal.editing}
+        prefill={!wordModal.editing && debouncedSearch && words.length === 0 ? { word: debouncedSearch } : null}
+        onClose={() => setWordModal((m) => ({ ...m, open: false }))}
+      />
 
       <Modal open={!!pendingDelete} onClose={() => setPendingDelete(null)} title="Xoá khỏi sổ tay?">
         <p className="text-sm text-slate-600">
@@ -137,7 +174,7 @@ export default function VocabNotebookPage() {
   );
 }
 
-function WordCard({ word, onDelete }: { word: NotebookWord; onDelete: () => void }) {
+function WordCard({ word, onDelete, onEdit }: { word: NotebookWord; onDelete: () => void; onEdit: () => void }) {
   const due = word.nextReviewAt ? Date.parse(word.nextReviewAt) <= Date.now() : false;
   return (
     <Card className="flex items-start justify-between gap-2 transition-shadow hover:shadow-md">
@@ -153,8 +190,22 @@ function WordCard({ word, onDelete }: { word: NotebookWord; onDelete: () => void
             🔊
           </button>
         </div>
+        {(word.ipa || word.partOfSpeech) && (
+          <p className="text-sm text-slate-500">
+            {word.ipa && <span>/{word.ipa.replace(/^\/|\/$/g, '')}/</span>}
+            {word.ipa && word.partOfSpeech && ' · '}
+            {word.partOfSpeech && <span className="italic">{word.partOfSpeech}</span>}
+          </p>
+        )}
         <p className="text-sm text-slate-600">{word.meaning}</p>
+        {word.example && (
+          <div className="mt-2 border-l-2 border-slate-200 pl-2 text-sm">
+            <p className="break-words italic text-slate-700">{word.example}</p>
+            {word.exampleVi && <p className="break-words text-slate-500">{word.exampleVi}</p>}
+          </div>
+        )}
         <div className="mt-2 flex flex-wrap items-center gap-2">
+          {word.custom && <Badge tone="purple">Tự thêm</Badge>}
           <Badge tone="brand">Đã ôn {word.repetitions} lần</Badge>
           {word.accuracy > 0 && <Badge tone="green">{Math.round(word.accuracy)}% chính xác</Badge>}
           {word.intervalDays != null && <Badge tone="slate">Chu kỳ {formatInterval(word.intervalDays)}</Badge>}
@@ -165,14 +216,27 @@ function WordCard({ word, onDelete }: { word: NotebookWord; onDelete: () => void
           </p>
         )}
       </div>
-      <button
-        type="button"
-        onClick={onDelete}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
-        aria-label={`Xoá "${word.word}" khỏi sổ tay`}
-      >
-        ✕
-      </button>
+      <div className="flex shrink-0 flex-col">
+        <button
+          type="button"
+          onClick={onDelete}
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600"
+          aria-label={`Xoá "${word.word}" khỏi sổ tay`}
+        >
+          ✕
+        </button>
+        {word.custom && (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-brand-50 hover:text-brand-600"
+            aria-label={`Sửa "${word.word}"`}
+            title="Sửa từ"
+          >
+            ✎
+          </button>
+        )}
+      </div>
     </Card>
   );
 }

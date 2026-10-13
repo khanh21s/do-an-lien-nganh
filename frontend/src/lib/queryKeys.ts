@@ -81,4 +81,8 @@ export const qk = {
 
   // --- T12 additions ---
   // --- end T12 ---
+
+  // --- T13 additions ---
+  // No new keys: creating/editing a personal word invalidates learnedWordsAll, vocabStats, reviewQueue.
+  // --- end T13 ---
 };

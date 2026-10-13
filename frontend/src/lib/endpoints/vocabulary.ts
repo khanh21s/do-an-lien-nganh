@@ -64,4 +64,14 @@ export const vocabularyApi = {
   searchDeckCards: (deckId: string, params: import('@/lib/types').DeckCardsParams = {}) =>
     api.get<PageResponse<VocabCard>>(`/vocabs/decks/${deckId}/cards`, { params }).then((r) => r.data),
   // --- end T12 ---
+
+  // --- T13 additions ---
+  /** VOC-NB-ADD: add the user's own word to the notebook (201; 409 when it is already there). */
+  createPersonalWord: (data: import('@/lib/types').CreatePersonalWordInput) =>
+    api.post<LearnedWord>('/vocabs/user/words', data).then((r) => r.data),
+
+  /** Edit a word the user added (403 for deck words, 409 when it collides with another word). */
+  updatePersonalWord: (userVocabId: string, data: import('@/lib/types').CreatePersonalWordInput) =>
+    api.put<LearnedWord>(`/vocabs/user/words/${userVocabId}`, data).then((r) => r.data),
+  // --- end T13 ---
 };
