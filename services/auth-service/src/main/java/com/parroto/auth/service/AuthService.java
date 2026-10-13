@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -120,14 +121,41 @@ public class AuthService {
         return issueTokens(user);
     }
 
+    /** Backward-compatible overload: revokes only the access token. */
     public void logout(String accessToken) {
-        Claims claims;
-        try {
-            claims = jwtService.parse(accessToken);
-        } catch (JwtException e) {
-            return; // already invalid/expired, nothing to blacklist
+        logout(accessToken, null);
+    }
+
+    /**
+     * Revokes the access token and, when given, the refresh token: each jti is blacklisted in Redis for
+     * the token's remaining lifetime, so {@link #refresh(String)} rejects the refresh token with 401.
+     * Invalid/expired tokens are skipped (nothing left to revoke), as is a refresh token that belongs to
+     * another user than the access token.
+     */
+    public void logout(String accessToken, String refreshToken) {
+        Claims access = parseQuietly(accessToken);
+        if (access != null) {
+            blacklistService.blacklist(access.getId(), jwtService.remainingTtlSeconds(access));
         }
-        blacklistService.blacklist(claims.getId(), jwtService.remainingTtlSeconds(claims));
+        Claims refresh = parseQuietly(refreshToken);
+        if (refresh == null || !"refresh".equals(refresh.get("type", String.class))) {
+            return;
+        }
+        if (access != null && !Objects.equals(access.getSubject(), refresh.getSubject())) {
+            return;
+        }
+        blacklistService.blacklist(refresh.getId(), jwtService.remainingTtlSeconds(refresh));
+    }
+
+    private Claims parseQuietly(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        try {
+            return jwtService.parse(token);
+        } catch (JwtException e) {
+            return null;
+        }
     }
 
     private AuthResponse issueTokens(User user) {

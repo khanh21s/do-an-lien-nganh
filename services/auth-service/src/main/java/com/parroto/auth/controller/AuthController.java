@@ -45,11 +45,12 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<MessageResponse> logout(HttpServletRequest httpRequest) {
+    public ResponseEntity<MessageResponse> logout(HttpServletRequest httpRequest,
+                                                  @RequestBody(required = false) LogoutRequest request) {
         String header = httpRequest.getHeader("Authorization");
-        if (header != null && header.startsWith("Bearer ")) {
-            authService.logout(header.substring(7));
-        }
+        String accessToken = header != null && header.startsWith("Bearer ") ? header.substring(7) : null;
+        // The body is optional (backward compatible): when it carries a refresh token, that one is revoked too.
+        authService.logout(accessToken, request != null ? request.refreshToken() : null);
         return ResponseEntity.ok(new MessageResponse("Logged out successfully"));
     }
 }
