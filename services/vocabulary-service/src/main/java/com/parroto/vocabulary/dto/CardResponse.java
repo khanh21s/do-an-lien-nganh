@@ -15,7 +15,9 @@ public record CardResponse(
         String ipa,
         String audioUrl,
         String imageUrl,
-        String partOfSpeech
+        String partOfSpeech,
+        /** user_vocab.id when the requesting user already learned this card, else null (VOC-04). */
+        UUID userVocabId
 ) {
     public static CardResponse from(VocabCard card) {
         return CardResponse.builder()
@@ -28,6 +30,12 @@ public record CardResponse(
                 .audioUrl(card.getAudioUrl())
                 .imageUrl(card.getImageUrl())
                 .partOfSpeech(card.getPartOfSpeech())
+                .userVocabId(null)
                 .build();
+    }
+
+    public CardResponse withUserVocabId(UUID newUserVocabId) {
+        return new CardResponse(id, word, meaning, example, exampleVi, ipa, audioUrl, imageUrl, partOfSpeech,
+                newUserVocabId);
     }
 }

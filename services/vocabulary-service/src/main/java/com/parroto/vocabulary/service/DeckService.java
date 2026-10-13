@@ -4,6 +4,7 @@ import com.parroto.vocabulary.dto.*;
 import com.parroto.vocabulary.entity.VocabCard;
 import com.parroto.vocabulary.entity.VocabDeck;
 import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.vocabulary.repository.UserVocabRepository;
 import com.parroto.vocabulary.repository.VocabCardRepository;
 import com.parroto.vocabulary.repository.VocabDeckRepository;
 import com.parroto.vocabulary.security.AuthenticatedUser;
@@ -15,7 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -27,13 +30,16 @@ public class DeckService {
 
     private final VocabDeckRepository deckRepository;
     private final VocabCardRepository cardRepository;
+    private final UserVocabRepository userVocabRepository;
     private final PremiumClient premiumClient;
     private final CacheService cacheService;
 
     public DeckService(VocabDeckRepository deckRepository, VocabCardRepository cardRepository,
+                        UserVocabRepository userVocabRepository,
                         PremiumClient premiumClient, CacheService cacheService) {
         this.deckRepository = deckRepository;
         this.cardRepository = cardRepository;
+        this.userVocabRepository = userVocabRepository;
         this.premiumClient = premiumClient;
         this.cacheService = cacheService;
     }
@@ -63,7 +69,9 @@ public class DeckService {
             }
         }
 
-        boolean cacheable = (searchWord == null || searchWord.isBlank());
+        // The shared cache holds the user-independent page; authenticated requests are enriched
+        // with per-user userVocabId, so they always read cards from the DB (VOC-04).
+        boolean cacheable = principal == null && (searchWord == null || searchWord.isBlank());
         String cacheKey = "vocab:deck:%s:cards:%d:%d".formatted(deckId, page, limit);
         if (cacheable) {
             PageResponse<CardResponse> cached = cacheService.get(cacheKey, PageResponse.class);
@@ -75,6 +83,11 @@ public class DeckService {
         Pageable pageable = PageRequest.of(Math.max(page - 1, 0), limit);
         Page<VocabCard> cards = cardRepository.findByDeck(deckId, blankToNull(searchWord), pageable);
         Page<CardResponse> mapped = cards.map(CardResponse::from);
+        if (principal != null && !mapped.isEmpty()) {
+            Map<UUID, UUID> learned = learnedCardIds(principal.userUuid(),
+                    mapped.getContent().stream().map(CardResponse::id).toList());
+            mapped = mapped.map(c -> c.withUserVocabId(learned.get(c.id())));
+        }
         PageResponse<CardResponse> response = PageResponse.of(mapped, page, limit);
         if (cacheable) {
             cacheService.set(cacheKey, response, DECK_CARDS_TTL);
@@ -82,14 +95,24 @@ public class DeckService {
         return response;
     }
 
+    /** cardId -> userVocabId for the cards (among {@code cardIds}) the user already learned; one query. */
+    private Map<UUID, UUID> learnedCardIds(UUID userId, List<UUID> cardIds) {
+        Map<UUID, UUID> result = new HashMap<>();
+        for (Object[] row : userVocabRepository.findIdsByUserIdAndCardIdIn(userId, cardIds)) {
+            result.put((UUID) row[0], (UUID) row[1]);
+        }
+        return result;
+    }
+
     @Transactional
-    public DeckResponse createDeck(CreateDeckRequest request) {
+    public DeckResponse createDeck(CreateDeckRequest request, UUID createdBy) {
         VocabDeck deck = VocabDeck.builder()
                 .name(request.name())
                 .description(request.description())
                 .level(request.level())
                 .isProOnly(Boolean.TRUE.equals(request.isProOnly()))
                 .cardCount(0)
+                .createdBy(createdBy)
                 .build();
         // saveAndFlush: the response below reads @CreationTimestamp, only populated once the
         // INSERT actually executes (a plain save() only guarantees that at transaction commit).
@@ -146,6 +169,24 @@ public class DeckService {
         card = cardRepository.save(card);
         cacheService.invalidateByPattern("vocab:deck:" + card.getDeck().getId() + ":*");
         return CardResponse.from(card);
+    }
+
+    /**
+     * ADM-05: deletes a card (user_vocab rows go via ON DELETE CASCADE) and decrements the
+     * deck's card_count in the same transaction.
+     */
+    @Transactional
+    public void deleteCard(UUID cardId) {
+        VocabCard card = cardRepository.findById(cardId)
+                .orElseThrow(() -> ApiException.notFound("Card not found"));
+        VocabDeck deck = card.getDeck();
+        UUID deckId = deck.getId();
+        cardRepository.delete(card);
+        cardRepository.flush();
+        deck.setCardCount((int) cardRepository.countByDeck_Id(deckId));
+        deckRepository.save(deck);
+        cacheService.invalidateByPattern("vocab:deck:" + deckId + ":*");
+        cacheService.invalidateByPattern("vocab:decks:list:*");
     }
 
     @Transactional
