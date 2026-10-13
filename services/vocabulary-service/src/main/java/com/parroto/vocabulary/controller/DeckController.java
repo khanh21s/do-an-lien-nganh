@@ -51,6 +51,15 @@ public class DeckController {
         return ResponseEntity.status(HttpStatus.CREATED).body(deckService.createDeck(request, principal.userUuid()));
     }
 
+    /** T14-VOC: admin edits a public deck's metadata; personal decks are 404. */
+    @PutMapping("/{id}")
+    public ResponseEntity<DeckResponse> update(@AuthenticationPrincipal AuthenticatedUser principal,
+                                               @PathVariable UUID id,
+                                               @RequestBody UpdateDeckRequest request) {
+        adminGuard.requireAdmin(principal);
+        return ResponseEntity.ok(deckService.updateDeck(id, request));
+    }
+
     @PostMapping("/{id}/cards")
     public ResponseEntity<List<CardResponse>> addCards(@AuthenticationPrincipal AuthenticatedUser principal,
                                                          @PathVariable UUID id,

@@ -23,7 +23,7 @@ public class AdminGuard {
 
     public void requireAdmin(AuthenticatedUser user) {
         if (user == null || user.email() == null || !adminEmails.contains(user.email().toLowerCase())) {
-            throw ApiException.forbidden("Admin privileges required");
+            throw ApiException.forbidden("Bạn không có quyền quản trị");
         }
     }
 }
