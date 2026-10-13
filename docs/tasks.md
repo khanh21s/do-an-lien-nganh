@@ -541,6 +541,53 @@ scripts/verify-fe.sh
 
 ---
 
+## T13 – Người dùng tự thêm từ vựng vào sổ tay (VOC-NB-ADD)
+
+**Yêu cầu (người dùng, 2026-10-13):** người dùng tự thêm từ của mình vào Sổ tay; từ tự thêm được ôn bằng SM-2 như thẻ khác.
+Chia thành **T13-BE** (nhánh `feat/T13-be-personal-words`) và **T13-FE** (nhánh `feat/T13-fe-add-word`), chạy song song theo hợp đồng dưới.
+
+### Thiết kế
+- `vocab_deck` thêm cột `owner_id UUID NULL` (+ index). `owner_id IS NULL` = deck công khai (admin); `owner_id = userId` = **deck cá nhân ẩn**, tên `"Sổ tay cá nhân"`, `is_pro_only=false`, tạo lười (lazy) khi user thêm từ đầu tiên, tối đa 1 deck/user.
+- Từ tự thêm = một `vocab_card` trong deck cá nhân + một `user_vocab` (next_review_at = now → vào review queue ngay).
+- Deck cá nhân **không** xuất hiện ở `GET /vocabs/decks`; `GET /vocabs/decks/{id}/cards` của deck người khác → 404; admin endpoints không đụng tới deck cá nhân.
+- Migration: sửa `CREATE TABLE vocab_deck` trong `init-db.sql`, và thêm `scripts/migrations/001_personal_vocab.sql` (idempotent: `ALTER TABLE vocab_deck ADD COLUMN IF NOT EXISTS owner_id UUID; CREATE UNIQUE INDEX IF NOT EXISTS ux_vocab_deck_owner ON vocab_deck(owner_id) WHERE owner_id IS NOT NULL;`) để áp lên DB đang chạy.
+
+### Hợp đồng API (vocabulary-service, qua gateway `/vocabs/...`, cần Bearer)
+| Method | Path | Body | Kết quả |
+|---|---|---|---|
+| POST | `/vocabs/user/words` | `CreatePersonalWordRequest` | 201 `LearnedWordResponse` |
+| PUT | `/vocabs/user/words/{userVocabId}` | `CreatePersonalWordRequest` | 200 `LearnedWordResponse` |
+| DELETE | `/vocabs/user/{userVocabId}` (đã có) | – | 200; nếu là từ tự thêm thì xoá luôn `vocab_card` và giảm `card_count` |
+
+`CreatePersonalWordRequest`: `word` (bắt buộc, trim, 1–100 ký tự), `meaning` (bắt buộc, 1–500), `ipa?` (≤100), `partOfSpeech?` (≤50), `example?` (≤500), `exampleVi?` (≤500). Chuỗi rỗng → null.
+
+`LearnedWordResponse` thêm: `custom: boolean` (true nếu card thuộc deck cá nhân của user), `ipa`, `partOfSpeech`, `example`, `exampleVi` (nullable).
+
+Lỗi (error JSON chuẩn, thông điệp tiếng Việt):
+- Từ đã có trong sổ tay (so khớp `lower(trim(word))` với mọi từ user đã có, kể cả từ từ deck) → **409** `"Từ này đã có trong sổ tay"` (PUT: chỉ 409 nếu trùng với từ *khác*).
+- PUT/xoá `userVocabId` không thuộc user → 404 `"Không tìm thấy từ"`; PUT một từ không phải tự thêm → **403** `"Chỉ sửa được từ bạn tự thêm"`.
+- Validation → 400.
+- Giới hạn: tối đa **2000** từ tự thêm/user → 400 `"Sổ tay cá nhân đã đạt giới hạn 2000 từ"`.
+- Sau khi tạo/sửa/xoá: xoá cache liên quan (vocab user stats).
+
+### T13-BE – acceptance
+- [ ] POST tạo từ → 201, xuất hiện ở `/vocabs/user/learned` với `custom=true`, và ở `/vocabs/user/review-queue` ngay.
+- [ ] POST lần 2 cùng từ (khác hoa/thường, có khoảng trắng) → 409. Từ đã học từ deck công khai → 409.
+- [ ] PUT sửa nghĩa → 200; PUT từ của deck công khai → 403; PUT/DELETE từ của user khác → 404.
+- [ ] DELETE từ tự thêm → xoá card; `GET /vocabs/decks` không bao giờ trả deck cá nhân; cards của deck cá nhân người khác → 404.
+- [ ] Unit test service (tạo deck lười, trùng từ, quyền sửa, giới hạn); `mvn test` xanh.
+
+### T13-FE – acceptance
+- [ ] `types.ts`/`endpoints/vocabulary.ts`/`queryKeys.ts`: thêm trong khối `// --- T13 additions ---` (`CreatePersonalWordInput`, `LearnedWord` thêm các field trên, `vocabularyApi.createPersonalWord/updatePersonalWord`).
+- [ ] Component `components/vocab/AddWordModal.tsx` (tạo + sửa, có prefill; Enter submit; hiện lỗi backend `error`), unit test cho hàm chuẩn hoá form.
+- [ ] Trang `/vocabulary/notebook`: nút "+ Thêm từ"; badge "Tự thêm" cho `custom`; nút sửa (chỉ `custom`); hiển thị IPA/ví dụ nếu có; empty state gợi ý thêm từ.
+- [ ] Dictation (sau khi nộp câu): bấm một từ trong phần đáp án → mở AddWordModal prefill `word` = từ đó (bỏ dấu câu), `example` = câu gốc, `exampleVi` = bản dịch câu; toast "Đã thêm vào sổ tay".
+- [ ] Thành công → invalidate `learnedWordsAll`, `vocabStats`, `reviewQueue`.
+- [ ] tsc / lint / vitest xanh.
+
+**Status:** TODO
+**Review notes:**
+
 ## Bảng đối chiếu spec → task (kiểm tra phủ 82 mục)
 
 | Module | Mục → Task |
