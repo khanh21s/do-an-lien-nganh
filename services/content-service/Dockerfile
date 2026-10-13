@@ -1,15 +1,18 @@
-# Build stage
-FROM maven:3.9-eclipse-temurin-25 AS builder
+# Build stage (Java 21 - must match <java.version> in pom.xml)
+FROM maven:3.9-eclipse-temurin-21 AS builder
 WORKDIR /app
 COPY pom.xml .
-RUN mvn dependency:go-offline
+RUN mvn -B dependency:go-offline
 COPY src src
-RUN mvn clean package -DskipTests
+RUN mvn -B clean package -DskipTests
 
 # Runtime stage
-FROM eclipse-temurin:25-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
 RUN apk add --no-cache curl
-RUN addgroup -S appuser && adduser -S appuser -G appuser
+# Fixed uid/gid so content-service and practice-service share the media_data volume
+RUN addgroup -S -g 1001 appuser && adduser -S -u 1001 -G appuser appuser
+# Local storage root for mock mode (MEDIA_ROOT, docker volume media_data)
+RUN mkdir -p /data/media && chown -R appuser:appuser /data/media
 WORKDIR /app
 COPY --from=builder /app/target/*.jar app.jar
 RUN chown appuser:appuser /app/app.jar

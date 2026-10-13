@@ -84,6 +84,8 @@ services:
       # Redis
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      # Fail fast when Redis hangs (cache/blacklist are fail-open) instead of the 60s default
+      SPRING_DATA_REDIS_TIMEOUT: ${REDIS_TIMEOUT:-2s}
       
       # JWT
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set a random value of at least 32 characters}
@@ -141,6 +143,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${CONTENT_DB_PASSWORD:-content_password}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      # Fail fast when Redis hangs (cache/blacklist are fail-open) instead of the 60s default
+      SPRING_DATA_REDIS_TIMEOUT: ${REDIS_TIMEOUT:-2s}
       
       # AWS S3 (for audio/video files)
       AWS_S3_BUCKET: ${S3_BUCKET:-parroto-dev-bucket}
@@ -194,6 +198,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${PRACTICE_DB_PASSWORD:-practice_password}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      # Fail fast when Redis hangs (cache/blacklist are fail-open) instead of the 60s default
+      SPRING_DATA_REDIS_TIMEOUT: ${REDIS_TIMEOUT:-2s}
       
       # Microservices communication
       CONTENT_SERVICE_URL: http://content-service:8002
@@ -253,6 +259,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${VOCABULARY_DB_PASSWORD:-vocabulary_password}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      # Fail fast when Redis hangs (cache/blacklist are fail-open) instead of the 60s default
+      SPRING_DATA_REDIS_TIMEOUT: ${REDIS_TIMEOUT:-2s}
 
       # JWT (must match auth-service's secret)
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set a random value of at least 32 characters}
@@ -297,6 +305,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${SUBSCRIPTION_DB_PASSWORD:-subscription_password}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      # Fail fast when Redis hangs (cache/blacklist are fail-open) instead of the 60s default
+      SPRING_DATA_REDIS_TIMEOUT: ${REDIS_TIMEOUT:-2s}
       
       # Microservices communication
       AUTH_SERVICE_URL: http://auth-service:8001
