@@ -162,7 +162,7 @@ export function ShadowingPractice({ lesson, sentence }: { lesson: LessonDetail; 
 
       <Card>
         <p className="break-words text-xl font-medium leading-relaxed text-slate-900">{sentence.text}</p>
-        {sentence.ipa && <p className="mt-1 break-words text-sm text-slate-500">/{sentence.ipa}/</p>}
+        {sentence.ipa && <p className="mt-1 break-words text-sm text-slate-500">/{sentence.ipa.replace(/^\/|\/$/g, '')}/</p>}
         {sentence.translationVi && <p className="mt-1 text-sm italic text-slate-500">{sentence.translationVi}</p>}
         <SentencePlayer audio={audio} className="mt-4" />
         <div className="mt-3">

@@ -370,7 +370,7 @@ export function DictationPractice({
           )}
           <div className="rounded-xl bg-slate-50 p-3 text-sm">
             {(isCorrect || showAnswer) && <p className="font-medium text-slate-900">{sentence.text}</p>}
-            {sentence.ipa && <p className="mt-1 text-slate-500">/{sentence.ipa}/</p>}
+            {sentence.ipa && <p className="mt-1 text-slate-500">/{sentence.ipa.replace(/^\/|\/$/g, '')}/</p>}
             {sentence.translationVi && <p className="mt-1 text-slate-600">🇻🇳 {sentence.translationVi}</p>}
           </div>
         </Card>

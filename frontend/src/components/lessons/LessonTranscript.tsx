@@ -101,7 +101,7 @@ export function LessonTranscript({
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="break-words font-medium text-slate-900">{s.text}</p>
-                    {showIpa && s.ipa && <p className="mt-1 break-words text-sm text-slate-400">/{s.ipa}/</p>}
+                    {showIpa && s.ipa && <p className="mt-1 break-words text-sm text-slate-400">/{s.ipa.replace(/^\/|\/$/g, '')}/</p>}
                     {showTranslation && s.translationVi && (
                       <p className="mt-1 break-words text-sm text-slate-500">{s.translationVi}</p>
                     )}
