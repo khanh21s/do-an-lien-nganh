@@ -26,6 +26,8 @@ public class AttemptQueryService {
 
     @Transactional(readOnly = true)
     public PageResponse<AttemptSummaryResponse> listAttempts(UUID userId, UUID lessonId, String mode, int page, int limit) {
+        page = Math.max(page, 1);
+        limit = Math.min(Math.max(limit, 1), 100);
         Pageable pageable = PageRequest.of(Math.max(page - 1, 0), limit, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<PracticeAttempt> attempts = attemptRepository.search(userId, lessonId, mode, pageable);
         Page<AttemptSummaryResponse> mapped = attempts.map(AttemptSummaryResponse::from);
@@ -34,11 +36,8 @@ public class AttemptQueryService {
 
     @Transactional(readOnly = true)
     public AttemptDetailResponse getAttempt(UUID userId, UUID attemptId) {
-        PracticeAttempt attempt = attemptRepository.findById(attemptId)
+        PracticeAttempt attempt = attemptRepository.findByIdAndUserId(attemptId, userId)
                 .orElseThrow(() -> ApiException.notFound("Attempt not found"));
-        if (!attempt.getUserId().equals(userId)) {
-            throw ApiException.notFound("Attempt not found");
-        }
         return AttemptDetailResponse.from(attempt);
     }
 

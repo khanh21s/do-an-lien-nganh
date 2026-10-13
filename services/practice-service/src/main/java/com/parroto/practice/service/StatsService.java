@@ -2,14 +2,15 @@ package com.parroto.practice.service;
 
 import com.parroto.practice.dto.*;
 import com.parroto.practice.entity.PracticeAttempt;
+import com.parroto.practice.exception.ApiException;
 import com.parroto.practice.repository.PracticeAttemptRepository;
+import com.parroto.practice.util.AppTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -18,6 +19,9 @@ import java.util.stream.Collectors;
 public class StatsService {
 
     private static final Duration STATS_TTL = Duration.ofHours(1);
+    public static final int MIN_ACTIVITY_DAYS = 1;
+    public static final int MAX_ACTIVITY_DAYS = 365;
+    public static final int DEFAULT_ACTIVITY_DAYS = 90;
 
     private final PracticeAttemptRepository attemptRepository;
     private final StreakCalculator streakCalculator;
@@ -45,7 +49,7 @@ public class StatsService {
         double averageScore = orZero(attemptRepository.averageScore(userId));
         long lessonsCompleted = attemptRepository.countDistinctLessonsCompleted(userId);
 
-        StreakCalculator.StreakResult streak = streakCalculator.calculate(attemptRepository.distinctPracticeDatesDesc(userId));
+        StreakCalculator.StreakResult streak = streakCalculator.calculate(practiceDays(userId));
 
         List<PracticeAttempt> latest = attemptRepository.findTop1ByUserIdOrderByCreatedAtDesc(userId);
         OffsetDateTime lastPracticeDate = latest.isEmpty() ? null : latest.get(0).getCreatedAt();
@@ -123,34 +127,74 @@ public class StatsService {
 
     @Transactional(readOnly = true)
     public StreakResponse getStreak(UUID userId) {
-        StreakCalculator.StreakResult streak = streakCalculator.calculate(attemptRepository.distinctPracticeDatesDesc(userId));
+        StreakCalculator.StreakResult streak = streakCalculator.calculate(practiceDays(userId));
         List<PracticeAttempt> latest = attemptRepository.findTop1ByUserIdOrderByCreatedAtDesc(userId);
         OffsetDateTime lastPracticeDate = latest.isEmpty() ? null : latest.get(0).getCreatedAt();
         return new StreakResponse(streak.currentStreak(), lastPracticeDate);
     }
 
+    /**
+     * PRA-03: one entry per Vietnam calendar day for the last {@code days} days (oldest first,
+     * today last); days without practice are zero-filled.
+     */
+    @Transactional(readOnly = true)
+    public List<ActivityDayResponse> getActivity(UUID userId, int days) {
+        if (days < MIN_ACTIVITY_DAYS || days > MAX_ACTIVITY_DAYS) {
+            throw ApiException.badRequest("Tham số days phải trong khoảng 1–365");
+        }
+        LocalDate today = AppTime.today();
+        LocalDate first = today.minusDays(days - 1L);
+        OffsetDateTime since = first.atStartOfDay(AppTime.ZONE).toOffsetDateTime();
+        return buildActivity(attemptRepository.dailyActivitySince(userId, since), first, days);
+    }
+
+    /** Zero-fills {@code days} consecutive days starting at {@code first} from [day, attempts, seconds] rows. */
+    static List<ActivityDayResponse> buildActivity(List<Object[]> rows, LocalDate first, int days) {
+        Map<LocalDate, Object[]> byDate = new HashMap<>();
+        for (Object[] row : rows) {
+            byDate.put(LocalDate.parse(String.valueOf(row[0])), row);
+        }
+        List<ActivityDayResponse> result = new ArrayList<>(days);
+        for (int i = 0; i < days; i++) {
+            LocalDate day = first.plusDays(i);
+            Object[] row = byDate.get(day);
+            long attempts = row == null ? 0 : toNumber(row[1]).longValue();
+            double seconds = row == null ? 0 : toNumber(row[2]).doubleValue();
+            result.add(new ActivityDayResponse(day.format(DateTimeFormatter.ISO_LOCAL_DATE), attempts,
+                    Math.round(seconds / 60.0)));
+        }
+        return result;
+    }
+
+    private List<LocalDate> practiceDays(UUID userId) {
+        return attemptRepository.distinctPracticeDatesDesc(userId).stream().map(LocalDate::parse).toList();
+    }
+
     private StatsResponse.AccuracyTrend buildWeeklyTrend(UUID userId) {
-        OffsetDateTime since = OffsetDateTime.now(ZoneOffset.UTC).minusDays(6)
-                .withHour(0).withMinute(0).withSecond(0).withNano(0);
+        LocalDate first = AppTime.today().minusDays(6);
+        OffsetDateTime since = first.atStartOfDay(AppTime.ZONE).toOffsetDateTime();
         List<Object[]> rows = attemptRepository.dailyAccuracySince(userId, since);
 
         Map<LocalDate, Double> byDate = new HashMap<>();
         for (Object[] row : rows) {
-            LocalDate date = ((java.sql.Date) row[0]).toLocalDate();
+            LocalDate date = LocalDate.parse(String.valueOf(row[0]));
             Double avg = row[1] == null ? 0.0 : ((Number) row[1]).doubleValue();
             byDate.put(date, avg);
         }
 
         List<Double> weekly = new ArrayList<>();
         List<String> dates = new ArrayList<>();
-        LocalDate cursor = since.toLocalDate();
         DateTimeFormatter formatter = DateTimeFormatter.ISO_LOCAL_DATE;
         for (int i = 0; i < 7; i++) {
-            LocalDate day = cursor.plusDays(i);
+            LocalDate day = first.plusDays(i);
             weekly.add(round(byDate.getOrDefault(day, 0.0)));
             dates.add(day.format(formatter));
         }
         return new StatsResponse.AccuracyTrend(weekly, dates);
+    }
+
+    private static Number toNumber(Object value) {
+        return value instanceof Number n ? n : 0;
     }
 
     private double orZero(Double value) {

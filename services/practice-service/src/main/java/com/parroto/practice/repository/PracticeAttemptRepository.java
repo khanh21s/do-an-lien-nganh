@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface PracticeAttemptRepository extends JpaRepository<PracticeAttempt, UUID> {
@@ -39,13 +40,33 @@ public interface PracticeAttemptRepository extends JpaRepository<PracticeAttempt
     @Query("SELECT SUM(a.duration) FROM PracticeAttempt a WHERE a.userId = :userId")
     Double sumDuration(@Param("userId") UUID userId);
 
-    @Query("""
-            SELECT CAST(a.createdAt AS date), AVG(a.accuracy) FROM PracticeAttempt a
-            WHERE a.userId = :userId AND a.createdAt >= :since
-            GROUP BY CAST(a.createdAt AS date)
-            ORDER BY CAST(a.createdAt AS date) ASC
-            """)
+    /**
+     * Daily average accuracy since {@code since}, bucketed by Vietnam calendar day.
+     * Rows: [day 'YYYY-MM-DD' (String), avg accuracy (Number)].
+     */
+    @Query(value = """
+            SELECT to_char(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') AS day, AVG(accuracy) AS avg_accuracy
+            FROM practice_attempt
+            WHERE user_id = :userId AND created_at >= :since
+            GROUP BY 1
+            ORDER BY 1
+            """, nativeQuery = true)
     List<Object[]> dailyAccuracySince(@Param("userId") UUID userId, @Param("since") OffsetDateTime since);
+
+    /**
+     * PRA-03 heatmap source: per Vietnam calendar day, attempt count and total duration (seconds).
+     * Rows: [day 'YYYY-MM-DD' (String), attempts (Number), duration seconds (Number)].
+     */
+    @Query(value = """
+            SELECT to_char(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') AS day,
+                   COUNT(*) AS attempts,
+                   COALESCE(SUM(duration), 0) AS seconds
+            FROM practice_attempt
+            WHERE user_id = :userId AND created_at >= :since
+            GROUP BY 1
+            ORDER BY 1
+            """, nativeQuery = true)
+    List<Object[]> dailyActivitySince(@Param("userId") UUID userId, @Param("since") OffsetDateTime since);
 
     List<PracticeAttempt> findTop1ByUserIdOrderByCreatedAtDesc(UUID userId);
 
@@ -57,7 +78,15 @@ public interface PracticeAttemptRepository extends JpaRepository<PracticeAttempt
                                                      @Param("lessonId") UUID lessonId,
                                                      @Param("sentenceId") UUID sentenceId);
 
-    @Query(value = "SELECT DISTINCT CAST(created_at AS date) FROM practice_attempt WHERE user_id = :userId ORDER BY 1 DESC",
-            nativeQuery = true)
-    List<java.sql.Date> distinctPracticeDatesDesc(@Param("userId") UUID userId);
+    /** PRA-07: distinct practice days ('YYYY-MM-DD', Vietnam time), most recent first. */
+    @Query(value = """
+            SELECT DISTINCT to_char(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') AS day
+            FROM practice_attempt
+            WHERE user_id = :userId
+            ORDER BY 1 DESC
+            """, nativeQuery = true)
+    List<String> distinctPracticeDatesDesc(@Param("userId") UUID userId);
+
+    /** SHA-04: ownership-scoped lookup; a foreign attempt is indistinguishable from a missing one. */
+    Optional<PracticeAttempt> findByIdAndUserId(UUID id, UUID userId);
 }
