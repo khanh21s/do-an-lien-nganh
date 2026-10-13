@@ -107,7 +107,7 @@ services:
 
       # Logging
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
-      LOGGING_LEVEL_COM_PARROTO: DEBUG
+      LOGGING_LEVEL_COM_PARROTO: ${APP_LOG_LEVEL:-INFO}
 
       # Spring
       SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
@@ -165,7 +165,7 @@ services:
 
       # Logging
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
-      LOGGING_LEVEL_COM_PARROTO: DEBUG
+      LOGGING_LEVEL_COM_PARROTO: ${APP_LOG_LEVEL:-INFO}
       SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
     volumes:
       - media_data:/data/media
@@ -226,7 +226,7 @@ services:
 
       # Logging
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
-      LOGGING_LEVEL_COM_PARROTO: DEBUG
+      LOGGING_LEVEL_COM_PARROTO: ${APP_LOG_LEVEL:-INFO}
       SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
     volumes:
       - media_data:/data/media
@@ -276,7 +276,7 @@ services:
 
       # Logging
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
-      LOGGING_LEVEL_COM_PARROTO: DEBUG
+      LOGGING_LEVEL_COM_PARROTO: ${APP_LOG_LEVEL:-INFO}
       SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
     depends_on:
       postgres:
@@ -340,7 +340,7 @@ services:
       
       # Logging
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
-      LOGGING_LEVEL_COM_PARROTO: DEBUG
+      LOGGING_LEVEL_COM_PARROTO: ${APP_LOG_LEVEL:-INFO}
       SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
     depends_on:
       postgres:
