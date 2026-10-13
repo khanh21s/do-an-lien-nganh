@@ -552,6 +552,15 @@ export interface ListActivationCodesParams extends PageParams {
 // --- end T09 ---
 
 // --- T10 additions ---
+/**
+ * SM-2 schedule fields the notebook shows when `GET /vocabs/user/learned` returns them
+ * (not in `LearnedWordResponse` yet – requested from the vocabulary-service owner).
+ */
+export interface LearnedWordSchedule {
+  nextReviewAt?: string | null;
+  intervalDays?: number | null;
+  easeFactor?: number | null;
+}
 // --- end T10 ---
 
 // --- T11 additions ---

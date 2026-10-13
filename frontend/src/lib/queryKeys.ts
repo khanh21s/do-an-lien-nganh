@@ -72,6 +72,8 @@ export const qk = {
   // --- end T09 ---
 
   // --- T10 additions ---
+  /** `useInfiniteQuery` pages of a deck (limit 50); prefix stays `deck-cards`. */
+  deckCardsInfinite: (deckId: string) => ['deck-cards', deckId, 'infinite'] as const,
   // --- end T10 ---
 
   // --- T11 additions ---
