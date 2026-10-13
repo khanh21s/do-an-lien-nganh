@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Final-round API regression (stdlib only): python3 scripts/api-smoke.py. Does not consume seeded demo codes.
-Registers admin@parroto.com with password Passw0rd!x if it does not exist yet."""
-import json, sys, time, struct, math, urllib.request, urllib.error
+Logs in as the admin account seeded from .env: ADMIN_EMAIL / ADMIN_PASSWORD must be set in the environment."""
+import json, os, sys, time, struct, math, urllib.request, urllib.error
 
 GW = "http://localhost:8000"
 FE = "http://localhost:3000"
@@ -42,15 +42,17 @@ def check(cid, desc, ok, info=""):
 
 
 ts = str(int(time.time()))
-pw = "Passw0rd!x"
+pw = "Passw0rd!smoke"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@parroto.com")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or sys.exit("set ADMIN_PASSWORD (the admin password from .env)")
 ea = f"final_a_{ts}@test.local"
 s, b, _ = req("POST", "/auth/register", {"email": ea, "password": pw, "cefrLevel": "A2"})
 check("AUTH-REG", "register user A", s == 201, s)
 A = j(b) or {}
 TA = A.get("token")
-s, b, _ = req("POST", "/auth/login", {"email": "admin@parroto.com", "password": pw})
+s, b, _ = req("POST", "/auth/login", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
 if s != 200:
-    s, b, _ = req("POST", "/auth/register", {"email": "admin@parroto.com", "password": pw})
+    s, b, _ = req("POST", "/auth/register", {"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD})
 check("AUTH-ADMIN", "register/login admin", s in (200, 201), s)
 TADM = (j(b) or {}).get("token")
 

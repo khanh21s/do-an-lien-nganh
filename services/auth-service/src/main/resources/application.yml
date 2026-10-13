@@ -45,6 +45,11 @@ cors:
 
 admin:
   emails: ${ADMIN_EMAILS:admin@parroto.com}
+  # Seeds the single admin account on startup (config/AdminBootstrap).
+  bootstrap:
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
+    reset-password: ${ADMIN_PASSWORD_RESET:false}
 
 management:
   endpoints:

@@ -6,7 +6,7 @@ Playwright suite used by the final review (`docs/reports/review-final.md`). Runs
 
 ```bash
 docker-compose up -d --build
-ADMIN_PASSWORD='<admin password if admin@parroto.com already exists>' DEMO_CODE=PROMO-DEMO1-MONTH e2e/run.sh
+ADMIN_PASSWORD='<ADMIN_PASSWORD from .env>' DEMO_CODE=PROMO-DEMO1-MONTH e2e/run.sh
 ```
 
 - The suite registers a new user each run; `admin@parroto.com` (in `ADMIN_EMAILS`) is registered if missing.

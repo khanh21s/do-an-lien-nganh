@@ -107,6 +107,11 @@ services:
       # frontend to show/hide admin navigation — actual write endpoints are still
       # gated independently by each service's own ADMIN_EMAILS check)
       ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@parroto.com}
+      # Single admin account created on startup if missing (AdminBootstrap); set
+      # ADMIN_PASSWORD_RESET=true once to overwrite its password, then back to false.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_PASSWORD_RESET: ${ADMIN_PASSWORD_RESET:-false}
 
       # Logging
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
