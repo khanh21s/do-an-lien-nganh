@@ -9,15 +9,26 @@ services:
       POSTGRES_USER: parroto
       POSTGRES_PASSWORD: ${DB_PASSWORD:-parroto_dev_password}
       POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
-    ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      # Per-service role passwords, read by initdb/00-roles.sh on the FIRST start of an
+      # empty volume (X-04). Must match the SPRING_DATASOURCE_PASSWORD of each service
+      # below — both sides read the same .env variable. Changing them later requires
+      # `docker-compose down -v` (re-init) or a manual ALTER ROLE.
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:-auth_password}
+      CONTENT_DB_PASSWORD: ${CONTENT_DB_PASSWORD:-content_password}
+      PRACTICE_DB_PASSWORD: ${PRACTICE_DB_PASSWORD:-practice_password}
+      VOCABULARY_DB_PASSWORD: ${VOCABULARY_DB_PASSWORD:-vocabulary_password}
+      SUBSCRIPTION_DB_PASSWORD: ${SUBSCRIPTION_DB_PASSWORD:-subscription_password}
+    # No host port: Postgres is only reachable inside the docker network (X-01).
+    # Copy docker-compose.override.yml.example -> docker-compose.override.yml to publish 5432 for dev.
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Mounting a whole directory here (e.g. ./seeds) would NOT work: the official
-      # postgres image's docker-entrypoint-initdb.d runner only processes files directly
-      # inside that path (*.sql/*.sh/*.sql.gz), it does not recurse into subdirectories —
-      # so all seed data lives directly in init-db.sql instead (see its "SEED DATA" sections).
-      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+      # The official postgres image runs files directly inside docker-entrypoint-initdb.d
+      # (*.sh / *.sql / *.sql.gz) in alphabetical order, without recursing into
+      # subdirectories, so each init file is mounted individually:
+      #   00-roles.sh  - creates the 5 roles + databases with passwords from env (psql -v)
+      #   01-init.sql  - schema + seed data (see its "SEED DATA" sections)
+      - ./initdb/00-roles.sh:/docker-entrypoint-initdb.d/00-roles.sh:ro
+      - ./init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U parroto"]
       interval: 10s
@@ -36,8 +47,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: parroto-redis
-    ports:
-      - "6379:6379"
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
@@ -75,15 +84,21 @@ services:
       # Redis
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      # Fail fast when Redis hangs (cache/blacklist are fail-open) instead of the 60s default
+      SPRING_DATA_REDIS_TIMEOUT: ${REDIS_TIMEOUT:-2s}
       
       # JWT
-      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
-      JWT_EXPIRY_SECONDS: 3600
-      JWT_REFRESH_EXPIRY_SECONDS: 604800
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set a random value of at least 32 characters}
+      JWT_EXPIRY_SECONDS: ${JWT_EXPIRY_SECONDS:-3600}
+      JWT_REFRESH_EXPIRY_SECONDS: ${JWT_REFRESH_EXPIRY_SECONDS:-604800}
       
-      # Google OAuth (set in production)
+      # Service-to-service auth: callers send X-Internal-Token (architecture §5.3)
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
+
+      # Google / Apple sign-in (empty = endpoint answers 503 "chưa cấu hình")
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
 
       # Admin allow-list (drives the isAdmin flag on GET /auth/profile, used by the
       # frontend to show/hide admin navigation — actual write endpoints are still
@@ -96,8 +111,6 @@ services:
 
       # Spring
       SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
-    ports:
-      - "8001:8001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -130,6 +143,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${CONTENT_DB_PASSWORD:-content_password}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      # Fail fast when Redis hangs (cache/blacklist are fail-open) instead of the 60s default
+      SPRING_DATA_REDIS_TIMEOUT: ${REDIS_TIMEOUT:-2s}
       
       # AWS S3 (for audio/video files)
       AWS_S3_BUCKET: ${S3_BUCKET:-parroto-dev-bucket}
@@ -137,8 +152,13 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
 
+      # Lesson audio storage (architecture §8): auto = s3 when both AWS keys are set
+      # (and not "your_..."), otherwise local files under MEDIA_ROOT (mock mode).
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-auto}
+      MEDIA_ROOT: ${MEDIA_ROOT:-/data/media}
+
       # JWT (must match auth-service's secret)
-      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set a random value of at least 32 characters}
 
       # Comma-separated emails allowed to call admin-only endpoints (MVP stand-in for a roles table)
       ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@parroto.com}
@@ -147,8 +167,10 @@ services:
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
       LOGGING_LEVEL_COM_PARROTO: DEBUG
       SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
-    ports:
-      - "8002:8002"
+    volumes:
+      - media_data:/data/media
+      # Seed lesson audio (local:seed/lesson-<n>/...), generated by scripts/gen-seed-audio.sh
+      - ./media/seed:/data/media/seed:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -176,6 +198,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${PRACTICE_DB_PASSWORD:-practice_password}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      # Fail fast when Redis hangs (cache/blacklist are fail-open) instead of the 60s default
+      SPRING_DATA_REDIS_TIMEOUT: ${REDIS_TIMEOUT:-2s}
       
       # Microservices communication
       CONTENT_SERVICE_URL: http://content-service:8002
@@ -190,15 +214,22 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
 
+      # Recording storage + pronunciation scoring (architecture §8):
+      # STORAGE_PROVIDER auto = s3 when AWS keys are set, else local files under MEDIA_ROOT;
+      # SPEECH_PROVIDER auto = azure when AZURE_SPEECH_KEY is set, else deterministic mock scorer.
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-auto}
+      SPEECH_PROVIDER: ${SPEECH_PROVIDER:-auto}
+      MEDIA_ROOT: ${MEDIA_ROOT:-/data/media}
+
       # JWT (must match auth-service's secret)
-      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set a random value of at least 32 characters}
 
       # Logging
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
       LOGGING_LEVEL_COM_PARROTO: DEBUG
       SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
-    ports:
-      - "8003:8003"
+    volumes:
+      - media_data:/data/media
     depends_on:
       postgres:
         condition: service_healthy
@@ -228,9 +259,11 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${VOCABULARY_DB_PASSWORD:-vocabulary_password}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      # Fail fast when Redis hangs (cache/blacklist are fail-open) instead of the 60s default
+      SPRING_DATA_REDIS_TIMEOUT: ${REDIS_TIMEOUT:-2s}
 
       # JWT (must match auth-service's secret)
-      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set a random value of at least 32 characters}
 
       # Comma-separated emails allowed to call admin-only endpoints (MVP stand-in for a roles table)
       ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@parroto.com}
@@ -238,12 +271,13 @@ services:
       # Microservices communication (premium gate for Pro-only decks)
       SUBSCRIPTION_SERVICE_URL: http://subscription-service:8005
 
+      # Service-to-service auth (architecture §5.3)
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
+
       # Logging
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
       LOGGING_LEVEL_COM_PARROTO: DEBUG
       SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
-    ports:
-      - "8004:8004"
     depends_on:
       postgres:
         condition: service_healthy
@@ -271,9 +305,17 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${SUBSCRIPTION_DB_PASSWORD:-subscription_password}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PORT: 6379
+      # Fail fast when Redis hangs (cache/blacklist are fail-open) instead of the 60s default
+      SPRING_DATA_REDIS_TIMEOUT: ${REDIS_TIMEOUT:-2s}
       
       # Microservices communication
       AUTH_SERVICE_URL: http://auth-service:8001
+
+      # Service-to-service auth (architecture §5.3)
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
+
+      # Comma-separated emails allowed to call admin-only endpoints (activation codes)
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@parroto.com}
       
       # VNPay Payment Gateway
       VNPAY_API_URL: ${VNPAY_API_URL:-https://sandbox.vnpayment.vn}
@@ -287,7 +329,7 @@ services:
       VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8000/subscriptions/payment-callback}
 
       # JWT (must match auth-service's secret)
-      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set a random value of at least 32 characters}
 
       # Email notifications (for subscription updates)
       MAIL_HOST: ${MAIL_HOST:-}
@@ -300,8 +342,6 @@ services:
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
       LOGGING_LEVEL_COM_PARROTO: DEBUG
       SPRING_PROFILES_ACTIVE: ${ENVIRONMENT:-dev}
-    ports:
-      - "8005:8005"
     depends_on:
       postgres:
         condition: service_healthy
@@ -329,7 +369,7 @@ services:
       NODE_ENV: ${ENVIRONMENT:-development}
       
       # JWT
-      JWT_SECRET: ${JWT_SECRET:-dev_super_secret_jwt_key_change_in_production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set a random value of at least 32 characters}
       
       # Microservices URLs
       AUTH_SERVICE_URL: http://auth-service:8001
@@ -340,17 +380,27 @@ services:
       
       # Frontend
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      
+
+      # Redis (JWT blacklist check; fail-open when Redis is down)
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
       - "8000:8000"
     depends_on:
-      - auth-service
-      - content-service
-      - practice-service
-      - vocabulary-service
-      - subscription-service
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      content-service:
+        condition: service_started
+      practice-service:
+        condition: service_started
+      vocabulary-service:
+        condition: service_started
+      subscription-service:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -396,6 +446,10 @@ volumes:
     driver: local
   redis_data:
     driver: local
+  # Local storage for mock mode (lesson audio uploads + shadowing recordings),
+  # shared by content-service and practice-service at /data/media.
+  media_data:
+    driver: local
 
 networks:
   parroto-network:
@@ -406,7 +460,7 @@ networks:
 # docker-compose down                           # Stop all services
 # docker-compose logs -f api-gateway            # Watch API Gateway logs
 # docker-compose ps                             # View running services
-# docker-compose exec postgres psql -U parroto parroto_db  # Access PostgreSQL
+# docker-compose exec postgres psql -U parroto parroto       # Access PostgreSQL
 # docker-compose exec redis redis-cli           # Access Redis CLI
 # docker-compose up -d --build                  # Rebuild and start
 # docker-compose restart auth-service           # Restart single service
