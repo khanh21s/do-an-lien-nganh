@@ -1,11 +1,18 @@
 import { api } from '@/lib/api';
+import { normalizePage } from '@/lib/page';
 import type {
+  AdminAuthStats,
+  AdminUser,
   AuthResponse,
   ChangePasswordInput,
+  FlatPageResponse,
+  ListAdminUsersParams,
   LoginInput,
   MessageResponse,
+  PageResponse,
   ProfileResponse,
   RegisterInput,
+  UpdateAdminUserInput,
   UpdateProfileInput,
 } from '@/lib/types';
 
@@ -41,4 +48,20 @@ export const authApi = {
 
   // --- T11 additions ---
   // --- end T11 ---
+
+  // --- T14 additions ---
+  /** Admin: users (admins included), `q` matches email, newest first. */
+  adminListUsers: (params: ListAdminUsersParams = {}) =>
+    api
+      .get<PageResponse<AdminUser> | FlatPageResponse<AdminUser>>('/auth/admin/users', { params })
+      .then((r) => normalizePage(r.data)),
+
+  adminGetUser: (id: string) => api.get<AdminUser>(`/auth/admin/users/${id}`).then((r) => r.data),
+
+  /** Admin: lock (`isActive=false`) or unlock a user. Admin accounts → 400. */
+  adminUpdateUser: (id: string, data: UpdateAdminUserInput) =>
+    api.patch<AdminUser>(`/auth/admin/users/${id}`, data).then((r) => r.data),
+
+  adminStats: () => api.get<AdminAuthStats>('/auth/admin/stats').then((r) => r.data),
+  // --- end T14 ---
 };

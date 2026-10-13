@@ -1,5 +1,7 @@
 import type {
   ListActivationCodesParams,
+  ListAdminTransactionsParams,
+  ListAdminUsersParams,
   ListAttemptsParams,
   ListDecksParams,
   ListLearnedParams,
@@ -85,4 +87,19 @@ export const qk = {
   // --- T13 additions ---
   // No new keys: creating/editing a personal word invalidates learnedWordsAll, vocabStats, reviewQueue.
   // --- end T13 ---
+
+  // --- T14 additions ---
+  adminUsersAll: ['admin-users'] as const,
+  adminUsers: (params: ListAdminUsersParams = {}) => ['admin-users', params] as const,
+  adminUserStatusAll: ['admin-user-status'] as const,
+  adminUserStatus: (userIds: readonly string[]) => ['admin-user-status', userIds] as const,
+  adminAuthStats: ['admin-auth-stats'] as const,
+  adminSubscriptionStats: ['admin-subscription-stats'] as const,
+  adminPlans: ['admin-plans'] as const,
+  adminTransactionsAll: ['admin-transactions'] as const,
+  adminTransactions: (params: ListAdminTransactionsParams = {}) => ['admin-transactions', params] as const,
+  /** Overview totals, nested under the existing prefixes so lesson/deck invalidation refreshes them. */
+  adminLessonCount: ['admin-lessons', 'count'] as const,
+  adminDeckCount: ['admin-decks', 'count'] as const,
+  // --- end T14 ---
 };

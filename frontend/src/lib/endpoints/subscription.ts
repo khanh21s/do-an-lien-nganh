@@ -1,6 +1,15 @@
 import { api } from '@/lib/api';
+import { normalizePage } from '@/lib/page';
 import type {
   ActivationCode,
+  AdminPlan,
+  AdminPlanInput,
+  AdminSubscriptionStats,
+  AdminTransaction,
+  FlatPageResponse,
+  ListAdminTransactionsParams,
+  UpdateAdminPlanInput,
+  UserPremiumStatus,
   CreateActivationCodesInput,
   CreateActivationCodesResult,
   CreatePaymentResult,
@@ -38,4 +47,32 @@ export const subscriptionApi = {
 
   // --- T12 additions ---
   // --- end T12 ---
+
+  // --- T14 additions ---
+  /** Admin: every plan, inactive ones included. */
+  adminListPlans: () => api.get<AdminPlan[]>('/subscriptions/admin/plans').then((r) => r.data),
+
+  /** Admin: 201; duplicate id → 409 "Mã gói đã tồn tại". */
+  adminCreatePlan: (data: AdminPlanInput) =>
+    api.post<AdminPlan>('/subscriptions/admin/plans', data).then((r) => r.data),
+
+  /** Admin: plans are never hard-deleted; deactivate with `isActive=false`. */
+  adminUpdatePlan: (id: string, data: UpdateAdminPlanInput) =>
+    api.put<AdminPlan>(`/subscriptions/admin/plans/${encodeURIComponent(id)}`, data).then((r) => r.data),
+
+  adminListTransactions: (params: ListAdminTransactionsParams = {}) =>
+    api
+      .get<PageResponse<AdminTransaction> | FlatPageResponse<AdminTransaction>>('/subscriptions/admin/transactions', {
+        params,
+      })
+      .then((r) => normalizePage(r.data)),
+
+  adminStats: () => api.get<AdminSubscriptionStats>('/subscriptions/admin/stats').then((r) => r.data),
+
+  /** Admin: premium status of up to 100 users (Premium column of the users table). */
+  adminUserStatus: (userIds: readonly string[]) =>
+    api
+      .post<UserPremiumStatus[]>('/subscriptions/admin/user-status', { userIds: [...userIds] })
+      .then((r) => r.data),
+  // --- end T14 ---
 };
