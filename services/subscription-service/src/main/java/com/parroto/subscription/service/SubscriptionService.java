@@ -9,15 +9,19 @@ import com.parroto.subscription.exception.ApiException;
 import com.parroto.subscription.repository.ActivationCodeRepository;
 import com.parroto.subscription.repository.PaymentTransactionRepository;
 import com.parroto.subscription.repository.SubscriptionRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,7 +29,12 @@ import java.util.UUID;
 @Service
 public class SubscriptionService {
 
+    private static final Logger log = LoggerFactory.getLogger(SubscriptionService.class);
     private static final long PAYMENT_URL_TTL_SECONDS = 900;
+
+    static final String STATUS_PENDING = "pending";
+    static final String STATUS_SUCCESS = "success";
+    static final String STATUS_FAILED = "failed";
 
     private final SubscriptionRepository subscriptionRepository;
     private final PaymentTransactionRepository transactionRepository;
@@ -34,14 +43,14 @@ public class SubscriptionService {
     private final VNPayService vnPayService;
     private final EmailService emailService;
     private final AuthServiceClient authServiceClient;
-    private final CacheService cacheService;
+    private final PremiumCacheEvictor premiumCacheEvictor;
 
     public SubscriptionService(SubscriptionRepository subscriptionRepository,
                                 PaymentTransactionRepository transactionRepository,
                                 ActivationCodeRepository activationCodeRepository,
                                 PlanService planService, VNPayService vnPayService,
                                 EmailService emailService, AuthServiceClient authServiceClient,
-                                CacheService cacheService) {
+                                PremiumCacheEvictor premiumCacheEvictor) {
         this.subscriptionRepository = subscriptionRepository;
         this.transactionRepository = transactionRepository;
         this.activationCodeRepository = activationCodeRepository;
@@ -49,7 +58,7 @@ public class SubscriptionService {
         this.vnPayService = vnPayService;
         this.emailService = emailService;
         this.authServiceClient = authServiceClient;
-        this.cacheService = cacheService;
+        this.premiumCacheEvictor = premiumCacheEvictor;
     }
 
     @Transactional(readOnly = true)
@@ -62,7 +71,7 @@ public class SubscriptionService {
         Subscription sub = active.get();
         long daysRemaining = Duration.between(OffsetDateTime.now(), sub.getEndAt()).toDays();
         var info = UserSubscriptionResponse.SubscriptionInfo.builder()
-                .id(sub.getId().toString())
+                .id(sub.getId() != null ? sub.getId().toString() : null)
                 .planId(sub.getPlan().getId())
                 .planName(sub.getPlan().getName())
                 .startAt(sub.getStartAt().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
@@ -88,7 +97,7 @@ public class SubscriptionService {
             throw ApiException.conflict("User already has an active Premium subscription");
         }
         if (!vnPayService.isConfigured()) {
-            throw new ApiException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
                     "VNPay is not configured (VNPAY_MERCHANT_ID / VNPAY_SECRET missing)");
         }
 
@@ -97,7 +106,7 @@ public class SubscriptionService {
                 .planId(plan.getId())
                 .amount(plan.getPrice())
                 .method("vnpay")
-                .status("pending")
+                .status(STATUS_PENDING)
                 .description("Nâng cấp gói " + plan.getName())
                 .build();
         transaction = transactionRepository.save(transaction);
@@ -112,62 +121,91 @@ public class SubscriptionService {
     }
 
     /**
-     * @return the frontend path to redirect the browser to ("/subscription/success" or "/subscription/failed")
+     * SUB-01/02: single entry point for VNPay results, shared by the server-to-server IPN and the
+     * browser return URL. Idempotent: the transaction row is locked and only a {@code pending}
+     * transaction is ever updated, so a replayed or concurrent call returns {@code 02}.
      */
     @Transactional
-    public String handlePaymentCallback(Map<String, String> params) {
-        if (!vnPayService.verifyCallback(params)) {
-            return "/subscription/failed?reason=invalid_signature";
+    public VnpayResult processVnpayResult(Map<String, String> params) {
+        if (!vnPayService.verifySignature(params)) {
+            return VnpayResult.of(VnpayResult.INVALID_SIGNATURE, "Invalid signature", null);
         }
-        String txnRef = params.get("vnp_TxnRef");
-        String responseCode = params.get("vnp_ResponseCode");
-        if (txnRef == null) {
-            return "/subscription/failed?reason=missing_reference";
+        UUID transactionId = parseUuid(params.get("vnp_TxnRef"));
+        if (transactionId == null) {
+            return VnpayResult.of(VnpayResult.ORDER_NOT_FOUND, "Order not found", null);
         }
-
-        UUID transactionId;
-        try {
-            transactionId = UUID.fromString(txnRef);
-        } catch (IllegalArgumentException e) {
-            return "/subscription/failed?reason=invalid_reference";
-        }
-
-        PaymentTransaction transaction = transactionRepository.findById(transactionId).orElse(null);
+        PaymentTransaction transaction = transactionRepository.findByIdForUpdate(transactionId).orElse(null);
         if (transaction == null) {
-            return "/subscription/failed?reason=not_found";
+            return VnpayResult.of(VnpayResult.ORDER_NOT_FOUND, "Order not found", null);
         }
-        if ("success".equals(transaction.getStatus())) {
-            return "/subscription/success"; // already processed (idempotent)
+        if (!STATUS_PENDING.equals(transaction.getStatus())) {
+            return VnpayResult.of(VnpayResult.ALREADY_CONFIRMED, "Order already confirmed", transaction.getStatus());
         }
 
-        if (!"00".equals(responseCode)) {
-            transaction.setStatus("failed");
+        Long paidAmount = parseLong(params.get("vnp_Amount"));
+        if (paidAmount == null || paidAmount != transaction.getAmount() * 100) {
+            log.warn("VNPay amount mismatch for transaction {}: expected {} got {}",
+                    transactionId, transaction.getAmount() * 100, params.get("vnp_Amount"));
+            transaction.setStatus(STATUS_FAILED);
             transactionRepository.save(transaction);
-            return "/subscription/failed?reason=payment_declined";
+            return VnpayResult.of(VnpayResult.INVALID_AMOUNT, "Invalid amount", STATUS_FAILED);
         }
 
-        transaction.setStatus("success");
+        boolean paid = "00".equals(params.get("vnp_ResponseCode"))
+                && "00".equals(params.get("vnp_TransactionStatus"));
+        if (!paid) {
+            transaction.setStatus(STATUS_FAILED);
+            transactionRepository.save(transaction);
+            return VnpayResult.of(VnpayResult.OK, "Confirm Success", STATUS_FAILED);
+        }
+
+        transaction.setStatus(STATUS_SUCCESS);
         transactionRepository.save(transaction);
 
         Plan plan = planService.getPlanOrThrow(transaction.getPlanId());
-        activateSubscription(transaction.getUserId(), plan, "vnpay", transaction.getTransactionId());
+        Subscription subscription = activateSubscription(transaction.getUserId(), plan, "vnpay",
+                transaction.getTransactionId());
 
-        String email = authServiceClient.findEmail(transaction.getUserId());
-        emailService.sendPaymentConfirmation(email, plan.getName(),
-                OffsetDateTime.now().plusDays(plan.getDurationDays()).format(DateTimeFormatter.ISO_LOCAL_DATE));
+        UUID userId = transaction.getUserId();
+        String endDate = subscription.getEndAt().format(DateTimeFormatter.ISO_LOCAL_DATE);
+        AfterCommit.run(() -> emailService.sendPaymentConfirmation(
+                authServiceClient.findEmail(userId), plan.getName(), endDate));
 
-        return "/subscription/success";
+        return VnpayResult.of(VnpayResult.OK, "Confirm Success", STATUS_SUCCESS);
     }
 
+    /**
+     * Return URL (browser redirect). Only decides where to send the user; if the IPN has not
+     * arrived yet the result is processed here exactly like the IPN would (idempotent).
+     *
+     * @return the frontend path to redirect the browser to ("/subscription/success" or "/subscription/failed?...")
+     */
+    @Transactional
+    public String handlePaymentCallback(Map<String, String> params) {
+        VnpayResult result = processVnpayResult(params);
+        return switch (result.rspCode()) {
+            case VnpayResult.INVALID_SIGNATURE -> "/subscription/failed?reason=invalid_signature";
+            case VnpayResult.ORDER_NOT_FOUND -> "/subscription/failed?reason=not_found";
+            case VnpayResult.INVALID_AMOUNT -> "/subscription/failed?reason=invalid_amount";
+            default -> STATUS_SUCCESS.equals(result.transactionStatus())
+                    ? "/subscription/success"
+                    : "/subscription/failed?reason=payment_declined";
+        };
+    }
+
+    /**
+     * SUB-05: redeems an activation code; time accumulates onto an active subscription.
+     */
     @Transactional
     public UserSubscriptionResponse activateCode(UUID userId, String code) {
-        ActivationCode activationCode = activationCodeRepository.findByCode(code)
-                .orElseThrow(() -> ApiException.notFound("Activation code not found"));
+        String normalized = code == null ? "" : code.trim().toUpperCase(Locale.ROOT);
+        ActivationCode activationCode = activationCodeRepository.findByCodeForUpdate(normalized)
+                .orElseThrow(() -> ApiException.notFound("Mã không hợp lệ"));
         if (activationCode.getUsedByUserId() != null) {
-            throw ApiException.conflict("This activation code has already been used");
+            throw ApiException.badRequest("Mã đã được sử dụng");
         }
         if (activationCode.getExpiresAt().isBefore(OffsetDateTime.now())) {
-            throw ApiException.badRequest("This activation code has expired");
+            throw ApiException.badRequest("Mã đã hết hạn");
         }
 
         activationCode.setUsedByUserId(userId);
@@ -187,7 +225,12 @@ public class SubscriptionService {
         return PageResponse.of(mapped, page, limit);
     }
 
-    private void activateSubscription(UUID userId, Plan plan, String paymentMethod, String transactionRef) {
+    /**
+     * Grants {@code plan.durationDays} of premium. If the user already has an active subscription its
+     * {@code end_at} is extended (accumulates); otherwise a new period starts now. Evicts the
+     * vocabulary-service premium cache after commit (SUB-04).
+     */
+    Subscription activateSubscription(UUID userId, Plan plan, String paymentMethod, String transactionRef) {
         OffsetDateTime now = OffsetDateTime.now();
         Subscription subscription = subscriptionRepository
                 .findFirstByUserIdAndStatusAndEndAtAfterOrderByEndAtDesc(userId, "active", now)
@@ -204,8 +247,31 @@ public class SubscriptionService {
             subscription.setStartAt(now);
         }
         subscription.setEndAt(baseline.plusDays(plan.getDurationDays()));
-        subscriptionRepository.save(subscription);
+        subscription = subscriptionRepository.save(subscription);
 
-        cacheService.invalidateByPattern("premium:" + userId);
+        premiumCacheEvictor.evictAfterCommit(userId);
+        return subscription;
+    }
+
+    private static UUID parseUuid(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private static Long parseLong(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

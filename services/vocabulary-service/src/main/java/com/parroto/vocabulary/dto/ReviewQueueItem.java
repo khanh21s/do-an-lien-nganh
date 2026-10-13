@@ -14,6 +14,10 @@ public record ReviewQueueItem(
         String meaning,
         String example,
         String ipa,
+        String exampleVi,
+        String partOfSpeech,
+        String audioUrl,
+        String imageUrl,
         OffsetDateTime lastReviewAt,
         OffsetDateTime nextReviewAt,
         int repetitions,
@@ -28,6 +32,10 @@ public record ReviewQueueItem(
                 .meaning(uv.getCard().getMeaning())
                 .example(uv.getCard().getExample())
                 .ipa(uv.getCard().getIpa())
+                .exampleVi(uv.getCard().getExampleVi())
+                .partOfSpeech(uv.getCard().getPartOfSpeech())
+                .audioUrl(uv.getCard().getAudioUrl())
+                .imageUrl(uv.getCard().getImageUrl())
                 .lastReviewAt(uv.getLastReviewAt())
                 .nextReviewAt(uv.getNextReviewAt())
                 .repetitions(uv.getRepetitions())

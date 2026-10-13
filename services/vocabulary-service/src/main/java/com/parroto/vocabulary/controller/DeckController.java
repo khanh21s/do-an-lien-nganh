@@ -48,7 +48,7 @@ public class DeckController {
     public ResponseEntity<DeckResponse> create(@AuthenticationPrincipal AuthenticatedUser principal,
                                                 @Valid @RequestBody CreateDeckRequest request) {
         adminGuard.requireAdmin(principal);
-        return ResponseEntity.status(HttpStatus.CREATED).body(deckService.createDeck(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(deckService.createDeck(request, principal.userUuid()));
     }
 
     @PostMapping("/{id}/cards")

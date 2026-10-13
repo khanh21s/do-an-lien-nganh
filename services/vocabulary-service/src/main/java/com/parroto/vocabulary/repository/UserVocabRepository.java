@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,7 +18,13 @@ public interface UserVocabRepository extends JpaRepository<UserVocab, UUID> {
     Optional<UserVocab> findByUserIdAndCard_Id(UUID userId, UUID cardId);
 
     @Query("""
-            SELECT uv FROM UserVocab uv
+            SELECT uv.card.id, uv.id FROM UserVocab uv
+            WHERE uv.userId = :userId AND uv.card.id IN :cardIds
+            """)
+    List<Object[]> findIdsByUserIdAndCardIdIn(@Param("userId") UUID userId, @Param("cardIds") Collection<UUID> cardIds);
+
+    @Query("""
+            SELECT uv FROM UserVocab uv JOIN FETCH uv.card
             WHERE uv.userId = :userId AND uv.nextReviewAt <= :now
             ORDER BY uv.nextReviewAt ASC
             """)

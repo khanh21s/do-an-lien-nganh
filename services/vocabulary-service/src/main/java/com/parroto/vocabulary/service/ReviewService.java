@@ -23,12 +23,14 @@ public class ReviewService {
     private final UserVocabRepository userVocabRepository;
     private final VocabCardRepository cardRepository;
     private final SM2Calculator sm2Calculator;
+    private final PremiumClient premiumClient;
 
     public ReviewService(UserVocabRepository userVocabRepository, VocabCardRepository cardRepository,
-                          SM2Calculator sm2Calculator) {
+                          SM2Calculator sm2Calculator, PremiumClient premiumClient) {
         this.userVocabRepository = userVocabRepository;
         this.cardRepository = cardRepository;
         this.sm2Calculator = sm2Calculator;
+        this.premiumClient = premiumClient;
     }
 
     @Transactional(readOnly = true)
@@ -50,11 +52,12 @@ public class ReviewService {
         SM2Calculator.Sm2Result result = sm2Calculator.calculate(
                 userVocab.getRepetitions(), userVocab.getIntervalDays(), userVocab.getEaseFactor(), request.quality());
 
+        OffsetDateTime now = OffsetDateTime.now();
         userVocab.setIntervalDays(result.interval());
         userVocab.setEaseFactor(result.easeFactor());
-        userVocab.setRepetitions(userVocab.getRepetitions() + 1);
-        userVocab.setLastReviewAt(OffsetDateTime.now());
-        userVocab.setNextReviewAt(OffsetDateTime.now().plusDays(result.interval()));
+        userVocab.setRepetitions(result.repetitions());
+        userVocab.setLastReviewAt(now);
+        userVocab.setNextReviewAt(now.plusDays(result.interval()));
         userVocab.setQuality(request.quality());
         userVocab = userVocabRepository.save(userVocab);
 
@@ -64,7 +67,7 @@ public class ReviewService {
                 .easeFactor(userVocab.getEaseFactor().doubleValue())
                 .interval(result.interval())
                 .repetitions(userVocab.getRepetitions())
-                .message(messageFor(result.interval()))
+                .message(messageFor(request.quality(), result.interval()))
                 .build();
     }
 
@@ -102,6 +105,10 @@ public class ReviewService {
         }
         VocabCard card = cardRepository.findById(request.cardId())
                 .orElseThrow(() -> ApiException.notFound("Card not found"));
+        if (card.getDeck() != null && Boolean.TRUE.equals(card.getDeck().getIsProOnly())
+                && !premiumClient.isPremium(userId.toString())) {
+            throw ApiException.forbidden("Bộ từ Pro – nâng cấp Premium để học");
+        }
 
         UserVocab userVocab = UserVocab.builder()
                 .userId(userId)
@@ -133,7 +140,13 @@ public class ReviewService {
         userVocabRepository.delete(userVocab);
     }
 
-    private String messageFor(int intervalDays) {
+    static String messageFor(int quality, int intervalDays) {
+        if (quality < 3) {
+            return "Đừng lo! Thẻ sẽ được ôn lại sau %d ngày.".formatted(intervalDays);
+        }
+        if (intervalDays <= 1) {
+            return "Tốt! Ôn lại vào ngày mai.";
+        }
         return "Tốt lắm! Ôn lại trong %d ngày.".formatted(intervalDays);
     }
 
