@@ -35,6 +35,7 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.GET, "/subscriptions/plans").permitAll()
                         .requestMatchers("/subscriptions/payment-callback").permitAll()
                         // VNPay server-to-server IPN (SUB-02): no user token; authenticity comes from the VNPay signature.

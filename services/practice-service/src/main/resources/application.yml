@@ -8,6 +8,10 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:practice_user}
     password: ${SPRING_DATASOURCE_PASSWORD:practice_password}
     driver-class-name: org.postgresql.Driver
+  mvc:
+    formcontent:
+      filter:
+        enabled: false
   jpa:
     hibernate:
       ddl-auto: validate
@@ -20,6 +24,7 @@ spring:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
+      timeout: ${SPRING_DATA_REDIS_TIMEOUT:2s}
 
 server:
   port: ${SERVER_PORT:8003}

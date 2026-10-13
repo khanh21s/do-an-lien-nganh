@@ -33,6 +33,7 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/error").permitAll()
                         // Public reads: lesson browsing doesn't require login.
                         .requestMatchers(HttpMethod.GET, "/lessons/**", "/sentences/**").permitAll()
                         // Writes (admin-gated in the controller layer) require a valid JWT.

@@ -41,6 +41,7 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/**").permitAll()
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers("/auth/register", "/auth/login", "/auth/login-google",
                                 "/auth/login-apple", "/auth/refresh-token").permitAll()
                         // Internal, service-to-service only (not exposed through the API gateway).
