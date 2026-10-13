@@ -15,6 +15,7 @@ public record AttemptSummaryResponse(
         String mode,
         BigDecimal score,
         BigDecimal accuracy,
+        String difficulty,
         OffsetDateTime createdAt
 ) {
     public static AttemptSummaryResponse from(PracticeAttempt a) {
@@ -25,6 +26,7 @@ public record AttemptSummaryResponse(
                 .mode(a.getMode())
                 .score(a.getScore())
                 .accuracy(a.getAccuracy())
+                .difficulty(a.getDifficulty())
                 .createdAt(a.getCreatedAt())
                 .build();
     }

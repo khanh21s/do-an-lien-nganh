@@ -1,5 +1,6 @@
 package com.parroto.practice.controller;
 
+import com.parroto.practice.dto.ActivityDayResponse;
 import com.parroto.practice.dto.LessonStatsResponse;
 import com.parroto.practice.dto.StatsResponse;
 import com.parroto.practice.dto.StreakResponse;
@@ -11,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -35,6 +37,13 @@ public class StatsController {
     public ResponseEntity<LessonStatsResponse> statsByLesson(@AuthenticationPrincipal AuthenticatedUser principal,
                                                                @PathVariable UUID lessonId) {
         return ResponseEntity.ok(statsService.getLessonStats(principal.userUuid(), lessonId));
+    }
+
+    /** PRA-03: heatmap data, exactly {@code days} entries (1–365, default 90), Asia/Ho_Chi_Minh days. */
+    @GetMapping("/stats/activity")
+    public ResponseEntity<List<ActivityDayResponse>> activity(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                              @RequestParam(defaultValue = "90") int days) {
+        return ResponseEntity.ok(statsService.getActivity(principal.userUuid(), days));
     }
 
     @GetMapping("/stats/trending-errors")

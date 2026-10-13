@@ -61,3 +61,10 @@ logging:
   level:
     root: ${LOGGING_LEVEL_ROOT:INFO}
     com.parroto: ${LOGGING_LEVEL_COM_PARROTO:DEBUG}
+
+app:
+  storage:
+    provider: ${STORAGE_PROVIDER:auto}
+    local-root: ${MEDIA_ROOT:/data/media}
+  speech:
+    provider: ${SPEECH_PROVIDER:auto}
