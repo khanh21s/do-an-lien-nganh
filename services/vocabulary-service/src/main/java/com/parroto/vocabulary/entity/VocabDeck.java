@@ -45,6 +45,18 @@ public class VocabDeck {
     @Column(name = "created_by")
     private UUID createdBy;
 
+    /** NULL = public (admin) deck; otherwise the user's hidden personal deck (T13). */
+    @Column(name = "owner_id")
+    private UUID ownerId;
+
+    public boolean isPersonal() {
+        return ownerId != null;
+    }
+
+    public boolean isOwnedBy(UUID userId) {
+        return ownerId != null && ownerId.equals(userId);
+    }
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt;

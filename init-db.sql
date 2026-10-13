@@ -224,6 +224,7 @@ CREATE TABLE vocab_deck (
   is_pro_only BOOLEAN DEFAULT false,
   card_count INTEGER DEFAULT 0, -- Denormalized for performance
   created_by UUID, -- Admin user ID
+  owner_id UUID, -- NULL = public (admin) deck; user ID = that user's hidden personal deck (T13)
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -262,6 +263,8 @@ CREATE TABLE user_vocab (
 
 -- Indices for SRS algorithm
 CREATE INDEX idx_vocab_deck_level ON vocab_deck(level);
+-- At most one personal deck per user (T13); also serves owner lookups.
+CREATE UNIQUE INDEX ux_vocab_deck_owner ON vocab_deck(owner_id) WHERE owner_id IS NOT NULL;
 CREATE INDEX idx_vocab_card_deck ON vocab_card(deck_id);
 CREATE INDEX idx_vocab_card_word ON vocab_card(word);
 CREATE INDEX idx_user_vocab_user ON user_vocab(user_id);
