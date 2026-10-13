@@ -7,7 +7,6 @@ import com.parroto.practice.repository.PracticeAttemptRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +27,7 @@ public class AttemptQueryService {
     public PageResponse<AttemptSummaryResponse> listAttempts(UUID userId, UUID lessonId, String mode, int page, int limit) {
         page = Math.max(page, 1);
         limit = Math.min(Math.max(limit, 1), 100);
-        Pageable pageable = PageRequest.of(Math.max(page - 1, 0), limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = PageRequest.of(page - 1, limit); // ordering (createdAt DESC) is part of the query
         Page<PracticeAttempt> attempts = attemptRepository.search(userId, lessonId, mode, pageable);
         Page<AttemptSummaryResponse> mapped = attempts.map(AttemptSummaryResponse::from);
         return PageResponse.of(mapped, page, limit);

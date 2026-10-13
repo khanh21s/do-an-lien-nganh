@@ -14,15 +14,33 @@ import java.util.UUID;
 
 public interface PracticeAttemptRepository extends JpaRepository<PracticeAttempt, UUID> {
 
-    @Query("""
-            SELECT a FROM PracticeAttempt a
-            WHERE a.userId = :userId
-              AND (:lessonId IS NULL OR a.lessonId = :lessonId)
-              AND (:mode IS NULL OR a.mode = :mode)
-            ORDER BY a.createdAt DESC
-            """)
-    Page<PracticeAttempt> search(@Param("userId") UUID userId, @Param("lessonId") UUID lessonId,
-                                  @Param("mode") String mode, Pageable pageable);
+    /**
+     * Attempts of one user, newest first, optionally filtered by lesson and/or mode.
+     * Dispatches to derived queries instead of {@code (:param IS NULL OR ...)}, which PostgreSQL
+     * rejects for null UUID parameters ("could not determine data type of parameter").
+     */
+    default Page<PracticeAttempt> search(UUID userId, UUID lessonId, String mode, Pageable pageable) {
+        boolean hasMode = mode != null && !mode.isBlank();
+        if (lessonId != null && hasMode) {
+            return findByUserIdAndLessonIdAndModeOrderByCreatedAtDesc(userId, lessonId, mode, pageable);
+        }
+        if (lessonId != null) {
+            return findPageByUserIdAndLessonIdOrderByCreatedAtDesc(userId, lessonId, pageable);
+        }
+        if (hasMode) {
+            return findByUserIdAndModeOrderByCreatedAtDesc(userId, mode, pageable);
+        }
+        return findByUserIdOrderByCreatedAtDesc(userId, pageable);
+    }
+
+    Page<PracticeAttempt> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+
+    Page<PracticeAttempt> findPageByUserIdAndLessonIdOrderByCreatedAtDesc(UUID userId, UUID lessonId, Pageable pageable);
+
+    Page<PracticeAttempt> findByUserIdAndModeOrderByCreatedAtDesc(UUID userId, String mode, Pageable pageable);
+
+    Page<PracticeAttempt> findByUserIdAndLessonIdAndModeOrderByCreatedAtDesc(UUID userId, UUID lessonId, String mode,
+                                                                             Pageable pageable);
 
     List<PracticeAttempt> findByUserIdAndLessonIdOrderByCreatedAtDesc(UUID userId, UUID lessonId);
 
