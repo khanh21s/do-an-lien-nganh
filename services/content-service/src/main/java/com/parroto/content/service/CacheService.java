@@ -1,13 +1,19 @@
 package com.parroto.content.service;
 
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class CacheService {
+
+    /** SCAN page-size hint and DEL batch size. */
+    private static final int SCAN_BATCH = 500;
 
     private final RedisTemplate<String, Object> redisTemplate;
 
@@ -25,10 +31,24 @@ public class CacheService {
         return type.isInstance(value) ? (T) value : null;
     }
 
+    /**
+     * Deletes every key matching {@code pattern} using an incremental SCAN cursor and batched DEL,
+     * never the blocking KEYS command (X-06).
+     */
     public void invalidateByPattern(String pattern) {
-        Set<String> keys = redisTemplate.keys(pattern);
-        if (keys != null && !keys.isEmpty()) {
-            redisTemplate.delete(keys);
+        ScanOptions options = ScanOptions.scanOptions().match(pattern).count(SCAN_BATCH).build();
+        List<String> batch = new ArrayList<>(SCAN_BATCH);
+        try (Cursor<String> cursor = redisTemplate.scan(options)) {
+            while (cursor.hasNext()) {
+                batch.add(cursor.next());
+                if (batch.size() >= SCAN_BATCH) {
+                    redisTemplate.delete(batch);
+                    batch = new ArrayList<>(SCAN_BATCH);
+                }
+            }
+        }
+        if (!batch.isEmpty()) {
+            redisTemplate.delete(batch);
         }
     }
 }
