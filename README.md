@@ -108,6 +108,17 @@ docker exec -i parroto-postgres psql -U parroto -d vocabulary_db -v ON_ERROR_STO
 docker-compose restart vocabulary-service
 ```
 
+**B2 vocabulary deck** — the free public deck "Từ vựng B2 thiết yếu" (734 cards: word, part of
+speech, Vietnamese meaning, IPA, example + translation) comes from `data/vocab/b2-essential.tsv`.
+Fresh volumes load it automatically (`initdb/02-seed-b2-vocab.sh`). For an existing DB, or after
+editing the TSV:
+```bash
+python3 scripts/gen-b2-seed.py     # validate the TSV + regenerate scripts/migrations/002_seed_b2_deck.sql
+docker exec -i parroto-postgres psql -U parroto -d vocabulary_db -v ON_ERROR_STOP=1 < scripts/migrations/002_seed_b2_deck.sql
+docker exec parroto-redis sh -c "redis-cli --scan --pattern 'vocab:decks:*' | xargs -r redis-cli del"   # refresh the deck list cache
+```
+The script is idempotent (fixed deck id, skips words already in the deck), so it only adds new rows.
+
 **Normalise old practice scores** — since Phase 1 a score is always 0–100
 (`accuracy × difficulty weight`). Rows written by older versions may be above 100; fix
 them once, manually:
