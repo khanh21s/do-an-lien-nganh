@@ -182,6 +182,10 @@ function TopicList({
   );
 }
 
+// Hide the inactive face at the flip's midpoint instead of relying on backface-visibility
+// alone, which Firefox doesn't honour reliably (the front showed through mirrored).
+const FACE_SWAP = 'transition-[opacity,visibility] duration-0 delay-200';
+
 function StudyCard({
   card,
   index,
@@ -223,14 +227,18 @@ function StudyCard({
       <div className="p-6 [perspective:1500px]">
         <div
           className={clsx(
-            'relative min-h-[340px] transition-transform duration-500 ease-out [transform-style:preserve-3d]',
+            'relative h-[340px] transition-transform duration-500 ease-out [transform-style:preserve-3d]',
             flipped && '[transform:rotateY(180deg)]'
           )}
         >
           {/* Front face */}
           <div
             onClick={onFlip}
-            className="absolute inset-0 flex cursor-pointer select-none flex-col items-center justify-center text-center [backface-visibility:hidden]"
+            className={clsx(
+              'absolute inset-0 flex cursor-pointer select-none flex-col items-center justify-center text-center [backface-visibility:hidden]',
+              FACE_SWAP,
+              flipped && 'invisible opacity-0'
+            )}
           >
             <div className="mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-amber-200 to-brand-200 text-5xl">
               {card.imageUrl ? (
@@ -266,8 +274,15 @@ function StudyCard({
           </div>
 
           {/* Back face */}
-          <div className="absolute inset-0 flex flex-col [backface-visibility:hidden] [transform:rotateY(180deg)]">
-            <div onClick={onFlip} className="flex-1 cursor-pointer select-none overflow-y-auto text-center">
+          <div
+            onClick={onFlip}
+            className={clsx(
+              'scrollbar-thin absolute inset-0 cursor-pointer select-none overflow-y-auto text-center [backface-visibility:hidden] [transform:rotateY(180deg)]',
+              FACE_SWAP,
+              !flipped && 'invisible opacity-0'
+            )}
+          >
+            <div className="flex min-h-full flex-col justify-center">
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <h2 className="text-xl font-bold text-brand-700">{card.word}</h2>
                 {card.partOfSpeech && <Badge tone="brand">{card.partOfSpeech}</Badge>}
@@ -287,28 +302,31 @@ function StudyCard({
               </div>
               <p className="mt-4 text-xs text-slate-400">👆 Nhấn để lật lại</p>
             </div>
-
-            <div>
-              <p className="pb-2 pt-4 text-center text-sm text-slate-500">Bạn nhớ từ này ở mức nào?</p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {GRADE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.quality}
-                    disabled={grading}
-                    onClick={() => onGrade(opt.quality)}
-                    className={clsx(
-                      'flex flex-col items-center gap-0.5 rounded-xl px-3 py-3 text-sm font-semibold text-white transition-colors disabled:opacity-60',
-                      opt.className
-                    )}
-                  >
-                    {opt.label}
-                    <span className="text-xs font-normal opacity-90">{opt.hint}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
+
+        {/* Grade buttons live outside the rotating card so they never overlap its faces */}
+        {flipped && (
+          <div>
+            <p className="pb-2 pt-4 text-center text-sm text-slate-500">Bạn nhớ từ này ở mức nào?</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {GRADE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.quality}
+                  disabled={grading}
+                  onClick={() => onGrade(opt.quality)}
+                  className={clsx(
+                    'flex flex-col items-center gap-0.5 rounded-xl px-3 py-3 text-sm font-semibold text-white transition-colors disabled:opacity-60',
+                    opt.className
+                  )}
+                >
+                  {opt.label}
+                  <span className="text-xs font-normal opacity-90">{opt.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </Card>
   );

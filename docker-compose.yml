@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-parroto_dev_password}
       POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Mounting a whole directory here (e.g. ./seeds) would NOT work: the official

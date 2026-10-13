@@ -35,7 +35,7 @@ export function Topbar() {
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-slate-100 bg-white px-4 md:px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-100 bg-white px-4 md:px-6">
       <span className="text-lg font-semibold text-brand-600 md:hidden">Parroto</span>
       <div className="ml-auto flex items-center gap-2 sm:gap-3">
         <Link

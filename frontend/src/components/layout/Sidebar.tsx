@@ -33,7 +33,7 @@ export function Sidebar() {
   const { data: userSub } = useQuery({ queryKey: ['user-subscription'], queryFn: subscriptionApi.getUserSubscription });
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-100 bg-white md:flex">
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-100 bg-white md:flex">
       <div className="flex h-16 items-center gap-2 border-b border-slate-100 px-6">
         <span className="text-xl">🦜</span>
         <span className="text-xl font-bold text-brand-600">Parroto</span>

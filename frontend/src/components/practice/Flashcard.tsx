@@ -3,6 +3,9 @@
 import clsx from 'clsx';
 import { useState } from 'react';
 
+// Hide the inactive face at the flip's midpoint; backface-visibility alone isn't reliable in Firefox.
+const FACE_SWAP = 'transition-[opacity,visibility] duration-0 delay-200';
+
 export function Flashcard({
   word,
   meaning,
@@ -38,14 +41,26 @@ export function Flashcard({
         )}
       >
         {/* Front face */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm [backface-visibility:hidden]">
+        <div
+          className={clsx(
+            'absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm [backface-visibility:hidden]',
+            FACE_SWAP,
+            flipped && 'invisible opacity-0'
+          )}
+        >
           <h3 className="text-3xl font-bold text-slate-900">{word}</h3>
           {ipa && <p className="text-slate-500">/{ipa}/</p>}
           <p className="mt-4 text-xs text-slate-400">👆 Nhấn để lật thẻ và xem nghĩa</p>
         </div>
 
         {/* Back face */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-brand-50 p-5 text-center shadow-sm [backface-visibility:hidden] [transform:rotateY(180deg)]">
+        <div
+          className={clsx(
+            'absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-brand-50 p-5 text-center shadow-sm [backface-visibility:hidden] [transform:rotateY(180deg)]',
+            FACE_SWAP,
+            !flipped && 'invisible opacity-0'
+          )}
+        >
           <p className="text-xl font-semibold text-brand-700">{meaning}</p>
           {example && <p className="mt-2 max-w-sm text-sm italic text-slate-600">&ldquo;{example}&rdquo;</p>}
           <p className="mt-4 text-xs text-slate-400">👆 Nhấn để lật lại</p>
