@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/auth-store';
 import clsx from 'clsx';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { LearnerOnly } from './LearnerOnly';
 import { isPracticeRoute } from './navItems';
 
 /** True after the first client render; lets auth-dependent markup match the server HTML. */
@@ -68,6 +69,12 @@ export function AuthAwareShell({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
 
   if (!mounted || !hasHydrated) return <FullPageSpinner />;
-  if (token) return <AppShell>{children}</AppShell>;
+  // T14: a signed-in admin is sent to /admin instead of the learner shell.
+  if (token)
+    return (
+      <LearnerOnly>
+        <AppShell>{children}</AppShell>
+      </LearnerOnly>
+    );
   return <PublicShell>{children}</PublicShell>;
 }

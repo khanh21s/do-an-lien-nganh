@@ -6,13 +6,14 @@ import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { useNextPath } from '@/hooks/useNextPath';
+import { usePostAuthRedirect } from '@/hooks/usePostAuthRedirect';
 import { apiErrorMessage } from '@/lib/api';
 import { authApi } from '@/lib/endpoints/auth';
 import type { AuthResponse } from '@/lib/types';
 import { useAuthStore } from '@/store/auth-store';
+import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { FormEvent, Suspense, useEffect, useState } from 'react';
+import { FormEvent, Suspense, useState } from 'react';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
@@ -24,23 +25,19 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
-  const router = useRouter();
-  const { next, rawNext } = useNextPath();
+  const queryClient = useQueryClient();
+  const { rawNext } = useNextPath();
   const setAuth = useAuthStore((s) => s.setAuth);
-  const hasHydrated = useAuthStore((s) => s.hasHydrated);
-  const token = useAuthStore((s) => s.token);
+  // AUTH-05 + T14: once signed in (now or already), admin → /admin, user → `next` or /dashboard.
+  const { redirecting } = usePostAuthRedirect(rawNext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // AUTH-05: already signed in → go straight to `next` (or /dashboard).
-  useEffect(() => {
-    if (hasHydrated && token) router.replace(next);
-  }, [hasHydrated, token, next, router]);
-
   function onAuthenticated(res: AuthResponse) {
+    // Never reuse cached data (e.g. a previous account's profile/role) for the new session.
+    queryClient.clear();
     setAuth({ userId: res.userId, email: res.email, cefrLevel: res.cefrLevel }, res.token, res.refreshToken);
-    router.replace(next);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -62,6 +59,8 @@ function LoginForm() {
       toast.error(apiErrorMessage(err, 'Đăng nhập Google thất bại.'));
     }
   }
+
+  if (redirecting) return <FullPageSpinner />;
 
   const registerHref = rawNext ? `/register?next=${encodeURIComponent(rawNext)}` : '/register';
 
