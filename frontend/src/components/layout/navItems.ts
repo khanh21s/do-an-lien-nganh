@@ -4,6 +4,8 @@
  * Kept free of React/API imports so the helpers can be unit tested in a node environment.
  */
 
+import type { VocabUserStats } from '@/lib/types';
+
 export type NavBadge = 'reviewDue';
 
 export interface NavLeaf {
@@ -78,6 +80,12 @@ export function moreDrawerEntries(isAdmin: boolean): NavEntry[] {
   }
   if (isAdmin) entries.push(ADMIN_NAV);
   return entries;
+}
+
+/** Resolves a badge to its current count (undefined/0 → no badge). */
+export function badgeCount(badge: NavBadge | undefined, vocabStats: VocabUserStats | undefined): number | undefined {
+  if (badge === 'reviewDue') return vocabStats?.dueToday;
+  return undefined;
 }
 
 export function flattenNav(entries: NavEntry[]): NavLeaf[] {
