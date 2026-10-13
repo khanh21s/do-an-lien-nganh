@@ -8,17 +8,17 @@
 | ID | Title | Wave | Depends | Status |
 |---|---|---|---|---|
 | T01 | Hạ tầng, Docker, seed, CI | 1 | – | DONE |
-| T02 | Bảo mật xuyên service + API Gateway + auth-service | 1 | – | DONE-WITH-ISSUES |
+| T02 | Bảo mật xuyên service + API Gateway + auth-service | 1 | – | DONE |
 | T03 | practice-service: chấm Dictation, Shadowing (S3/Azure + mock), stats | 1 | – | DONE |
 | T04 | content-service: CRUD câu, cache, upload, lưu trữ local | 1 | – | DONE-WITH-ISSUES |
-| T05 | vocabulary-service + subscription-service: SM-2, Pro gating, VNPay IPN, mã kích hoạt | 1 | – | DONE-WITH-ISSUES |
+| T05 | vocabulary-service + subscription-service: SM-2, Pro gating, VNPay IPN, mã kích hoạt | 1 | – | DONE |
 | T06 | Frontend core: API/refresh, types contract, primitives, trang lỗi, tooling | 1 | – | DONE-WITH-ISSUES |
-| T07 | Layout & điều hướng (desktop + mobile) | 2 | T06 | TODO |
-| T08 | Lessons + Dictation + màn kết quả | 2 | T06 (E2E: T03, T04) | TODO |
-| T09 | Shadowing frontend (Recorder WAV) | 2 | T06 (E2E: T01, T03) | TODO |
-| T10 | Vocabulary frontend (flashcard, review, notebook) | 2 | T06 (E2E: T05) | TODO |
-| T11 | Dashboard, lịch sử luyện tập, hồ sơ | 2 | T06 (E2E: T02, T03) | TODO |
-| T12 | Subscription, pricing & Admin frontend | 2 | T06 (E2E: T04, T05) | TODO |
+| T07 | Layout & điều hướng (desktop + mobile) | 2 | T06 | DONE |
+| T08 | Lessons + Dictation + màn kết quả | 2 | T06 (E2E: T03, T04) | DONE |
+| T09 | Shadowing frontend (Recorder WAV) | 2 | T06 (E2E: T01, T03) | DONE |
+| T10 | Vocabulary frontend (flashcard, review, notebook) | 2 | T06 (E2E: T05) | DONE |
+| T11 | Dashboard, lịch sử luyện tập, hồ sơ | 2 | T06 (E2E: T02, T03) | DONE |
+| T12 | Subscription, pricing & Admin frontend | 2 | T06 (E2E: T04, T05) | DONE |
 
 - **Lệnh verify:** `scripts/verify-fe.sh`, `scripts/verify-gw.sh`, `scripts/verify-java.sh <svc>` do T01 tạo. Khi T01 chưa merge (mọi task Wave 1), chạy lệnh `docker run …` tương ứng ở `docs/architecture.md` §1.1 — máy này không có `npm`/`mvn`, Java local là 17.
 - **Wave 1** (T01–T06): độc lập hoàn toàn, chạy song song từ `dev/multi-agent` hiện tại. Không task nào sửa file của task khác.
@@ -132,13 +132,15 @@ for s in auth-service content-service practice-service vocabulary-service subscr
 grep -rn "dev_super_secret\|\.keys(" api-gateway services/*/src/main || echo CLEAN
 ```
 
-**Status:** DONE-WITH-ISSUES
+**Status:** DONE
 
 **Review notes:**
 - **Fixed by reviewer (Blocker) – 3350240:** auth-service `JwtService.generate` used `.signWith(key)`, so jjwt picked **HS512** for a ≥ 64-byte `JWT_SECRET` (the user's is 68 chars). The gateway only accepts `algorithms: ['HS256']` (`api-gateway/middleware/auth.js:33`), so every authenticated call got 401 "Invalid or expired token". Repro before fix: `curl -s -XPOST :8000/auth/login -d '{…}' | jq -r .token | cut -d. -f1 | base64 -d` → `{"alg":"HS512"}`; `curl -H "Authorization: Bearer $T" :8000/practice/stats` → 401. Now pinned to `Jwts.SIG.HS256` (`services/auth-service/src/main/java/com/parroto/auth/security/JwtService.java:67-69`) + unit test `alwaysSignsWithHs256EvenForLongSecrets`.
 - After the fix all T02 ACs pass: refresh token as Bearer → 401 at GW and directly at practice-service; logout → old access token 401 on `/practice/stats`, `/vocabs/user/stats`, `/subscriptions/user`, `/auth/profile` (GW) and directly at vocabulary-service; `/internal/**` without / with wrong `X-Internal-Token` → 401, correct token → 200 (from inside the network); GW `/internal` → 404; `/subscriptions/vnpay-ipn` reachable without token; GW exits 1 on empty/short `JWT_SECRET`; no `.keys(`.
 - Open (Medium, not an AC): **logout does not revoke the refresh token.** `AuthService.logout` (`services/auth-service/src/main/java/com/parroto/auth/service/AuthService.java:123-131`) only blacklists the access-token `jti`; `POST /auth/logout` takes no body. Repro: login → logout with Bearer → `curl -XPOST :8000/auth/refresh-token -d '{"refreshToken":"<old>"}'` → 200 with new tokens. Suggest accepting an optional `{refreshToken}` body on logout and blacklisting its `jti` too (FE `authApi.logout` must send it).
 - Open (Low): `GoogleTokenVerifier`/`AppleTokenVerifier` only treat a *blank* client id as "not configured" (`GoogleTokenVerifier.java:36`); a `your_…` placeholder (present in the user's old `.env`) → 401 "Invalid Google token" instead of 503, and FE may show the Google button. Either reuse practice's placeholder rule or blank the value in `.env`.
+- Review Final (FIX-R1 `52f9946`, `a9714fe`, `138a5bd`): logout with `{refreshToken}` → old refresh token 401 (API + from the FE avatar menu in the browser); logout without body still 200; placeholder `your_…` Google client id → 503. Medium + Low issues above are **resolved**.
+- Review Final fix `208b400` (High, found in browser): helmet's default `Cross-Origin-Resource-Policy: same-origin` on the gateway made Chrome block every `<audio src=http://localhost:8000/content/…/audio>` loaded from the FE origin (`ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`) — lesson/sentence audio never played. Now `crossOriginResourcePolicy: cross-origin` (`api-gateway/server.js`); `requireAuthForWrites` also lets HEAD/OPTIONS through.
 
 ---
 
@@ -217,6 +219,8 @@ scripts/verify-java.sh content-service
 **Review notes:**
 - Review Wave 1: ACs pass E2E — admin upload 20 MB mp3 → 200 and streams with Range 206; `.exe`/`application/octet-stream` → 400; seed `local:seed/...` → 200 `audio/mpeg`; PUT sentence `endMs` → detail shows new value immediately; `startMs >= endMs` → 400; delete sentence 2/5 → orders 1..4 and list `sentenceCount` 4 immediately; normal user PUT/DELETE sentence and POST lesson → 403. (Tested on a throw-away lesson created by admin, then deleted; seed lessons untouched.)
 - Open (Low): malformed path params give 500 instead of 400/404 — `curl :8000/content/lessons/abc` → 500 "Internal server error". `GlobalExceptionHandler` (`services/content-service/src/main/java/com/parroto/content/exception/GlobalExceptionHandler.java:55`) has no `MethodArgumentTypeMismatchException` / `NoResourceFoundException` mapping (practice-service has one at `GlobalExceptionHandler.java:43`).
+- Review Final (FIX-R1 `37e6478`): `/content/lessons/abc` → 400, unknown content route → 404 JSON. Low issue above **resolved**.
+- Open (Low): `HEAD /content/sentences/{id}/audio` → 401 (Spring `SecurityConfig` permits only `HttpMethod.GET`); browsers use GET, so no user impact.
 
 ---
 
@@ -258,11 +262,12 @@ scripts/verify-java.sh content-service
 scripts/verify-java.sh vocabulary-service && scripts/verify-java.sh subscription-service
 ```
 
-**Status:** DONE-WITH-ISSUES
+**Status:** DONE
 
 **Review notes:**
 - Review Wave 1: ACs pass E2E — free user adds Pro-deck card → 403; deck cards with Bearer expose `userVocabId`; reviews with q=1/3/4/5 → 200, 2nd Good → interval 6, Again → interval 1 / repetitions 0; review-queue items carry `exampleVi, partOfSpeech, audioUrl, imageUrl`; admin delete card → `cardCount` 3→2; normal user DELETE card / POST deck → 403. Subscription: `PROMO-DEMO1-MONTH` → premium, reuse → 400 "Mã đã được sử dụng", unknown → 404, 2nd code accumulates (119 days); `premium:{userId}` key deleted on activation and Pro card then allowed (201); admin creates 10 unique `PROMO-` codes, `used=true` list shows `usedByEmail`; normal user → 403 on admin endpoints. VNPay via `scripts/vnpay-ipn-test.sh`: bad signature 97, wrong amount 04 (no subscription), valid 00 → premium, replay 02, unknown txn 01.
 - Open (Low): vocabulary-service returns 500 for malformed UUIDs / unmapped routes — `curl :8000/vocabs/decks/xyz/cards` → 500, `curl :8000/vocabs/decks/22222222-2222-2222-2222-222222222201` (no `GET /vocabs/decks/{id}` route) → 500. `GlobalExceptionHandler` (`services/vocabulary-service/src/main/java/com/parroto/vocabulary/exception/GlobalExceptionHandler.java:38`) maps everything unknown to 500; add `MethodArgumentTypeMismatchException` → 400 and `NoResourceFoundException`/`ErrorResponseException` → their own status.
+- Review Final (FIX-R1 `37e6478`, `a1e65f7`): `/vocabs/decks/xyz/cards` → 400, `GET /vocabs/decks/{id}` → 405 JSON (no 500); `GET /vocabs/user/learned` returns `nextReviewAt`, `intervalDays`, `easeFactor`. VNPay IPN re-run: 97/04/00/02. Low issue above **resolved**.
 
 ---
 
@@ -304,6 +309,8 @@ scripts/verify-fe.sh   # hoặc lệnh Frontend ở architecture §1.1
 - Review Wave 1: `scripts/verify-fe.sh` green (tsc, `next lint` 0 warnings, vitest 25/25 incl. single-flight refresh test). Frontend container: `/`, `/login`, `/lessons` → 200; unknown route → 404 page. Static review of `src/lib` (api.ts refresh queue, `safeNextPath`, `uploadRecording` honouring `uploadRequiresAuth`) found no bugs.
 - Not verified in a browser: refresh-failure redirect and `/login?next=` round-trip (unit tests only).
 - Open (Low, process): `docs/reports/T06.md` is missing (T01–T05 have reports).
+- Review Final: `docs/reports/T06.md` added (`d838bb5`). Browser E2E: invalid access token + valid refresh token → page still loads, exactly 1 `/auth/refresh-token` call, new token stored; non-admin `/admin/*` → `/dashboard`; no uncaught page errors. Open issues **resolved**.
+- Open (Low, a11y): `FieldWrapper` (`components/ui/Input.tsx`) renders `<label>` without `htmlFor`/`id`, so form labels are not associated with their inputs (screen readers, `getByLabel`).
 
 ---
 
@@ -337,9 +344,10 @@ scripts/verify-fe.sh   # hoặc lệnh Frontend ở architecture §1.1
 scripts/verify-fe.sh
 ```
 
-**Status:** TODO
+**Status:** DONE
 
 **Review notes:**
+- Review Final (Playwright, Chromium): dashboard Topbar streak chip (`Chuỗi N ngày…`), PRO badge after activation, avatar menu logout. 375×812: tab bar visible, "Thêm" opens the bottom-sheet drawer (Bộ từ, Sổ tay, Gói Premium, Hồ sơ, Đăng xuất); tab bar hidden on dictation. 360px: no horizontal scroll on /dashboard, /lessons, /lessons/{id}, /vocabulary, /vocabulary/notebook, /vocabulary/review, /practice/history, /profile, /subscription, /pricing. Not exercised in browser: sidebar collapse persistence, review popup once/day, guest PublicHeader (covered by unit tests).
 
 ---
 
@@ -377,9 +385,11 @@ scripts/verify-fe.sh
 scripts/verify-fe.sh
 ```
 
-**Status:** TODO
+**Status:** DONE
 
 **Review notes:**
+- Review Final (Playwright): /lessons level chip A1 → `?level=A1`, search "Greet" → `?q=Greet`; lesson detail → "Luyện Dictation" opens sentence 1. Normal: fill blanks + Enter → "🎉 Chính xác!" 80/80; switch to Hard via ⚙ → textarea + Enter → 100/100; `Shift+→` → sentence 2; wrong input → "Chưa đúng, thử lại"; "Bỏ qua & kết thúc" → `/result?mode=dictation` with final score and "Đã làm x/5 câu". Sentence audio loads from the FE origin after gateway fix `208b400`.
+- Fixed by reviewer (Low) `b701cfc`: sentence IPA displayed as `//…//` (seed IPA already has slashes) in dictation, shadowing and transcript.
 
 ---
 
@@ -412,9 +422,10 @@ scripts/verify-fe.sh
 scripts/verify-fe.sh
 ```
 
-**Status:** TODO
+**Status:** DONE
 
 **Review notes:**
+- Review Final (Playwright, `--use-fake-device-for-media-stream`): record 2.2 s → upload (local, 204) → per-word scores (5 words with %) + "🧪 Chế độ demo – điểm mô phỏng"; local take playback shown. History → shadowing row → detail modal `<audio src=blob:…>` plays.
 
 ---
 
@@ -450,9 +461,10 @@ scripts/verify-fe.sh
 scripts/verify-fe.sh
 ```
 
-**Status:** TODO
+**Status:** DONE
 
 **Review notes:**
+- Review Final (Playwright): deck page `Space` flips, keys 1–4 rate (4 cards added); review (cards made due by SQL) → flip with Space, rate with 1–4, summary with Again/Hard/Good/Easy distribution and next review time; notebook shows "Ôn tiếp: …" and "Chu kỳ N ngày" (BE fields from T05 FIX-R1).
 
 ---
 
@@ -483,9 +495,10 @@ scripts/verify-fe.sh
 scripts/verify-fe.sh
 ```
 
-**Status:** TODO
+**Status:** DONE
 
 **Review notes:**
+- Review Final (Playwright): new user dashboard renders the weekly SVG chart and exactly 90 heatmap cells without errors; after practice: KPI tiles, "Tiếp tục học", trending errors. History table with lesson names, VN date-time, mode/difficulty, detail modal.
 
 ---
 
@@ -521,9 +534,10 @@ scripts/verify-fe.sh
 scripts/verify-fe.sh
 ```
 
-**Status:** TODO
+**Status:** DONE
 
 **Review notes:**
+- Review Final (Playwright): /pricing shows 79.000đ / 169.000đ / 499.000đ; /subscription activates `PROMO-DEMO1-MONTH` → Topbar PRO + status card, reuse → "Mã đã được sử dụng"; admin edits a (throw-away) lesson title → persisted; "Tạo mã" shows new `PROMO-XXXXX-XXXXX` codes; non-admin `/admin/lessons` → `/dashboard`.
 
 ---
 
@@ -662,4 +676,35 @@ Không thuộc phạm vi các task trên. Danh sách đầy đủ và ưu tiên 
 | T06-VERIFY | `scripts/verify-fe.sh`: tsc, next lint (0 warnings), vitest 25/25 | PASS | |
 | AUTH-03-REFRESH | refresh token after logout rejected | FAIL | not an AC; see T02 notes (Medium) |
 | ERR-UUID | malformed UUID / unmapped route in content & vocabulary → 4xx | FAIL | `GET /content/lessons/abc`, `GET /vocabs/decks/xyz/cards`, `GET /vocabs/decks/{id}` → 500 (Low) |
+
+---
+
+## Review Final
+
+> 2026-10-13, Reviewer/Tester (final round) on `dev/multi-agent` (start `d838bb5`). `docker-compose down -v && up -d --build` (all 8 back-end containers healthy). Note: the user's `.env` has `LOG_LEVEL=DEBUG` (left as is). Full log: `docs/reports/review-final.md`.
+
+**Totals:** API regression 46/46 PASS + VNPay IPN 4/4 PASS; browser E2E (Playwright 1.47.2, Chromium, `e2e/`) 10/10 PASS after fixes. 1 High + 1 Low bug found and fixed (`208b400`, `b701cfc`); 2 Low open.
+
+| Area | Check | Result | Detail |
+|---|---|---|---|
+| API | Wave 1 smoke (auth, dictation 60/80/100, shadowing mock, stats, vocab SM-2, Pro gating, codes, plans, FE routes) | PASS | 46/46, `docs/reports/review-final.md` §2 |
+| API | FIX-R1 logout `{refreshToken}` → refresh 401 | PASS | 401; logout without body 200 |
+| API | FIX-R1 `/content/lessons/abc` → 400, `/vocabs/decks/xyz/cards` → 400, unknown route → 404 | PASS | no 500s |
+| API | FIX-R1 `/vocabs/user/learned` has `nextReviewAt/intervalDays/easeFactor` | PASS | |
+| API | FIX-R1 Google placeholder client id → 503 | PASS | |
+| API | VNPay IPN 97 / 04 / 00 / 02 | PASS | `scripts/vnpay-ipn-test.sh` |
+| E2E 01 | register → dashboard, weekly chart, 90-cell heatmap, Topbar streak | PASS | |
+| E2E 02 | /lessons search + level filter, open lesson | PASS | |
+| E2E 03 | dictation Normal + Hard, Enter submit, score, `Shift+→`, finish → result | PASS | after `208b400` (audio) and `b701cfc` (IPA) |
+| E2E 04 | shadowing fake mic 2 s → word scores + demo badge; history blob playback | PASS | |
+| E2E 05 | deck study keys Space/1–4; review flip + 1–4; notebook schedule | PASS | cards made due via SQL |
+| E2E 06 | pricing 79.000đ/169.000đ/499.000đ; demo code → PRO; reuse → error | PASS | |
+| E2E 07 | admin edit lesson title, create codes; non-admin → /dashboard | PASS | |
+| E2E 08 | mobile 375×812 tab bar + drawer; 360px no horizontal scroll (10 pages) | PASS | |
+| E2E 09 | invalid access token + refresh token → page works, 1 refresh call; UI logout revokes refresh | PASS | |
+| E2E | uncaught page errors / console errors | PASS | 0 pageerrors; only expected network logs (400 reused code, 401 before refresh) |
+| Bug | Gateway CORP `same-origin` blocked all lesson/sentence audio in the browser | FIXED (High) | `208b400` |
+| Bug | Sentence IPA shown as `//…//` | FIXED (Low) | `b701cfc` |
+| Open | `HEAD` on content audio → 401 | Low | T04 notes |
+| Open | Form `<label>` not associated with inputs | Low (a11y) | T06 notes |
 
