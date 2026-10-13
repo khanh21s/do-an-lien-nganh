@@ -22,8 +22,9 @@ spring:
       port: ${SPRING_REDIS_PORT:6379}
   servlet:
     multipart:
-      max-file-size: 5MB
-      max-request-size: 5MB
+      max-file-size: 50MB
+      # slightly above the file limit so a 50MB file plus multipart overhead/fields still fits (ADM-04)
+      max-request-size: 51MB
 
 server:
   port: ${SERVER_PORT:8002}
@@ -60,3 +61,8 @@ logging:
   level:
     root: ${LOGGING_LEVEL_ROOT:INFO}
     com.parroto: ${LOGGING_LEVEL_COM_PARROTO:DEBUG}
+
+app:
+  storage:
+    provider: ${STORAGE_PROVIDER:auto}
+    local-root: ${MEDIA_ROOT:/data/media}
