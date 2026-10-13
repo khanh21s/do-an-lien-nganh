@@ -1,60 +1,72 @@
 'use client';
 
+import { ConfirmModal } from '@/components/admin/ConfirmModal';
+import { invalidateLessonCaches } from '@/components/admin/invalidate';
+import { optional } from '@/components/admin/validation';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { Pagination } from '@/components/ui/Pagination';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { apiErrorMessage } from '@/lib/api';
+import { CEFR_LEVELS, TOPIC_LABELS, TOPIC_TAGS, topicLabel } from '@/lib/constants';
 import { contentApi } from '@/lib/endpoints/content';
-import type { CefrLevel, CreateLessonInput } from '@/lib/types';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/lib/queryKeys';
+import type { CefrLevel, CreateLessonInput, LessonSummary } from '@/lib/types';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import toast from 'react-hot-toast';
 
-const CEFR_LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+const PAGE_SIZE = 20;
 
-const emptyForm: CreateLessonInput = {
-  title: '',
-  cefrLevel: 'A1',
-  audioUrl: '',
-  sourceUrl: '',
-  topicTag: '',
-  description: '',
-  duration: undefined,
-};
+interface LessonForm {
+  title: string;
+  cefrLevel: CefrLevel;
+  audioUrl: string;
+  sourceUrl: string;
+  topicTag: string;
+  description: string;
+}
+
+const emptyForm: LessonForm = { title: '', cefrLevel: 'A1', audioUrl: '', sourceUrl: '', topicTag: '', description: '' };
 
 export default function AdminLessonsPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<CreateLessonInput>(emptyForm);
+  const [form, setForm] = useState<LessonForm>(emptyForm);
+  const [toDelete, setToDelete] = useState<LessonSummary | null>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['admin-lessons', page],
-    queryFn: () => contentApi.listLessons({ page, limit: 20 }),
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: qk.adminLessons(page),
+    queryFn: () => contentApi.listLessons({ page, limit: PAGE_SIZE }),
+    placeholderData: keepPreviousData,
   });
 
   const createMutation = useMutation({
     mutationFn: (input: CreateLessonInput) => contentApi.createLesson(input),
-    onSuccess: () => {
+    onSuccess: (lesson) => {
       toast.success('Đã tạo bài học.');
       setModalOpen(false);
       setForm(emptyForm);
-      queryClient.invalidateQueries({ queryKey: ['admin-lessons'] });
+      invalidateLessonCaches(queryClient, lesson.id);
     },
-    onError: (err) => toast.error(apiErrorMessage(err, 'Không thể tạo bài học — kiểm tra quyền admin của bạn.')),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Không thể tạo bài học.')),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => contentApi.deleteLesson(id),
-    onSuccess: () => {
+    onSuccess: (_res, id) => {
       toast.success('Đã xoá bài học.');
-      queryClient.invalidateQueries({ queryKey: ['admin-lessons'] });
+      setToDelete(null);
+      queryClient.removeQueries({ queryKey: qk.lesson(id) });
+      invalidateLessonCaches(queryClient);
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Không thể xoá bài học.')),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -63,102 +75,128 @@ export default function AdminLessonsPage() {
       toast.error('Vui lòng nhập tiêu đề và URL audio.');
       return;
     }
-    createMutation.mutate(form);
+    createMutation.mutate({
+      title: form.title.trim(),
+      cefrLevel: form.cefrLevel,
+      audioUrl: form.audioUrl.trim(),
+      sourceUrl: optional(form.sourceUrl),
+      topicTag: optional(form.topicTag),
+      description: optional(form.description),
+    });
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
+    <div className="mx-auto w-full max-w-5xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-900">Quản lý bài học</h1>
-        <Button onClick={() => setModalOpen(true)}>+ Tạo bài học</Button>
+        <Button onClick={() => setModalOpen(true)} className="min-h-[44px]">
+          + Tạo bài học
+        </Button>
       </div>
 
       {isLoading ? (
         <FullPageSpinner />
+      ) : isError ? (
+        <ErrorState error={error} onRetry={refetch} className="mt-6" />
+      ) : !data || data.data.length === 0 ? (
+        <Card className="mt-6 text-center text-sm text-slate-500">
+          Chưa có bài học nào.{' '}
+          <button type="button" className="font-medium text-brand-600 hover:underline" onClick={() => setModalOpen(true)}>
+            Tạo bài học đầu tiên
+          </button>
+        </Card>
       ) : (
-        <div className="mt-6 flex flex-col gap-3">
-          {data?.data.map((lesson) => (
-            <Card key={lesson.id} className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-slate-900">{lesson.title}</h3>
-                  <Badge tone="brand">{lesson.cefrLevel}</Badge>
+        <>
+          <div className="mt-6 flex flex-col gap-3">
+            {data.data.map((lesson) => (
+              <Card key={lesson.id} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="break-words font-semibold text-slate-900">{lesson.title}</h3>
+                    <Badge tone="brand">{lesson.cefrLevel}</Badge>
+                    {lesson.topicTag && <Badge tone="slate">{topicLabel(lesson.topicTag)}</Badge>}
+                  </div>
+                  <p className="text-sm text-slate-500">{lesson.sentenceCount} câu</p>
                 </div>
-                <p className="text-sm text-slate-500">{lesson.sentenceCount} câu</p>
-              </div>
-              <div className="flex gap-2">
-                <Link href={`/admin/lessons/${lesson.id}`}>
-                  <Button size="sm" variant="secondary">
-                    Quản lý câu
+                <div className="flex shrink-0 gap-2">
+                  <Link
+                    href={`/admin/lessons/${lesson.id}`}
+                    className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Sửa bài & câu
+                  </Link>
+                  <Button size="sm" variant="danger" className="min-h-[44px]" onClick={() => setToDelete(lesson)}>
+                    Xoá
                   </Button>
-                </Link>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  loading={deleteMutation.isPending && deleteMutation.variables === lesson.id}
-                  onClick={() => {
-                    if (confirm(`Xoá bài học "${lesson.title}"?`)) deleteMutation.mutate(lesson.id);
-                  }}
-                >
-                  Xoá
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {data && data.pagination.totalPages > 1 && (
-        <div className="mt-6 flex justify-center gap-2 text-sm">
-          {Array.from({ length: data.pagination.totalPages }, (_, i) => i + 1).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPage(p)}
-              className={`h-8 w-8 rounded-lg ${p === page ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-100'}`}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+          <Pagination page={page} totalPages={data.pagination.totalPages} onChange={setPage} className="mt-6" />
+        </>
       )}
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Tạo bài học mới">
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <Input label="Tiêu đề" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-          <Select
-            label="Cấp độ CEFR"
-            value={form.cefrLevel}
-            onChange={(e) => setForm({ ...form, cefrLevel: e.target.value as CefrLevel })}
-          >
-            {CEFR_LEVELS.map((lvl) => (
-              <option key={lvl} value={lvl}>
-                {lvl}
-              </option>
-            ))}
-          </Select>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Select
+              label="Cấp độ CEFR"
+              value={form.cefrLevel}
+              onChange={(e) => setForm({ ...form, cefrLevel: e.target.value as CefrLevel })}
+            >
+              {CEFR_LEVELS.map((lvl) => (
+                <option key={lvl} value={lvl}>
+                  {lvl}
+                </option>
+              ))}
+            </Select>
+            <Select label="Chủ đề" value={form.topicTag} onChange={(e) => setForm({ ...form, topicTag: e.target.value })}>
+              <option value="">— Không chọn —</option>
+              {TOPIC_TAGS.map((t) => (
+                <option key={t} value={t}>
+                  {TOPIC_LABELS[t]}
+                </option>
+              ))}
+            </Select>
+          </div>
           <Input
             label="URL audio bài học"
             required
             value={form.audioUrl}
             onChange={(e) => setForm({ ...form, audioUrl: e.target.value })}
-            placeholder="https://..."
+            placeholder="https://... hoặc local:..."
+            hint="Có thể tải file audio lên thay thế ở trang chi tiết bài."
           />
           <Input
-            label="Thẻ chủ đề"
-            value={form.topicTag ?? ''}
-            onChange={(e) => setForm({ ...form, topicTag: e.target.value })}
+            label="URL nguồn (tuỳ chọn)"
+            value={form.sourceUrl}
+            onChange={(e) => setForm({ ...form, sourceUrl: e.target.value })}
           />
           <Textarea
             label="Mô tả"
             rows={2}
-            value={form.description ?? ''}
+            value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
-          <Button type="submit" loading={createMutation.isPending} className="mt-2 w-full">
+          <Button type="submit" loading={createMutation.isPending} className="mt-2 min-h-[44px] w-full">
             Tạo bài học
           </Button>
         </form>
       </Modal>
+
+      <ConfirmModal
+        open={!!toDelete}
+        title="Xoá bài học?"
+        message={
+          <>
+            Bài <strong>{toDelete?.title}</strong> cùng toàn bộ câu sẽ bị xoá vĩnh viễn.
+          </>
+        }
+        loading={deleteMutation.isPending}
+        onConfirm={() => toDelete && deleteMutation.mutate(toDelete.id)}
+        onClose={() => setToDelete(null)}
+      />
     </div>
   );
 }

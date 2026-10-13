@@ -567,4 +567,8 @@ export interface LearnedWordSchedule {
 // --- end T11 ---
 
 // --- T12 additions ---
+/** Query params of `GET /vocabs/decks/{id}/cards` used by the admin card manager (ADM-05). */
+export interface DeckCardsParams extends PageParams {
+  searchWord?: string;
+}
 // --- end T12 ---
