@@ -1,0 +1,43 @@
+# ==========================================================================
+# DEV-ONLY port overrides (X-01)
+# ==========================================================================
+# By default docker-compose.yml publishes ONLY frontend (3000) and api-gateway (8000)
+# to the host; Postgres, Redis and the 5 Java services are reachable only inside the
+# docker network. When you need direct access while developing (psql, redis-cli,
+# calling a service without the gateway, running a service from your IDE against the
+# dockerised DB...), copy this file:
+#
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#
+# docker-compose automatically merges docker-compose.override.yml on top of
+# docker-compose.yml. The copy is git-ignored — never commit it, never use it in
+# production. Ports bind to 127.0.0.1 so they are not exposed to the LAN.
+# ==========================================================================
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
+
+  auth-service:
+    ports:
+      - "127.0.0.1:8001:8001"
+
+  content-service:
+    ports:
+      - "127.0.0.1:8002:8002"
+
+  practice-service:
+    ports:
+      - "127.0.0.1:8003:8003"
+
+  vocabulary-service:
+    ports:
+      - "127.0.0.1:8004:8004"
+
+  subscription-service:
+    ports:
+      - "127.0.0.1:8005:8005"
