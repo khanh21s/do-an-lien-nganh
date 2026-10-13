@@ -92,7 +92,7 @@ public class SubscriptionService {
 
     @Transactional
     public CreatePaymentResponse createPayment(UUID userId, String planId, String clientIp) {
-        Plan plan = planService.getPlanOrThrow(planId);
+        Plan plan = planService.getActivePlanOrThrow(planId);
         if (isPremium(userId)) {
             throw ApiException.conflict("User already has an active Premium subscription");
         }
@@ -207,6 +207,7 @@ public class SubscriptionService {
         if (activationCode.getExpiresAt().isBefore(OffsetDateTime.now())) {
             throw ApiException.badRequest("Mã đã hết hạn");
         }
+        PlanService.requireOnSale(activationCode.getPlan());
 
         activationCode.setUsedByUserId(userId);
         activationCode.setUsedAt(OffsetDateTime.now());

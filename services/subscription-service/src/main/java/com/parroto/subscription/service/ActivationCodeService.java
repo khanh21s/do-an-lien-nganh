@@ -59,7 +59,7 @@ public class ActivationCodeService {
         if (quantity < 1 || quantity > MAX_QUANTITY) {
             throw ApiException.badRequest("Số lượng mã phải từ 1 đến " + MAX_QUANTITY);
         }
-        Plan plan = planService.getPlanOrThrow(request.planId());
+        Plan plan = planService.getActivePlanOrThrow(request.planId());
         OffsetDateTime expiresAt = parseExpiresAt(request.expiresAt());
 
         Set<String> codes = generateUniqueCodes(quantity);
