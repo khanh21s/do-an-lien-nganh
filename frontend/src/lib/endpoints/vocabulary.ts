@@ -60,5 +60,8 @@ export const vocabularyApi = {
   // --- end T10 ---
 
   // --- T12 additions ---
+  /** ADM-05: deck cards with optional `searchWord` filter (same endpoint as `getDeckCards`). */
+  searchDeckCards: (deckId: string, params: import('@/lib/types').DeckCardsParams = {}) =>
+    api.get<PageResponse<VocabCard>>(`/vocabs/decks/${deckId}/cards`, { params }).then((r) => r.data),
   // --- end T12 ---
 };
