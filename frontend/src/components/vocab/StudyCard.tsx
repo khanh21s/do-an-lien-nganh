@@ -11,6 +11,8 @@ import { useRef, useState } from 'react';
 interface TypingResult {
   input: string;
   correct: boolean;
+  /** The back (answer) had already been shown before this attempt. */
+  afterPeek: boolean;
 }
 
 /**
@@ -39,9 +41,17 @@ export function StudyCard({
   const [flipped, setFlipped] = useState(false);
   const [input, setInput] = useState('');
   const [result, setResult] = useState<TypingResult | null>(null);
+  // Set once the back (answer) has been shown, so a retry after peeking is still suggested as "Again".
+  const [peeked, setPeeked] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function flip() {
+    // Typing mode: flipping back to the front brings the input back so the word can be typed again.
+    if (flipped && typingMode && result) {
+      setResult(null);
+      setInput('');
+    }
+    if (!flipped) setPeeked(true);
     setFlipped((f) => !f);
   }
 
@@ -52,7 +62,8 @@ export function StudyCard({
 
   function check(given: string) {
     const correct = isTypedAnswerCorrect(given, card.word);
-    setResult({ input: given, correct });
+    setResult({ input: given, correct, afterPeek: peeked });
+    setPeeked(true);
     setFlipped(true);
     inputRef.current?.blur();
     if (correct) pronounce(card.word, card.audioUrl);
@@ -63,7 +74,7 @@ export function StudyCard({
     { combo: 'Enter', handler: flip },
     ...SRS_RATINGS.map((r) => ({
       combo: r.key,
-      handler: () => (flipped ? rate(r.quality) : setFlipped(true)),
+      handler: () => (flipped ? rate(r.quality) : flip()),
     })),
   ]);
 
@@ -119,7 +130,9 @@ export function StudyCard({
               : 'mt-3 rounded-xl bg-red-50 px-4 py-2 text-center text-sm text-red-700'
           }
         >
-          {result.correct ? (
+          {result.correct && result.afterPeek ? (
+            'Chính xác! Bạn đã xem đáp án trước đó – gợi ý: chấm "Học lại".'
+          ) : result.correct ? (
             'Chính xác! Gợi ý: chấm "Tốt".'
           ) : (
             <>
@@ -135,7 +148,7 @@ export function StudyCard({
           state={srsState}
           onRate={rate}
           disabled={busy}
-          suggestedQuality={result ? suggestedQuality(result.correct) : null}
+          suggestedQuality={result ? suggestedQuality(result.correct && !result.afterPeek) : null}
         />
       ) : (
         !typingFront && (
