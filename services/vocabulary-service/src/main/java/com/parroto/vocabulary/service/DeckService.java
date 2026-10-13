@@ -18,7 +18,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -122,6 +124,46 @@ public class DeckService {
         // INSERT actually executes (a plain save() only guarantees that at transaction commit).
         deck = deckRepository.saveAndFlush(deck);
         cacheService.invalidateByPattern("vocab:decks:list:*");
+        return DeckResponse.from(deck);
+    }
+
+    static final int DECK_NAME_MAX = 255;
+    private static final Set<String> LEVELS = Set.of("A1", "A2", "B1", "B2", "C1", "C2");
+
+    /**
+     * T14-VOC: replaces name/description/level/isProOnly of a public deck. Personal decks (T13)
+     * are reported as missing. Invalidates every cached deck listing ({@code vocab:decks:*}).
+     */
+    @Transactional
+    public DeckResponse updateDeck(UUID deckId, UpdateDeckRequest request) {
+        if (request == null) {
+            throw ApiException.badRequest("Dữ liệu không hợp lệ");
+        }
+        String name = request.name() == null ? "" : request.name().trim();
+        if (name.isEmpty()) {
+            throw ApiException.badRequest("Tên deck không được để trống");
+        }
+        if (name.length() > DECK_NAME_MAX) {
+            throw ApiException.badRequest("Tên deck tối đa %d ký tự".formatted(DECK_NAME_MAX));
+        }
+        String level = blankToNull(request.level());
+        if (level != null) {
+            level = level.trim().toUpperCase(Locale.ROOT);
+            if (!LEVELS.contains(level)) {
+                throw ApiException.badRequest("Trình độ phải là một trong A1, A2, B1, B2, C1, C2");
+            }
+        }
+
+        VocabDeck deck = deckRepository.findById(deckId)
+                .filter(d -> !d.isPersonal())
+                .orElseThrow(() -> ApiException.notFound("Không tìm thấy deck"));
+        deck.setName(name);
+        deck.setDescription(blankToNull(request.description()));
+        deck.setLevel(level);
+        deck.setIsProOnly(Boolean.TRUE.equals(request.isProOnly()));
+        deck = deckRepository.saveAndFlush(deck);
+
+        cacheService.invalidateByPattern("vocab:decks:*");
         return DeckResponse.from(deck);
     }
 
