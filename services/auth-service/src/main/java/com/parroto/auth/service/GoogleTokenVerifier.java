@@ -33,7 +33,7 @@ public class GoogleTokenVerifier {
     @SuppressWarnings("unchecked")
     public VerifiedGoogleUser verify(String idToken) {
         // AUTH-04: never accept a token without checking its audience; no client id = feature off.
-        if (expectedClientId == null || expectedClientId.isBlank()) {
+        if (!OAuthClientIds.isConfigured(expectedClientId)) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "Google login chưa cấu hình");
         }
         Map<String, Object> payload;

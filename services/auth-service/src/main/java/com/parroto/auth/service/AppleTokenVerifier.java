@@ -42,7 +42,7 @@ public class AppleTokenVerifier {
 
     public VerifiedAppleUser verify(String identityToken) {
         // AUTH-04: never accept a token without checking its audience; no client id = feature off.
-        if (expectedClientId == null || expectedClientId.isBlank()) {
+        if (!OAuthClientIds.isConfigured(expectedClientId)) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "Apple login chưa cấu hình");
         }
         String kid = extractHeaderKid(identityToken);

@@ -4,6 +4,8 @@ import com.parroto.auth.entity.User;
 import com.parroto.auth.exception.ApiException;
 import com.parroto.auth.repository.UserRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.client.RestTemplate;
@@ -43,6 +45,33 @@ class SocialLoginAndPasswordTest {
                         e -> org.assertj.core.api.Assertions.assertThat(e.getStatus())
                                 .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
         verifyNoInteractions(restTemplate);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"your_google_client_id", "your-google-client-id.apps.googleusercontent.com",
+            "changeme", "  YOUR_CLIENT_ID  "})
+    void placeholderClientIdsAre503AndNeverCallOut(String placeholder) {
+        RestTemplate restTemplate = mock(RestTemplate.class);
+        GoogleTokenVerifier google = new GoogleTokenVerifier(restTemplate, placeholder);
+        AppleTokenVerifier apple = new AppleTokenVerifier(restTemplate, placeholder);
+
+        assertThatThrownBy(() -> google.verify("any-token"))
+                .isInstanceOfSatisfying(ApiException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getStatus())
+                                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+        assertThatThrownBy(() -> apple.verify("a.b.c"))
+                .isInstanceOfSatisfying(ApiException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getStatus())
+                                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+        verifyNoInteractions(restTemplate);
+    }
+
+    @Test
+    void realLookingClientIdCountsAsConfigured() {
+        org.assertj.core.api.Assertions.assertThat(
+                OAuthClientIds.isConfigured("1234567890-abc.apps.googleusercontent.com")).isTrue();
+        org.assertj.core.api.Assertions.assertThat(OAuthClientIds.isConfigured("com.parroto.web")).isTrue();
+        org.assertj.core.api.Assertions.assertThat(OAuthClientIds.isConfigured(null)).isFalse();
     }
 
     @Test
