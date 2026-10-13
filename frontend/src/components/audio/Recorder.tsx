@@ -3,13 +3,15 @@
 import { MicPermissionHelp } from '@/components/practice/shadowing/MicPermissionHelp';
 import { classifyMediaError, startPcmCapture, type PcmCapture, type RecorderErrorCode } from '@/lib/audio/recorder';
 import { MAX_RECORDING_SECONDS, MIN_RECORDING_SECONDS } from '@/lib/audio/wav';
+import { primaryLabel } from '@/lib/shortcuts';
+import { useShortcutKeys } from '@/store/shortcut-store';
 import clsx from 'clsx';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 export interface RecorderHandle {
   start: () => void;
   stop: () => void;
-  /** Start when idle, stop when recording (Shift+` shortcut). */
+  /** Start when idle, stop when recording (`shadowing.record` shortcut). */
   toggle: () => void;
 }
 
@@ -39,6 +41,7 @@ export const Recorder = forwardRef<RecorderHandle, RecorderProps>(function Recor
   { onRecorded, onStart, disabled, maxSeconds = MAX_RECORDING_SECONDS, className },
   ref
 ) {
+  const keys = useShortcutKeys();
   const [phase, setPhase] = useState<Phase>('idle');
   const [elapsed, setElapsed] = useState(0);
   const [level, setLevel] = useState(0);
@@ -152,7 +155,7 @@ export const Recorder = forwardRef<RecorderHandle, RecorderProps>(function Recor
         disabled={(disabled && !recording) || busy}
         aria-pressed={recording}
         aria-label={recording ? 'Dừng ghi âm' : 'Bắt đầu ghi âm'}
-        title="Ghi âm / dừng (Shift+`)"
+        title={`Ghi âm / dừng (${primaryLabel(keys('shadowing.record'))})`}
         className={clsx(
           'flex h-20 w-20 items-center justify-center rounded-full text-3xl text-white shadow-md transition-colors',
           'focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-300 disabled:cursor-not-allowed disabled:opacity-50',

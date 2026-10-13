@@ -2,7 +2,9 @@
 
 import { PracticeHeader } from '@/components/practice/PracticeHeader';
 import { SentencePlayer } from '@/components/practice/SentencePlayer';
-import { DICTATION_SHORTCUTS, ShortcutHelp } from '@/components/practice/ShortcutHelp';
+import { ShortcutHelp } from '@/components/practice/ShortcutHelp';
+import { bindAction, isBareKey, primaryLabel } from '@/lib/shortcuts';
+import { useShortcutKeys } from '@/store/shortcut-store';
 import { WordDiffView } from '@/components/practice/WordDiffView';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -63,6 +65,7 @@ export function DictationPractice({
   const lessonId = lesson.id;
   const queryClient = useQueryClient();
   const nav = usePracticeNav(lessonId, MODE, lesson.sentences, sentence.id);
+  const keys = useShortcutKeys();
   const audio = useSentenceAudio({
     lessonId,
     sentence,
@@ -216,39 +219,41 @@ export function DictationPractice({
     });
   }, []);
 
-  // DIC-05: spec §3.3 shortcuts (ignored while a modal is open — handled by useHotkeys).
+  // DIC-05: spec §3.3 shortcuts, customisable in /settings/shortcuts (ignored while a modal is
+  // open — handled by useHotkeys). A bare Tab keeps normal focus navigation on buttons/links and a
+  // bare Enter on a focused button activates the button instead.
   const bindings: HotkeyBinding[] = [
-    {
-      combo: 'Tab',
+    ...keys('dictation.playPause').map((combo): HotkeyBinding =>
+      isBareKey(combo, 'Tab')
+        ? {
+            combo,
+            allowInInput: true,
+            preventDefault: false,
+            handler: (e) => {
+              const t = e.target as HTMLElement | null;
+              const inAnswer = !t || t === document.body || !!t.hasAttribute?.(DICTATION_INPUT_ATTR);
+              if (!inAnswer) return;
+              e.preventDefault();
+              audio.toggle();
+            },
+          }
+        : { combo, allowInInput: true, handler: () => audio.toggle() }
+    ),
+    ...bindAction(keys('dictation.replay'), { allowInInput: true, handler: () => audio.replay() }),
+    ...keys('dictation.submit').map((combo): HotkeyBinding => ({
+      combo,
       allowInInput: true,
       preventDefault: false,
       handler: (e) => {
-        const t = e.target as HTMLElement | null;
-        const inAnswer = !t || t === document.body || !!t.hasAttribute?.(DICTATION_INPUT_ATTR);
-        if (!inAnswer) return; // normal focus navigation on buttons/links
-        e.preventDefault();
-        audio.toggle();
-      },
-    },
-    { combo: 'Ctrl+Space', allowInInput: true, handler: () => audio.toggle() },
-    { combo: '`', allowInInput: true, handler: () => audio.replay() },
-    { combo: 'Ctrl+R', allowInInput: true, handler: () => audio.replay() },
-    {
-      combo: 'Enter',
-      allowInInput: true,
-      preventDefault: false,
-      handler: (e) => {
-        if (isNativeActivation(e.target)) return;
+        if (isBareKey(combo, 'Enter') && isNativeActivation(e.target)) return;
         e.preventDefault();
         if (isCorrect) nav.goNextOrFinish();
         else submit();
       },
-    },
-    { combo: 'Shift+ArrowRight', allowInInput: true, handler: () => nav.goNext() },
-    { combo: 'Mod+ArrowRight', allowInInput: true, handler: () => nav.goNext() },
-    { combo: 'Shift+ArrowLeft', allowInInput: true, handler: () => nav.goPrev() },
-    { combo: 'Mod+ArrowLeft', allowInInput: true, handler: () => nav.goPrev() },
-    { combo: 'Ctrl+H', allowInInput: true, handler: () => hint() },
+    })),
+    ...bindAction(keys('dictation.next'), { allowInInput: true, handler: () => nav.goNext() }),
+    ...bindAction(keys('dictation.prev'), { allowInInput: true, handler: () => nav.goPrev() }),
+    ...bindAction(keys('dictation.hint'), { allowInInput: true, handler: () => hint() }),
   ];
   useHotkeys(bindings);
 
@@ -266,7 +271,7 @@ export function DictationPractice({
         right={
           <div className="flex items-center gap-2">
             <DifficultyPopover value={difficulty} onChange={onDifficultyChange} />
-            <ShortcutHelp shortcuts={DICTATION_SHORTCUTS} title="Phím tắt Dictation" />
+            <ShortcutHelp scope="dictation" title="Phím tắt Dictation" />
           </div>
         }
       />
@@ -320,14 +325,14 @@ export function DictationPractice({
         <div className="flex flex-wrap items-center gap-2">
           {isCorrect ? (
             <Button variant="success" onClick={nav.goNextOrFinish} className="min-h-[44px]">
-              {nav.isLast ? 'Hoàn thành bài' : 'Câu kế →'} <span className="text-xs opacity-80">(Enter)</span>
+              {nav.isLast ? 'Hoàn thành bài' : 'Câu kế →'} <span className="text-xs opacity-80">({primaryLabel(keys('dictation.submit'))})</span>
             </Button>
           ) : (
             <Button onClick={submit} loading={mutation.isPending} className="min-h-[44px]">
-              {result ? 'Nộp lại' : 'Kiểm tra'} <span className="text-xs opacity-80">(Enter)</span>
+              {result ? 'Nộp lại' : 'Kiểm tra'} <span className="text-xs opacity-80">({primaryLabel(keys('dictation.submit'))})</span>
             </Button>
           )}
-          <Button variant="secondary" onClick={hint} disabled={isCorrect} className="min-h-[44px]" title="Ctrl+H">
+          <Button variant="secondary" onClick={hint} disabled={isCorrect} className="min-h-[44px]" title={primaryLabel(keys('dictation.hint'))}>
             💡 Gợi ý 1 từ
           </Button>
           <Button variant="ghost" onClick={revealAll} disabled={isCorrect} className="min-h-[44px]">
@@ -339,7 +344,7 @@ export function DictationPractice({
         </div>
         {!isHard && !result && (
           <p className="-mt-2 text-xs text-slate-400">
-            Space: ô kế · Backspace ở ô trống: ô trước · Ctrl+H hoặc nút Gợi ý: lộ từ ở ô đang chọn (tính là sai)
+            Space: ô kế · Backspace ở ô trống: ô trước · {primaryLabel(keys('dictation.hint'))} hoặc nút Gợi ý: lộ từ ở ô đang chọn (tính là sai)
           </p>
         )}
       </Card>

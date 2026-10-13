@@ -2,7 +2,9 @@
 
 import { Button } from '@/components/ui/Button';
 import { usePracticeNav } from '@/hooks/usePracticeNav';
+import { primaryLabel } from '@/lib/shortcuts';
 import type { PracticeMode, SentenceResponse } from '@/lib/types';
+import { useShortcutKeys } from '@/store/shortcut-store';
 import clsx from 'clsx';
 import Link from 'next/link';
 
@@ -34,6 +36,7 @@ export function PracticeHeader({
   className?: string;
 }) {
   const nav = usePracticeNav(lessonId, mode, sentences, currentId);
+  const keys = useShortcutKeys();
   const position = nav.index >= 0 ? nav.index + 1 : 0;
   const percent = nav.total > 0 ? Math.round((position / nav.total) * 100) : 0;
 
@@ -73,7 +76,7 @@ export function PracticeHeader({
           onClick={nav.goPrev}
           disabled={!nav.prev}
           className="min-h-[44px]"
-          title="Câu trước (Shift+←)"
+          title={`Câu trước (${primaryLabel(keys(`${mode}.prev`))})`}
         >
           ← Câu trước
         </Button>
@@ -91,7 +94,7 @@ export function PracticeHeader({
             onClick={nav.goNext}
             disabled={!nav.next}
             className="min-h-[44px]"
-            title="Câu kế (Shift+→)"
+            title={`Câu kế (${primaryLabel(keys(`${mode}.next`))})`}
           >
             Câu kế →
           </Button>

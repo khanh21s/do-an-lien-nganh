@@ -10,6 +10,7 @@ export const storageKeys = {
   sidebarCollapsed: 'parroto:sidebar-collapsed',
   reviewDailyLimit: 'parroto:review-daily-limit',
   reviewPopupDate: 'parroto:review-popup-date',
+  shortcuts: 'parroto:shortcuts',
 
   // sessionStorage (see lib/practice-session.ts)
   practiceSession: (lessonId: string, mode: PracticeMode) => `parroto:session:${lessonId}:${mode}`,

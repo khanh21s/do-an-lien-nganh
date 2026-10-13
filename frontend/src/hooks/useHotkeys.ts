@@ -57,15 +57,22 @@ const KEY_ALIASES: Record<string, string> = {
 };
 
 // KeyboardEvent.code for keys whose `key` changes with Shift.
+// Covers every digit and the US-layout punctuation keys, so user-chosen combos such as
+// `Shift+6` or `Shift+=` (customisable shortcuts) match on `code`.
 const CODE_FOR_KEY: Record<string, string> = {
   ' ': 'space',
   '`': 'backquote',
   '/': 'slash',
-  '1': 'digit1',
-  '2': 'digit2',
-  '3': 'digit3',
-  '4': 'digit4',
-  '5': 'digit5',
+  '-': 'minus',
+  '=': 'equal',
+  '[': 'bracketleft',
+  ']': 'bracketright',
+  '\\': 'backslash',
+  ';': 'semicolon',
+  "'": 'quote',
+  ',': 'comma',
+  '.': 'period',
+  ...Object.fromEntries(Array.from({ length: 10 }, (_, d) => [String(d), `digit${d}`])),
 };
 
 export function parseCombo(combo: string): ParsedCombo {

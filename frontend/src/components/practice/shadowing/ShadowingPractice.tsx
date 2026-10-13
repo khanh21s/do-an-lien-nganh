@@ -4,12 +4,14 @@ import { Recorder, type RecorderHandle } from '@/components/audio/Recorder';
 import { RecordingPlayer, type RecordingPlayerHandle } from '@/components/audio/RecordingPlayer';
 import { PracticeHeader } from '@/components/practice/PracticeHeader';
 import { SentencePlayer } from '@/components/practice/SentencePlayer';
-import { SHADOWING_SHORTCUTS, ShortcutHelp } from '@/components/practice/ShortcutHelp';
+import { ShortcutHelp } from '@/components/practice/ShortcutHelp';
+import { bindAction } from '@/lib/shortcuts';
+import { useShortcutKeys } from '@/store/shortcut-store';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Kbd } from '@/components/ui/Kbd';
+import { KbdCombo } from '@/components/ui/Kbd';
 import { Spinner } from '@/components/ui/Spinner';
-import { useHotkeys } from '@/hooks/useHotkeys';
+import { comboToLabels, useHotkeys } from '@/hooks/useHotkeys';
 import { usePracticeNav } from '@/hooks/usePracticeNav';
 import { useSentenceAudio } from '@/hooks/useSentenceAudio';
 import { apiErrorMessage, apiErrorStatus } from '@/lib/api';
@@ -137,16 +139,16 @@ export function ShadowingPractice({ lesson, sentence }: { lesson: LessonDetail; 
     setFailure(null);
   }, [pauseModel]);
 
+  const keys = useShortcutKeys();
   useHotkeys([
-    {
-      combo: 'Shift+`',
+    ...bindAction(keys('shadowing.record'), {
       handler: () => {
         if (!processing) recorderRef.current?.toggle();
       },
-    },
-    { combo: 'Space', handler: () => playerRef.current?.toggle(), enabled: !!take },
-    { combo: 'Shift+ArrowLeft', handler: nav.goPrev, allowInInput: true },
-    { combo: 'Shift+ArrowRight', handler: nav.goNext, allowInInput: true },
+    }),
+    ...bindAction(keys('shadowing.playTake'), { handler: () => playerRef.current?.toggle(), enabled: !!take }),
+    ...bindAction(keys('shadowing.prev'), { handler: nav.goPrev, allowInInput: true }),
+    ...bindAction(keys('shadowing.next'), { handler: nav.goNext, allowInInput: true }),
   ]);
 
   return (
@@ -157,7 +159,7 @@ export function ShadowingPractice({ lesson, sentence }: { lesson: LessonDetail; 
         mode="shadowing"
         sentences={lesson.sentences}
         currentId={sentence.id}
-        right={<ShortcutHelp shortcuts={SHADOWING_SHORTCUTS} title="Phím tắt Shadowing" />}
+        right={<ShortcutHelp scope="shadowing" title="Phím tắt Shadowing" />}
       />
 
       <Card>
@@ -172,14 +174,14 @@ export function ShadowingPractice({ lesson, sentence }: { lesson: LessonDetail; 
 
       <Card className="flex flex-col items-center gap-4">
         <p className="text-center text-sm text-slate-600">
-          Nghe câu mẫu rồi nói lại theo. Phím tắt <Kbd>Shift</Kbd> + <Kbd>`</Kbd> để ghi / dừng.
+          Nghe câu mẫu rồi nói lại theo. Phím tắt <KbdCombo keys={comboToLabels(keys('shadowing.record')[0])} /> để ghi / dừng.
         </p>
         <Recorder ref={recorderRef} onRecorded={handleRecorded} onStart={handleStart} disabled={processing} />
 
         {take && (
           <div className="w-full max-w-md">
             <p className="mb-1 text-xs text-slate-500">
-              Bản ghi của bạn ({take.durationSec.toFixed(1)}s) · <Kbd>Space</Kbd> để nghe lại
+              Bản ghi của bạn ({take.durationSec.toFixed(1)}s) · <KbdCombo keys={comboToLabels(keys('shadowing.playTake')[0])} /> để nghe lại
             </p>
             <RecordingPlayer ref={playerRef} blob={take.blob} />
           </div>

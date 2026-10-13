@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/Button';
 import { RatingButtons } from '@/components/vocab/RatingButtons';
 import { pronounce } from '@/components/vocab/pronounce';
 import { useHotkeys } from '@/hooks/useHotkeys';
+import { bindAction } from '@/lib/shortcuts';
+import { useShortcutKeys } from '@/store/shortcut-store';
 import { SRS_RATINGS, isTypedAnswerCorrect, maskWord, suggestedQuality, type SrsState } from '@/lib/srs';
 import { useRef, useState } from 'react';
 
@@ -17,7 +19,7 @@ interface TypingResult {
 
 /**
  * One flashcard + rating buttons + keyboard shortcuts, shared by `decks/[id]` and `review` (VOC-02).
- * Shortcuts: Space/Enter flip; 1–4 rate when flipped (when not flipped they only flip).
+ * Shortcuts (customisable, defaults Space/Enter flip; 1–4 rate when flipped, otherwise they only flip).
  * Typing mode (VOC-09): front shows the meaning + masked example, Enter checks the typed word;
  * correct → Good is suggested, wrong → Again.
  *
@@ -69,13 +71,12 @@ export function StudyCard({
     if (correct) pronounce(card.word, card.audioUrl);
   }
 
+  const keys = useShortcutKeys();
   useHotkeys([
-    { combo: 'Space', handler: flip },
-    { combo: 'Enter', handler: flip },
-    ...SRS_RATINGS.map((r) => ({
-      combo: r.key,
-      handler: () => (flipped ? rate(r.quality) : flip()),
-    })),
+    ...bindAction(keys('flashcard.flip'), { handler: flip }),
+    ...SRS_RATINGS.flatMap((r) =>
+      bindAction(keys(`flashcard.${r.name}`), { handler: () => (flipped ? rate(r.quality) : flip()) })
+    ),
   ]);
 
   const typingFront =

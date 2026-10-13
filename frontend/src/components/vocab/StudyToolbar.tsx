@@ -1,6 +1,6 @@
 'use client';
 
-import { FLASHCARD_SHORTCUTS, ShortcutHelp } from '@/components/practice/ShortcutHelp';
+import { ShortcutHelp } from '@/components/practice/ShortcutHelp';
 import clsx from 'clsx';
 
 /** Typing-mode switch (VOC-09) + shortcut help, shown above the study card. */
@@ -38,7 +38,7 @@ export function StudyToolbar({
         </span>
         Chế độ gõ từ
       </button>
-      <ShortcutHelp shortcuts={FLASHCARD_SHORTCUTS} />
+      <ShortcutHelp scope="flashcard" />
     </div>
   );
 }

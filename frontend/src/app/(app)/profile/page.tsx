@@ -15,6 +15,7 @@ import { qk } from '@/lib/queryKeys';
 import type { CefrLevel } from '@/lib/types';
 import { useAuthStore } from '@/store/auth-store';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -126,6 +127,21 @@ export default function ProfilePage() {
         <Button className="mt-4" loading={updateMutation.isPending} onClick={() => updateMutation.mutate()}>
           Lưu thay đổi
         </Button>
+      </Card>
+
+      <Card className="mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900">Phím tắt</h2>
+            <p className="mt-1 text-sm text-slate-600">Tuỳ chỉnh phím tắt cho Dictation, Shadowing và Flashcard.</p>
+          </div>
+          <Link
+            href="/profile/shortcuts"
+            className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Tuỳ chỉnh phím tắt
+          </Link>
+        </div>
       </Card>
 
       {isLocalAccount ? (

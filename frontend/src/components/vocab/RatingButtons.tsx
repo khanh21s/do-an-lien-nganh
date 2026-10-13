@@ -1,6 +1,8 @@
 'use client';
 
 import { Kbd } from '@/components/ui/Kbd';
+import { primaryLabel } from '@/lib/shortcuts';
+import { useShortcutKeys } from '@/store/shortcut-store';
 import { SRS_RATINGS, formatInterval, previewInterval, type SrsRatingName, type SrsState } from '@/lib/srs';
 import clsx from 'clsx';
 
@@ -12,7 +14,7 @@ const COLORS: Record<SrsRatingName, string> = {
 };
 
 /**
- * VOC-02: the 4 SM-2 rating buttons (Again/Hard/Good/Easy → q1/q3/q4/q5, keys 1–4).
+ * VOC-02: the 4 SM-2 rating buttons (Again/Hard/Good/Easy → q1/q3/q4/q5, default keys 1–4, customisable).
  * `state` = the card's current SM-2 state for the interval labels; `null` = new card;
  * `undefined` = unknown (labels hidden rather than guessed).
  */
@@ -27,19 +29,21 @@ export function RatingButtons({
   disabled?: boolean;
   suggestedQuality?: number | null;
 }) {
+  const keys = useShortcutKeys();
   return (
     <div>
       <p className="pb-2 pt-4 text-center text-sm text-slate-500">Bạn nhớ từ này ở mức nào?</p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {SRS_RATINGS.map((r) => {
           const suggested = suggestedQuality === r.quality;
+          const keyLabel = primaryLabel(keys(`flashcard.${r.name}`));
           return (
             <button
               key={r.key}
               type="button"
               disabled={disabled}
               onClick={() => onRate(r.quality)}
-              aria-keyshortcuts={r.key}
+              aria-keyshortcuts={keys(`flashcard.${r.name}`)[0]}
               className={clsx(
                 'flex min-h-[64px] flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-60',
                 COLORS[r.name],
@@ -47,7 +51,7 @@ export function RatingButtons({
               )}
             >
               <span className="flex items-center gap-1.5">
-                <Kbd className="hidden border-white/40 bg-white/20 text-white shadow-none sm:inline-flex">{r.key}</Kbd>
+                <Kbd className="hidden border-white/40 bg-white/20 text-white shadow-none sm:inline-flex">{keyLabel}</Kbd>
                 {r.label}
               </span>
               {state !== undefined && (
