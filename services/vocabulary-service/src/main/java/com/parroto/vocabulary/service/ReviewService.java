@@ -104,6 +104,8 @@ public class ReviewService {
             throw ApiException.conflict("Từ đã có trong sổ tay");
         }
         VocabCard card = cardRepository.findById(request.cardId())
+                // another user's personal card (T13) is treated as non-existent
+                .filter(c -> c.getDeck() == null || !c.getDeck().isPersonal() || c.getDeck().isOwnedBy(userId))
                 .orElseThrow(() -> ApiException.notFound("Card not found"));
         if (card.getDeck() != null && Boolean.TRUE.equals(card.getDeck().getIsProOnly())
                 && !premiumClient.isPremium(userId.toString())) {
@@ -128,16 +130,6 @@ public class ReviewService {
                 .nextReviewAt(userVocab.getNextReviewAt())
                 .status("new")
                 .build();
-    }
-
-    @Transactional
-    public void removeFromNotebook(UUID userId, UUID userVocabId) {
-        UserVocab userVocab = userVocabRepository.findById(userVocabId)
-                .orElseThrow(() -> ApiException.notFound("Vocabulary entry not found"));
-        if (!userVocab.getUserId().equals(userId)) {
-            throw ApiException.notFound("Vocabulary entry not found");
-        }
-        userVocabRepository.delete(userVocab);
     }
 
     static String messageFor(int quality, int intervalDays) {

@@ -99,6 +99,15 @@ variables are passed to each service, so changing a password means:
 
 ## Operations notes
 
+**Apply DB migrations to an existing volume** — `init-db.sql` only runs on the first start
+of an empty Postgres volume. Later schema changes ship as idempotent scripts in
+`scripts/migrations/` (safe to re-run); apply them in order, e.g. T13 (personal words in the
+notebook, `vocab_deck.owner_id`), then restart the service (`ddl-auto: validate` needs the column):
+```bash
+docker-compose exec -T postgres psql -U parroto -d vocabulary_db < scripts/migrations/001_personal_vocab.sql
+docker-compose restart vocabulary-service
+```
+
 **Normalise old practice scores** — since Phase 1 a score is always 0–100
 (`accuracy × difficulty weight`). Rows written by older versions may be above 100; fix
 them once, manually:
