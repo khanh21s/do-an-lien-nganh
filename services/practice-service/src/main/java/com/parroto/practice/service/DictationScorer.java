@@ -41,13 +41,29 @@ public class DictationScorer {
         return new Result(wordScores, total, correct, accuracy);
     }
 
+    /**
+     * DIC-07: score = round2(accuracy x weight), weight Easy 0.6 / Normal 0.8 / Hard 1.0
+     * (null or unknown difficulty -> Normal), clamped to [0, 100].
+     */
     public double weightedScore(double accuracy, String difficulty) {
-        double multiplier = switch (difficulty == null ? "Normal" : difficulty) {
-            case "Easy" -> 1.0;
-            case "Hard" -> 1.5;
-            default -> 1.2;
+        double weight = weightFor(difficulty);
+        double raw = accuracy * weight;
+        if (Double.isNaN(raw)) {
+            return 0.0;
+        }
+        double clamped = Math.max(0.0, Math.min(100.0, raw));
+        return Math.round(clamped * 100.0) / 100.0;
+    }
+
+    public static double weightFor(String difficulty) {
+        if (difficulty == null) {
+            return 0.8;
+        }
+        return switch (difficulty) {
+            case "Easy" -> 0.6;
+            case "Hard" -> 1.0;
+            default -> 0.8;
         };
-        return accuracy * multiplier;
     }
 
     private boolean isMatch(String expected, String typed) {
@@ -62,7 +78,8 @@ public class DictationScorer {
         return levenshtein(expected, typed) <= allowedDistance;
     }
 
-    private List<String> normalize(String text) {
+    /** Lower-cases, strips punctuation and splits on whitespace (shared with the mock pronunciation scorer). */
+    public static List<String> normalize(String text) {
         if (text == null) {
             return List.of();
         }
