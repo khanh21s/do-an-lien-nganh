@@ -50,6 +50,17 @@ class JwtServiceTest {
     }
 
     @Test
+    void alwaysSignsWithHs256EvenForLongSecrets() {
+        // A >= 64-byte secret would make jjwt default to HS512, which the gateway rejects.
+        JwtService longKey = new JwtService("x".repeat(68), 3600, 604800);
+        String token = longKey.generateAccessToken(user()).token();
+        String header = new String(java.util.Base64.getUrlDecoder().decode(token.split("\\.")[0]),
+                java.nio.charset.StandardCharsets.UTF_8);
+
+        assertThat(header).contains("\"alg\":\"HS256\"");
+    }
+
+    @Test
     void failsFastOnShortSecret() {
         assertThatThrownBy(() -> new JwtService("too_short_secret", 3600, 604800))
                 .isInstanceOf(IllegalStateException.class)

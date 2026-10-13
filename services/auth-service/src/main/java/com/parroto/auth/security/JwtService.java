@@ -64,7 +64,9 @@ public class JwtService {
                 .id(jti)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(ttlSeconds)))
-                .signWith(key)
+                // Pin HS256 (architecture §5.2): jjwt would otherwise pick HS384/HS512 for keys >= 48/64 bytes,
+                // which the gateway (algorithms: [HS256]) rejects.
+                .signWith(key, Jwts.SIG.HS256)
                 .compact();
         return new IssuedToken(token, jti, ttlSeconds);
     }
