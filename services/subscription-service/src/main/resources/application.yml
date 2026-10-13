@@ -54,6 +54,9 @@ vnpay:
   hash-secret: ${VNPAY_SECRET:}
   return-url: ${VNPAY_RETURN_URL:http://localhost:8000/subscriptions/payment-callback}
 
+admin:
+  emails: ${ADMIN_EMAILS:admin@parroto.com}
+
 management:
   endpoints:
     web:
