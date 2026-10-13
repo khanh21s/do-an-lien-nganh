@@ -2,6 +2,7 @@ package com.parroto.auth.service;
 
 import com.parroto.auth.exception.ApiException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
@@ -31,6 +32,10 @@ public class GoogleTokenVerifier {
 
     @SuppressWarnings("unchecked")
     public VerifiedGoogleUser verify(String idToken) {
+        // AUTH-04: never accept a token without checking its audience; no client id = feature off.
+        if (expectedClientId == null || expectedClientId.isBlank()) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "Google login chưa cấu hình");
+        }
         Map<String, Object> payload;
         try {
             payload = restTemplate.getForObject(TOKENINFO_URL + idToken, Map.class);
@@ -40,11 +45,9 @@ public class GoogleTokenVerifier {
         if (payload == null || !payload.containsKey("email")) {
             throw ApiException.unauthorized("Invalid Google token");
         }
-        if (expectedClientId != null && !expectedClientId.isBlank()) {
-            Object aud = payload.get("aud");
-            if (aud == null || !expectedClientId.equals(aud.toString())) {
-                throw ApiException.unauthorized("Google token was not issued for this application");
-            }
+        Object aud = payload.get("aud");
+        if (aud == null || !expectedClientId.equals(aud.toString())) {
+            throw ApiException.unauthorized("Google token was not issued for this application");
         }
         return new VerifiedGoogleUser(
                 payload.get("email").toString(),

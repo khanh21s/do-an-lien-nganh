@@ -25,7 +25,10 @@ server:
   port: ${SERVER_PORT:8003}
 
 jwt:
-  secret: ${JWT_SECRET:dev_change_this_in_production_use_strong_random_key_minimum_32_chars}
+  secret: ${JWT_SECRET:}
+
+internal:
+  token: ${INTERNAL_TOKEN:}
 
 cors:
   allowed-origin: ${FRONTEND_URL:http://localhost:3000}

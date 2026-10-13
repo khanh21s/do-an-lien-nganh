@@ -1,5 +1,6 @@
 package com.parroto.subscription.config;
 
+import com.parroto.subscription.security.InternalTokenFilter;
 import com.parroto.subscription.security.JwtAuthFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +26,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthFilter jwtAuthFilter,
+                                            InternalTokenFilter internalTokenFilter,
                                             RestAuthEntryPoint restAuthEntryPoint) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
@@ -35,9 +37,13 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/subscriptions/plans").permitAll()
                         .requestMatchers("/subscriptions/payment-callback").permitAll()
+                        // VNPay server-to-server IPN (SUB-02): no user token; authenticity comes from the VNPay signature.
+                        .requestMatchers(HttpMethod.GET, "/subscriptions/vnpay-ipn").permitAll()
                         // Internal, service-to-service only (not exposed through the API gateway).
+                        // No user JWT here: InternalTokenFilter rejects calls without a valid X-Internal-Token first.
                         .requestMatchers("/internal/**").permitAll()
                         .anyRequest().authenticated())
+                .addFilterBefore(internalTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

@@ -18,6 +18,8 @@ import java.util.stream.Collectors;
 @Service
 public class ProfileService {
 
+    private static final Set<String> LOCAL_PROVIDERS = Set.of("email", "local");
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final Set<String> adminEmails;
@@ -65,8 +67,9 @@ public class ProfileService {
     @Transactional
     public void changePassword(UUID userId, String currentPassword, String newPassword) {
         User user = findActiveUser(userId);
-        if (user.getPasswordHash() == null) {
-            throw ApiException.badRequest("This account signs in via a social provider and has no password");
+        // AUTH-07: social (Google/Apple) accounts have no password to change.
+        if (!isLocalAccount(user) || user.getPasswordHash() == null) {
+            throw ApiException.badRequest("Tài khoản đăng nhập bằng Google/Apple không có mật khẩu");
         }
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
             throw ApiException.unauthorized("Current password is incorrect");
@@ -76,6 +79,12 @@ public class ProfileService {
         }
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+    }
+
+    /** Email/password accounts are stored with auth_provider "email" ("local" accepted as an alias). */
+    static boolean isLocalAccount(User user) {
+        String provider = user.getAuthProvider();
+        return provider == null || LOCAL_PROVIDERS.contains(provider.toLowerCase());
     }
 
     @Transactional

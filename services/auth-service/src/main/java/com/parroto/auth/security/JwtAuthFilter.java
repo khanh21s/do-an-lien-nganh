@@ -7,6 +7,9 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -17,6 +20,8 @@ import java.util.List;
 
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
 
     private final JwtService jwtService;
     private final TokenBlacklistService blacklistService;
@@ -33,8 +38,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
             try {
-                Claims claims = jwtService.parse(token);
-                if (!blacklistService.isBlacklisted(claims.getId())) {
+                // Only access tokens authenticate requests; refresh tokens go to /auth/refresh-token in the body.
+                Claims claims = jwtService.parseAccessToken(token);
+                if (!isRevoked(claims.getId())) {
                     AuthenticatedUser principal = new AuthenticatedUser(
                             claims.getSubject(),
                             claims.get("email", String.class),
@@ -47,5 +53,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
         }
         chain.doFilter(request, response);
+    }
+
+    /** Tokens without a jti can't be revoked, so they are rejected. Redis errors fail open (architecture §5.2). */
+    private boolean isRevoked(String jti) {
+        if (jti == null || jti.isBlank()) {
+            return true;
+        }
+        try {
+            return blacklistService.isBlacklisted(jti);
+        } catch (DataAccessException e) {
+            log.warn("Redis unavailable, skipping token blacklist check (fail-open): {}", e.getMessage());
+            return false;
+        }
     }
 }

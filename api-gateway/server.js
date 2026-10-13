@@ -95,8 +95,10 @@ app.use('/vocabs/cards', verifyToken, proxyTo(SERVICES.vocabulary, { serviceName
 app.use('/vocabs/user', verifyToken, userLimiter, proxyTo(SERVICES.vocabulary, { serviceName: 'vocabulary' }));
 
 // ==================== SUBSCRIPTION SERVICE ====================
+// Public: plan listing, the VNPay browser return URL, and the VNPay server-to-server IPN (SUB-02),
+// none of which carry a user token. subscription-service verifies the VNPay signature itself.
 app.use(
-  ['/subscriptions/plans', '/subscriptions/payment-callback'],
+  ['/subscriptions/plans', '/subscriptions/payment-callback', '/subscriptions/vnpay-ipn'],
   proxyTo(SERVICES.subscription, { serviceName: 'subscription' })
 );
 app.use('/subscriptions', verifyToken, userLimiter, proxyTo(SERVICES.subscription, { serviceName: 'subscription' }));

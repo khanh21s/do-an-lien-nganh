@@ -21,13 +21,22 @@ import java.util.UUID;
 @Service
 public class JwtService {
 
+    /** HS256 needs a key of at least 256 bits. */
+    public static final int MIN_SECRET_BYTES = 32;
+    public static final String ACCESS_TOKEN_TYPE = "access";
+
     private final SecretKey key;
     private final long expirySeconds;
     private final long refreshExpirySeconds;
 
-    public JwtService(@Value("${jwt.secret}") String secret,
+    public JwtService(@Value("${jwt.secret:}") String secret,
                        @Value("${jwt.expiry-seconds}") long expirySeconds,
                        @Value("${jwt.refresh-expiry-seconds}") long refreshExpirySeconds) {
+        if (secret == null || secret.isBlank()
+                || secret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "JWT_SECRET must be set and at least " + MIN_SECRET_BYTES + " bytes long");
+        }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirySeconds = expirySeconds;
         this.refreshExpirySeconds = refreshExpirySeconds;
@@ -37,7 +46,7 @@ public class JwtService {
     }
 
     public IssuedToken generateAccessToken(User user) {
-        return generate(user, expirySeconds, "access");
+        return generate(user, expirySeconds, ACCESS_TOKEN_TYPE);
     }
 
     public IssuedToken generateRefreshToken(User user) {
@@ -68,6 +77,15 @@ public class JwtService {
         } catch (JwtException | IllegalArgumentException e) {
             throw new JwtException("Invalid or expired token", e);
         }
+    }
+
+    /** Verifies the token and requires {@code type=access}: refresh tokens are never valid as Bearer. */
+    public Claims parseAccessToken(String token) {
+        Claims claims = parse(token);
+        if (!ACCESS_TOKEN_TYPE.equals(claims.get("type", String.class))) {
+            throw new JwtException("Token is not an access token");
+        }
+        return claims;
     }
 
     public long remainingTtlSeconds(Claims claims) {

@@ -6,6 +6,7 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -40,6 +41,10 @@ public class AppleTokenVerifier {
     }
 
     public VerifiedAppleUser verify(String identityToken) {
+        // AUTH-04: never accept a token without checking its audience; no client id = feature off.
+        if (expectedClientId == null || expectedClientId.isBlank()) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "Apple login chưa cấu hình");
+        }
         String kid = extractHeaderKid(identityToken);
         RSAPublicKey publicKey = fetchPublicKey(kid);
         try {
@@ -49,8 +54,7 @@ public class AppleTokenVerifier {
             if (!APPLE_ISSUER.equals(claims.getIssuer())) {
                 throw ApiException.unauthorized("Invalid Apple token issuer");
             }
-            if (expectedClientId != null && !expectedClientId.isBlank()
-                    && !expectedClientId.equals(claims.getAudience().iterator().next())) {
+            if (claims.getAudience() == null || !claims.getAudience().contains(expectedClientId)) {
                 throw ApiException.unauthorized("Apple token was not issued for this application");
             }
             String email = claims.get("email", String.class);
