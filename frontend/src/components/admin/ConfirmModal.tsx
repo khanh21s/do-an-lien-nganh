@@ -9,6 +9,7 @@ export function ConfirmModal({
   title,
   message,
   confirmLabel = 'Xoá',
+  confirmVariant = 'danger',
   loading,
   onConfirm,
   onClose,
@@ -17,6 +18,8 @@ export function ConfirmModal({
   title: string;
   message: React.ReactNode;
   confirmLabel?: string;
+  /** T14: non-destructive confirmations (e.g. unlocking a user) use 'primary'. */
+  confirmVariant?: 'danger' | 'primary';
   loading?: boolean;
   onConfirm: () => void;
   onClose: () => void;
@@ -28,7 +31,7 @@ export function ConfirmModal({
         <Button variant="secondary" onClick={onClose} disabled={loading} className="min-h-[44px]">
           Huỷ
         </Button>
-        <Button variant="danger" onClick={onConfirm} loading={loading} className="min-h-[44px]">
+        <Button variant={confirmVariant} onClick={onConfirm} loading={loading} className="min-h-[44px]">
           {confirmLabel}
         </Button>
       </div>
