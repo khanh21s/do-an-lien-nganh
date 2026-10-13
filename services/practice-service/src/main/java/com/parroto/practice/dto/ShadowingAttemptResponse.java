@@ -14,6 +14,7 @@ public record ShadowingAttemptResponse(
         double accuracy,
         double duration,
         List<ShadowingWordScoreDto> wordScores,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        String scorer
 ) {
 }
