@@ -2,6 +2,8 @@
 
 import { CardFormModal } from '@/components/admin/CardFormModal';
 import { ConfirmModal } from '@/components/admin/ConfirmModal';
+import { DeckFormModal } from '@/components/admin/DeckFormModal';
+import { deckDraftToUpdate } from '@/components/admin/console';
 import { invalidateVocabCaches } from '@/components/admin/invalidate';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -14,7 +16,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { apiErrorMessage } from '@/lib/api';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
 import { qk } from '@/lib/queryKeys';
-import type { CardInput, DeckCardsParams, UpdateCardInput, VocabCard } from '@/lib/types';
+import type { CardInput, DeckCardsParams, UpdateCardInput, UpdateDeckInput, VocabCard } from '@/lib/types';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -34,6 +36,8 @@ export default function AdminDeckCardsPage() {
   const [editing, setEditing] = useState<VocabCard | null>(null);
   const [formKey, setFormKey] = useState(0);
   const [toDelete, setToDelete] = useState<VocabCard | null>(null);
+  const [deckFormOpen, setDeckFormOpen] = useState(false);
+  const [deckFormKey, setDeckFormKey] = useState(0);
 
   const params: DeckCardsParams = { page, limit: PAGE_SIZE, ...(searchWord ? { searchWord } : {}) };
 
@@ -84,6 +88,22 @@ export default function AdminDeckCardsPage() {
     onError: (err) => toast.error(apiErrorMessage(err, 'Không xoá được thẻ.')),
   });
 
+  // T14: edit the deck itself (name, description, level, isProOnly).
+  const updateDeckMutation = useMutation({
+    mutationFn: (input: UpdateDeckInput) => vocabularyApi.updateDeck(deckId, input),
+    onSuccess: () => {
+      toast.success('Đã lưu bộ từ vựng.');
+      setDeckFormOpen(false);
+      refresh();
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, 'Không lưu được bộ từ vựng.')),
+  });
+
+  function openDeckForm() {
+    setDeckFormKey((k) => k + 1);
+    setDeckFormOpen(true);
+  }
+
   function openForm(card: VocabCard | null) {
     setEditing(card);
     setFormKey((k) => k + 1);
@@ -116,11 +136,19 @@ export default function AdminDeckCardsPage() {
             {deck?.level && <Badge tone="brand">{deck.level}</Badge>}
             {deck?.isProOnly && <Badge tone="purple">Pro</Badge>}
           </div>
+          {deck?.description && <p className="break-words text-sm text-slate-600">{deck.description}</p>}
           <p className="text-sm text-slate-500">{result?.pagination.total ?? 0} thẻ{searchWord ? ' khớp tìm kiếm' : ''}</p>
         </div>
-        <Button onClick={() => openForm(null)} className="min-h-[44px]">
-          + Thêm thẻ
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {deck && (
+            <Button variant="secondary" onClick={openDeckForm} className="min-h-[44px]">
+              Sửa deck
+            </Button>
+          )}
+          <Button onClick={() => openForm(null)} className="min-h-[44px]">
+            + Thêm thẻ
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 flex items-center gap-2">
@@ -186,6 +214,17 @@ export default function AdminDeckCardsPage() {
         onCreate={(input) => createMutation.mutate(input)}
         onUpdate={(id, input) => updateMutation.mutate({ id, input })}
       />
+
+      {deck && (
+        <DeckFormModal
+          key={deckFormKey}
+          open={deckFormOpen}
+          deck={deck}
+          loading={updateDeckMutation.isPending}
+          onClose={() => setDeckFormOpen(false)}
+          onSubmit={(draft) => updateDeckMutation.mutate(deckDraftToUpdate(draft))}
+        />
+      )}
 
       <ConfirmModal
         open={!!toDelete}

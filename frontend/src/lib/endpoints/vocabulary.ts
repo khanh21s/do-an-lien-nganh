@@ -74,4 +74,10 @@ export const vocabularyApi = {
   updatePersonalWord: (userVocabId: string, data: import('@/lib/types').CreatePersonalWordInput) =>
     api.put<LearnedWord>(`/vocabs/user/words/${userVocabId}`, data).then((r) => r.data),
   // --- end T13 ---
+
+  // --- T14 additions ---
+  /** Admin: edit a system deck (personal decks → 404). */
+  updateDeck: (deckId: string, data: import('@/lib/types').UpdateDeckInput) =>
+    api.put<VocabDeck>(`/vocabs/decks/${deckId}`, data).then((r) => r.data),
+  // --- end T14 ---
 };

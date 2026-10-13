@@ -14,13 +14,11 @@ import { badgeCount, moreDrawerEntries, type NavLeaf } from './navItems';
 export function MoreDrawer({
   open,
   onClose,
-  isAdmin,
   activeHref,
   vocabStats,
 }: {
   open: boolean;
   onClose: () => void;
-  isAdmin: boolean;
   activeHref: string | null;
   vocabStats?: VocabUserStats;
 }) {
@@ -47,7 +45,7 @@ export function MoreDrawer({
 
   if (!open) return null;
 
-  const entries = moreDrawerEntries(isAdmin);
+  const entries = moreDrawerEntries();
 
   return (
     <div className="fixed inset-0 z-50 md:hidden">

@@ -597,3 +597,124 @@ export interface CreatePersonalWordInput {
   exampleVi?: string | null;
 }
 // --- end T13 ---
+
+// --- T14 additions ---
+// Admin console contract (docs/tasks.md "T14"), built in parallel with T14-AUTH/SUB/VOC.
+
+export type AdminUserStatusFilter = 'all' | 'active' | 'locked';
+
+/** `AdminUserResponse` (auth-service). */
+export interface AdminUser {
+  id: string;
+  email: string;
+  authProvider: string;
+  cefrLevel: CefrLevel | null;
+  isActive: boolean;
+  isAdmin: boolean;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+export interface ListAdminUsersParams extends PageParams {
+  q?: string;
+  status?: AdminUserStatusFilter;
+}
+
+/** Body of `PATCH /auth/admin/users/{id}`. */
+export interface UpdateAdminUserInput {
+  isActive: boolean;
+}
+
+/** `GET /auth/admin/stats` (admin accounts excluded). */
+export interface AdminAuthStats {
+  totalUsers: number;
+  activeUsers: number;
+  lockedUsers: number;
+  newUsersLast7Days: number;
+  newUsersLast30Days: number;
+}
+
+/** `AdminPlanResponse` (subscription-service); includes inactive plans. */
+export interface AdminPlan {
+  id: string;
+  name: string;
+  durationDays: number;
+  price: number;
+  features: string[] | null;
+  isActive: boolean;
+  activeSubscribers: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** Body of `POST /subscriptions/admin/plans`. */
+export interface AdminPlanInput {
+  id: string;
+  name: string;
+  durationDays: number;
+  price: number;
+  features: string[];
+  isActive: boolean;
+}
+
+/** Body of `PUT /subscriptions/admin/plans/{id}` (same as create, without `id`). */
+export type UpdateAdminPlanInput = Omit<AdminPlanInput, 'id'>;
+
+export type AdminTransactionStatusFilter = 'all' | 'pending' | 'success' | 'failed';
+
+export interface ListAdminTransactionsParams extends PageParams {
+  status?: AdminTransactionStatusFilter;
+  method?: string;
+  q?: string;
+  /** 'YYYY-MM-DD' (Vietnam time). */
+  from?: string;
+  /** 'YYYY-MM-DD' (Vietnam time). */
+  to?: string;
+}
+
+/** `AdminTransactionResponse` (subscription-service). */
+export interface AdminTransaction {
+  id: string;
+  userId: string;
+  planId: string | null;
+  planName: string | null;
+  amount: number;
+  method: string | null;
+  status: string;
+  transactionId: string | null;
+  description: string | null;
+  createdAt: string;
+}
+
+export interface RevenueDay {
+  /** 'YYYY-MM-DD' */
+  date: string;
+  amount: number;
+}
+
+/** `GET /subscriptions/admin/stats`; `revenueByDay` = last 30 days, oldest → newest. */
+export interface AdminSubscriptionStats {
+  activeSubscribers: number;
+  revenueTotal: number;
+  revenueLast30Days: number;
+  successfulTransactions: number;
+  pendingTransactions: number;
+  revenueByDay: RevenueDay[];
+}
+
+/** Item of `POST /subscriptions/admin/user-status`. */
+export interface UserPremiumStatus {
+  userId: string;
+  premium: boolean;
+  planId: string | null;
+  endAt: string | null;
+}
+
+/** Body of `PUT /vocabs/decks/{id}` (admin, system decks only). */
+export interface UpdateDeckInput {
+  name: string;
+  description: string | null;
+  level: CefrLevel | null;
+  isProOnly: boolean;
+}
+// --- end T14 ---
