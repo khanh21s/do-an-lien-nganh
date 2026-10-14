@@ -39,6 +39,7 @@ cors:
 
 services:
   subscription-service-url: ${SUBSCRIPTION_SERVICE_URL:http://localhost:8005}
+  practice-service-url: ${PRACTICE_SERVICE_URL:http://localhost:8003}
 
 management:
   endpoints:

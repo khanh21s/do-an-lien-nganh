@@ -7,10 +7,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-/** One round of the "Dịch nhanh" game (T15). Score and counters are maintained server-side. */
+/** One round of the "Dịch nhanh" game (T15/T16). Score and counters are maintained server-side. */
 @Entity
 @Table(name = "game_session")
 @Getter
@@ -91,6 +92,26 @@ public class GameSession {
     @Builder.Default
     private Integer srsUpdated = 0;
 
+    /** Lives left (SURVIVAL only). */
+    private Integer lives;
+
+    /** Correct answers without hints in under 3 s (badge "Tốc độ ánh sáng"). */
+    @Column(name = "fast_count")
+    @Builder.Default
+    private Integer fastCount = 0;
+
+    /** Masked email shown on leaderboards. */
+    @Column(name = "display_name")
+    private String displayName;
+
+    /** Day the round started, Vietnam time (daily goal, leaderboards). */
+    @Column(name = "play_date", nullable = false)
+    private LocalDate playDate;
+
+    /** Counts for leaderboards (public word sources only). */
+    @Builder.Default
+    private Boolean ranked = false;
+
     @Column(name = "started_at", nullable = false)
     private OffsetDateTime startedAt;
 
@@ -102,5 +123,9 @@ public class GameSession {
 
     public boolean isActive() {
         return STATUS_ACTIVE.equals(status);
+    }
+
+    public GameMode gameMode() {
+        return GameMode.valueOf(mode);
     }
 }

@@ -27,3 +27,13 @@ docker run --rm --network host --ipc=host -u "$(id -u):$(id -g)" -e HOME=/tmp -e
 docker run --rm --network host --ipc=host -u "$(id -u):$(id -g)" -e HOME=/tmp \
   -v "$PWD/e2e":/work -w /work mcr.microsoft.com/playwright:v1.47.2-jammy npx playwright test translate-game
 ```
+
+`tests/game-phase2.spec.ts` (T16) needs a Premium account for the Survival test (skipped otherwise). Create one, then run:
+```bash
+PEMAIL="e2e_premium_$(date +%s)@test.local"
+UID_=$(curl -s -X POST localhost:8000/auth/register -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$PEMAIL\",\"password\":\"Passw0rd!e2e\",\"cefrLevel\":\"B2\"}" | python3 -c 'import json,sys;print(json.load(sys.stdin)["userId"])')
+docker exec parroto-postgres psql -U parroto -d subscription_db -c "INSERT INTO subscription (user_id, plan_id, start_at, end_at, status, payment_method) VALUES ('$UID_','plan-1month',now(),now()+interval '30 days','active','activation_code');"
+docker run --rm --network host --ipc=host -u "$(id -u):$(id -g)" -e HOME=/tmp -e PREMIUM_EMAIL="$PEMAIL" -e PREMIUM_PASSWORD='Passw0rd!e2e' \
+  -v "$PWD/e2e":/work -w /work mcr.microsoft.com/playwright:v1.47.2-jammy npx playwright test game-phase2
+```

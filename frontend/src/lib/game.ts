@@ -1,7 +1,7 @@
-import type { GameResult, GameSummaryItem } from '@/lib/types';
+import type { GameBoard, GameMode, GameProgress, GameResult, GameSummaryItem } from '@/lib/types';
 
 /**
- * Pure helpers of the "Dịch nhanh" game UI (T15). Scoring itself happens on the server
+ * Pure helpers of the "Dịch nhanh" game UI (T15/T16). Scoring itself happens on the server
  * (vocabulary-service GameScoring); these only mirror its tiers for display.
  */
 
@@ -89,4 +89,45 @@ export function recordMessage(score: number, previousBest: number | null, newRec
   if (previousBest == null) return 'Hãy ghi điểm để lập kỷ lục.';
   if (score === previousBest) return 'Bằng kỷ lục của bạn!';
   return `Còn ${previousBest - score + 1} điểm nữa là phá kỷ lục ${previousBest}.`;
+}
+
+// --- T16 ---
+
+export const MODE_INFO: Record<GameMode, { icon: string; title: string; short: string; text: string }> = {
+  SPRINT: { icon: '⚡', title: 'Nước rút', short: '60 giây', text: 'Trả lời càng nhiều càng tốt trong 60 giây.' },
+  SURVIVAL: { icon: '❤️', title: 'Sinh tồn', short: '3 mạng', text: '3 mạng, 15 giây mỗi từ, từ khó dần. Sai hoặc hết giờ mất 1 mạng.' },
+  DAILY: { icon: '📅', title: 'Thử thách hôm nay', short: '10 từ', text: '10 từ giống nhau cho mọi người, 20 giây mỗi từ, chơi 1 lần mỗi ngày.' },
+};
+
+export const BOARD_LABELS: Record<GameBoard, string> = {
+  daily: 'Hôm nay',
+  'sprint-week': 'Nước rút tuần',
+  'survival-week': 'Sinh tồn tuần',
+};
+
+export const DAILY_GOAL_OPTIONS = [100, 200, 300, 500] as const;
+
+/** 0–100, for progress bars. */
+export function percent(value: number, total: number): number {
+  if (total <= 0) return 100;
+  return Math.max(0, Math.min(100, Math.round((value / total) * 100)));
+}
+
+export function levelPercent(p: GameProgress): number {
+  return percent(p.levelXp, p.levelXpNeeded);
+}
+
+export function goalPercent(p: GameProgress): number {
+  return percent(p.todayPoints, p.dailyGoal);
+}
+
+/** "Còn 40 điểm để đạt mục tiêu" / "Đã đạt mục tiêu hôm nay". */
+export function goalMessage(p: GameProgress): string {
+  return p.goalMet ? 'Đã đạt mục tiêu hôm nay – được tính vào chuỗi ngày học 🔥' : `Còn ${p.dailyGoal - p.todayPoints} điểm để đạt mục tiêu`;
+}
+
+/** "Hạng 3/25 · Nước rút tuần" for the summary. */
+export function rankMessage(board: GameBoard | null, rank: number | null, total: number | null): string | null {
+  if (!board || !rank) return null;
+  return `Hạng ${rank}${total ? `/${total}` : ''} · ${BOARD_LABELS[board]}`;
 }

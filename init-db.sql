@@ -198,6 +198,16 @@ CREATE INDEX idx_practice_user_created ON practice_attempt(user_id, created_at D
 CREATE INDEX idx_practice_created_at ON practice_attempt(created_at DESC);
 CREATE INDEX idx_practice_mode ON practice_attempt(mode);
 
+-- T16: days a daily goal was met outside dictation/shadowing (count for the streak)
+CREATE TABLE goal_day (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  day DATE NOT NULL,             -- calendar day in Vietnam time
+  source VARCHAR(20) NOT NULL,   -- game
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, day, source)
+);
+
 GRANT CONNECT ON DATABASE practice_db TO practice_user;
 GRANT USAGE ON SCHEMA public TO practice_user;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO practice_user;
@@ -305,6 +315,11 @@ CREATE TABLE game_session (
   skipped_count INTEGER NOT NULL DEFAULT 0,
   previous_best INTEGER,              -- best score of the same scope before this round
   srs_updated INTEGER NOT NULL DEFAULT 0,
+  lives INTEGER,                      -- SURVIVAL only (T16)
+  fast_count INTEGER NOT NULL DEFAULT 0, -- clean answers < 3 s (T16)
+  display_name VARCHAR(50),           -- masked email for leaderboards (T16)
+  play_date DATE NOT NULL,            -- start day, Vietnam time (T16)
+  ranked BOOLEAN NOT NULL DEFAULT false, -- counts for leaderboards (T16)
   started_at TIMESTAMPTZ NOT NULL,
   ends_at TIMESTAMPTZ NOT NULL,
   finished_at TIMESTAMPTZ
@@ -326,6 +341,37 @@ CREATE TABLE game_answer (
   hints_used INTEGER NOT NULL DEFAULT 0,
   points INTEGER NOT NULL DEFAULT 0,
   UNIQUE (session_id, seq)
+);
+
+-- T16 (same schema as scripts/migrations/006_vocab_game_phase2.sql)
+-- one Daily challenge attempt per user and day
+CREATE UNIQUE INDEX ux_game_session_daily ON game_session(user_id, source_key) WHERE mode = 'DAILY';
+CREATE INDEX idx_game_session_board ON game_session(mode, play_date, score DESC)
+  WHERE status = 'FINISHED' AND ranked;
+
+-- the 10 cards of each day's challenge (same for everyone), created on first play of the day
+CREATE TABLE daily_challenge (
+  day DATE PRIMARY KEY,
+  card_ids TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- per-user game progress: XP (sum of finished round scores), daily points goal
+CREATE TABLE game_profile (
+  user_id UUID PRIMARY KEY,
+  xp BIGINT NOT NULL DEFAULT 0,
+  daily_goal INTEGER NOT NULL DEFAULT 200,
+  goal_recorded_day DATE,          -- last day reported to practice-service (streak)
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE game_badge (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  code VARCHAR(40) NOT NULL,
+  session_id UUID,                 -- round that earned it
+  earned_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (user_id, code)
 );
 
 GRANT CONNECT ON DATABASE vocabulary_db TO vocabulary_user;

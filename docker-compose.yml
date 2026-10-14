@@ -211,6 +211,8 @@ services:
       
       # Microservices communication
       CONTENT_SERVICE_URL: http://content-service:8002
+      # Service-to-service auth: vocabulary-service reports met game goals (T16)
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
       
       # Azure Speech API (for Shadowing pronunciation scoring)
       AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
@@ -278,6 +280,8 @@ services:
 
       # Microservices communication (premium gate for Pro-only decks)
       SUBSCRIPTION_SERVICE_URL: http://subscription-service:8005
+      # T16: game daily goal met -> practice streak day
+      PRACTICE_SERVICE_URL: http://practice-service:8003
 
       # Service-to-service auth (architecture §5.3)
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}

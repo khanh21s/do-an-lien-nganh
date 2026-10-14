@@ -51,7 +51,7 @@ test('play a round: combo, hint, skip, summary, notebook, replay', async ({ page
   await expect(page.getByText('Chưa có ván nào')).toBeVisible();
 
   await page.getByRole('radio', { name: /Bộ từ/ }).click();
-  await page.getByRole('combobox').selectOption(DECK);
+  await page.getByRole('combobox', { name: 'Bộ từ' }).selectOption(DECK);
   await page.screenshot({ path: 'screenshots/16-game-lobby.png', fullPage: true });
   await page.getByRole('button', { name: /Bắt đầu/ }).click();
 
@@ -96,8 +96,8 @@ test('play a round: combo, hint, skip, summary, notebook, replay', async ({ page
   await expect(page.getByTestId('summary-record')).toContainText(`kỷ lục ${score}`);
 
   // notebook source: the 2 words just added
-  await page.getByRole('button', { name: 'Đổi nguồn từ' }).click();
-  await expect(page.getByText(/1 ván · tổng|2 ván · tổng/)).toBeVisible();
+  await page.getByRole('button', { name: 'Đổi chế độ' }).click();
+  await expect(page.getByText(/\d ván · tổng/)).toBeVisible();
   await page.getByRole('radio', { name: /Từ của tôi/ }).click();
   await page.getByRole('button', { name: /Bắt đầu/ }).click();
   const notebook = await (await page.request.get(`${API}/vocabs/user/learned`, { headers: { Authorization: `Bearer ${token}` } })).json();
@@ -119,5 +119,5 @@ test('the round ends by itself when the 60 s are up', async ({ page }) => {
   await expect(page.getByTestId('game-meaning')).toBeVisible();
   await expect(page.getByLabel('Thời gian còn lại')).toContainText(/0:5\d|1:00/);
   await expect(page.getByTestId('summary-score')).toBeVisible({ timeout: 75_000 });
-  await expect(page.getByText('Trình độ A1 · Nước rút 60 giây')).toBeVisible();
+  await expect(page.getByText('⚡ Nước rút · Trình độ A1')).toBeVisible();
 });

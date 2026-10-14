@@ -8,7 +8,7 @@ import { pronounce } from '@/components/vocab/pronounce';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { apiErrorMessage } from '@/lib/api';
 import { gameApi } from '@/lib/endpoints/game';
-import { comboMultiplier, formatClock, hintFactor, nextComboTier, posLabel } from '@/lib/game';
+import { MODE_INFO, comboMultiplier, formatClock, hintFactor, nextComboTier, posLabel } from '@/lib/game';
 import { bindAction, primaryLabel } from '@/lib/shortcuts';
 import type { GameAnswerResult, GameHint, GameQuestion, GameState, GameSummary } from '@/lib/types';
 import { useShortcutKeys } from '@/store/shortcut-store';
@@ -20,12 +20,20 @@ import toast from 'react-hot-toast';
 interface Feedback {
   result: GameAnswerResult;
   typed: string;
+  /** Skipped automatically because the word's timer ran out. */
+  timeout: boolean;
 }
 
+/** Per-word time limits of the server (GameMode), for the per-word bar. */
+const QUESTION_LIMIT_MS: Record<string, number> = { SURVIVAL: 15_000, DAILY: 20_000 };
+
 /**
- * One 60-second round. The server is authoritative for grading, score and remaining time; the
- * local countdown is re-synced from `remainingMs` after every answer. When the time is up (or
- * the words run out) the round is finished and the summary handed to `onFinished`.
+ * One round. The server is authoritative for grading, score, lives and time; the local
+ * countdowns are re-synced from the server after every answer.
+ * - SPRINT: a 60-second round timer.
+ * - SURVIVAL / DAILY: a per-word timer (`timeLeftMs`); when it runs out the word is skipped
+ *   automatically (Survival: costs a life). Survival shows the lives, Daily "Câu x/10".
+ * When the round is over the summary is fetched and handed to `onFinished`.
  */
 export function GamePlay({
   initial,
@@ -46,11 +54,19 @@ export function GamePlay({
   const [busy, setBusy] = useState(false);
   const [deadline, setDeadline] = useState(() => Date.now() + initial.remainingMs);
   const [now, setNow] = useState(() => Date.now());
+  const [lives, setLives] = useState(initial.lives);
+  const [questionDeadline, setQuestionDeadline] = useState(() => Date.now() + (initial.question.timeLeftMs ?? 0));
+  const [done, setDone] = useState(false);
   const finishing = useRef(false);
+  const timeoutSent = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const mode = initial.mode;
+  const timed = initial.durationSec > 0;
   const remaining = Math.max(0, deadline - now);
   const durationMs = initial.durationSec * 1000;
+  const questionLimit = QUESTION_LIMIT_MS[mode] ?? 0;
+  const questionRemaining = Math.max(0, questionDeadline - now);
 
   const finish = useCallback(async () => {
     if (finishing.current) return;
@@ -69,14 +85,22 @@ export function GamePlay({
   }, []);
 
   useEffect(() => {
-    if (remaining <= 0 && !busy) void finish();
-  }, [remaining, busy, finish]);
+    if ((done || (timed && remaining <= 0)) && !busy) void finish();
+  }, [done, timed, remaining, busy, finish]);
+
+  // per-word timer (Survival / Daily): skip the word when it runs out, once per word
+  useEffect(() => {
+    if (timed || !question || busy || questionRemaining > 0 || timeoutSent.current === question.seq) return;
+    timeoutSent.current = question.seq;
+    void send(true, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timed, question, busy, questionRemaining]);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, [question?.seq]);
 
-  async function send(skip: boolean) {
+  async function send(skip: boolean, timeout = false) {
     if (busy || !question || finishing.current) return;
     const typed = input.trim();
     if (!skip && !typed) {
@@ -88,19 +112,19 @@ export function GamePlay({
       const r = await gameApi.answer(sessionId, skip ? { skip: true } : { answer: typed });
       setScore(r.score);
       setCombo(r.combo);
+      setLives(r.lives);
       if (r.timeUp) {
-        setDeadline(Date.now());
+        setDone(true);
         return;
       }
-      setFeedback({ result: r, typed });
+      setFeedback({ result: r, typed: skip ? '' : typed, timeout });
       if (r.points > 0) setGain({ points: r.points, key: r.score });
       setInput('');
       setHint(null);
       setDeadline(Date.now() + r.remainingMs);
       setQuestion(r.nextQuestion);
-      if (r.finished || !r.nextQuestion) {
-        setDeadline(Date.now());
-      }
+      if (r.nextQuestion?.timeLeftMs != null) setQuestionDeadline(Date.now() + r.nextQuestion.timeLeftMs);
+      if (r.finished || !r.nextQuestion) setDone(true);
     } catch (err) {
       toast.error(apiErrorMessage(err, 'Không gửi được đáp án.'));
     } finally {
@@ -128,14 +152,38 @@ export function GamePlay({
   const multiplier = comboMultiplier(combo);
   const tier = nextComboTier(combo);
   const hintsUsed = hint?.hintsUsed ?? 0;
-  const low = remaining <= 10_000;
+  const shown = timed ? remaining : questionRemaining;
+  const shownTotal = timed ? durationMs : questionLimit;
+  const low = shown <= (timed ? 10_000 : 5_000);
 
   return (
     <div className="mx-auto max-w-xl">
-      {/* status bar: time, score, combo */}
+      <p className="mb-2 text-center text-xs font-medium uppercase tracking-wide text-slate-400">
+        {MODE_INFO[mode].icon} {mode === 'SPRINT' ? `${MODE_INFO[mode].title} · ${initial.sourceLabel}` : initial.sourceLabel}
+      </p>
+      {/* status bar: time, lives / progress, score, combo */}
       <div className="flex items-center justify-between gap-3">
-        <div className={clsx('text-2xl font-bold tabular-nums', low ? 'text-red-600' : 'text-slate-900')} aria-label="Thời gian còn lại">
-          ⏱ {formatClock(remaining)}
+        <div className="flex items-center gap-3">
+          <div
+            className={clsx('text-2xl font-bold tabular-nums', low ? 'text-red-600' : 'text-slate-900')}
+            aria-label={timed ? 'Thời gian còn lại' : 'Thời gian cho từ này'}
+          >
+            ⏱ {formatClock(shown)}
+          </div>
+          {lives != null && (
+            <div className="text-xl" aria-label={`Còn ${lives} mạng`} data-testid="game-lives">
+              {Array.from({ length: 3 }, (_, i) => (
+                <span key={i} aria-hidden className={i < lives ? '' : 'opacity-25 grayscale'}>
+                  ❤️
+                </span>
+              ))}
+            </div>
+          )}
+          {initial.questionCount != null && question && (
+            <div className="text-sm font-semibold text-slate-500" data-testid="game-progress-count">
+              {question.seq}/{initial.questionCount}
+            </div>
+          )}
         </div>
         <div className="relative text-right">
           <div className="text-xs uppercase tracking-wide text-slate-400">Điểm</div>
@@ -154,12 +202,12 @@ export function GamePlay({
         role="progressbar"
         aria-label="Thời gian"
         aria-valuemin={0}
-        aria-valuemax={durationMs}
-        aria-valuenow={remaining}
+        aria-valuemax={shownTotal}
+        aria-valuenow={shown}
       >
         <div
           className={clsx('h-full rounded-full transition-[width] duration-100', low ? 'bg-red-500' : 'bg-brand-500')}
-          style={{ width: `${(remaining / durationMs) * 100}%` }}
+          style={{ width: `${shownTotal > 0 ? Math.min(100, (shown / shownTotal) * 100) : 0}%` }}
         />
       </div>
 
@@ -279,13 +327,17 @@ function AnswerFeedback({ feedback }: { feedback: Feedback }) {
     CORRECT: `✅ Chính xác! +${r.points}`,
     NEAR: `🟡 Gần đúng – sai 1 chữ cái. +${r.points}`,
     WRONG: '❌ Chưa đúng',
-    SKIPPED: '⏭ Đã bỏ qua',
+    SKIPPED: feedback.timeout ? '⏰ Hết giờ' : '⏭ Đã bỏ qua',
   }[r.result];
+  const heading = r.timedOut ? '⏰ Quá thời gian – không được tính' : title;
 
   return (
     <div className={clsx('mt-3 rounded-xl border px-4 py-3 text-sm', tone)} role="status" data-testid="game-feedback">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold">{title}</span>
+        <span className="font-semibold">
+          {heading}
+          {r.lives != null && (r.result === 'WRONG' || r.result === 'SKIPPED') && <span className="ml-2 text-red-600">−1 ❤️</span>}
+        </span>
         {r.result === 'CORRECT' && (
           <span className="text-xs">
             {r.multiplier > 1 && `🔥 ×${r.multiplier} `}

@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { pronounce } from '@/components/vocab/pronounce';
 import { apiErrorMessage, apiErrorStatus } from '@/lib/api';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
-import { RESULT_LABELS, posLabel, recordMessage, wordsToReview } from '@/lib/game';
+import { MODE_INFO, RESULT_LABELS, goalMessage, posLabel, rankMessage, recordMessage, wordsToReview } from '@/lib/game';
 import { qk } from '@/lib/queryKeys';
 import type { GameResult, GameSummary as Summary, GameSummaryItem } from '@/lib/types';
 import { useQueryClient } from '@tanstack/react-query';
@@ -21,7 +21,10 @@ const RESULT_TONE: Record<GameResult, 'green' | 'amber' | 'red' | 'slate'> = {
   SKIPPED: 'slate',
 };
 
-/** End of a round: score vs. record, counters, the words to review (+ add them to the notebook). */
+/**
+ * End of a round: score vs. record, counters, XP / level / daily goal, new badges, leaderboard
+ * rank, and the words to review (+ add them to the notebook). The Daily challenge cannot be replayed.
+ */
 export function GameSummary({
   summary,
   onReplay,
@@ -80,14 +83,21 @@ export function GameSummary({
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <Card className="text-center">
-        <p className="text-sm text-slate-500">{summary.sourceLabel} · Nước rút 60 giây</p>
+        <p className="text-sm text-slate-500">
+          {MODE_INFO[summary.mode].icon} {MODE_INFO[summary.mode].title}
+          {summary.mode === 'SPRINT' ? ` · ${summary.sourceLabel}` : ''}
+        </p>
         <p className="mt-2 text-5xl font-extrabold tabular-nums text-slate-900" data-testid="summary-score">
           {summary.score}
         </p>
-        <p className={clsx('mt-2 font-semibold', summary.newRecord ? 'text-amber-600' : 'text-slate-600')} data-testid="summary-record">
-          {summary.newRecord && '🏆 '}
-          {recordMessage(summary.score, summary.previousBest, summary.newRecord)}
-        </p>
+        {summary.mode === 'DAILY' ? (
+          <p className="mt-2 font-semibold text-slate-600">{summary.sourceLabel} · cùng 10 từ với mọi người</p>
+        ) : (
+          <p className={clsx('mt-2 font-semibold', summary.newRecord ? 'text-amber-600' : 'text-slate-600')} data-testid="summary-record">
+            {summary.newRecord && '🏆 '}
+            {recordMessage(summary.score, summary.previousBest, summary.newRecord)}
+          </p>
+        )}
         <dl className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-6">
           {stats.map((s) => (
             <div key={s.label} className="rounded-lg bg-slate-50 px-2 py-2">
@@ -96,18 +106,65 @@ export function GameSummary({
             </div>
           ))}
         </dl>
+        <div className="mt-4 flex flex-wrap justify-center gap-2 text-sm" data-testid="summary-progress">
+          <span className="rounded-full bg-violet-100 px-3 py-1 font-semibold text-violet-700">+{summary.xpGained} XP</span>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">Cấp {summary.progress.level}</span>
+          {rankMessage(summary.board, summary.rank, summary.totalPlayers) && (
+            <span className="rounded-full bg-brand-100 px-3 py-1 text-brand-700" data-testid="summary-rank">
+              {rankMessage(summary.board, summary.rank, summary.totalPlayers)}
+            </span>
+          )}
+        </div>
+        {summary.leveledUp && (
+          <p className="mt-3 font-semibold text-violet-700" role="status">
+            🎉 Lên cấp {summary.progress.level}!
+          </p>
+        )}
+        <p className={clsx('mt-2 text-sm', summary.progress.goalMet ? 'text-green-700' : 'text-slate-500')}>
+          {summary.goalJustMet ? '🎯 Bạn vừa đạt mục tiêu hôm nay – chuỗi ngày học được giữ!' : goalMessage(summary.progress)}{' '}
+          <span className="tabular-nums">
+            ({summary.progress.todayPoints}/{summary.progress.dailyGoal})
+          </span>
+        </p>
         {summary.srsUpdated > 0 && (
           <p className="mt-3 text-xs text-slate-500">Đã cập nhật lịch ôn tập cho {summary.srsUpdated} từ trong sổ tay.</p>
         )}
         <div className="mt-5 flex flex-wrap justify-center gap-2">
-          <Button size="lg" className="min-h-[48px]" onClick={onReplay} loading={replaying} autoFocus>
-            Chơi lại
-          </Button>
-          <Button size="lg" variant="secondary" className="min-h-[48px]" onClick={onChangeSource}>
-            Đổi nguồn từ
+          {summary.mode !== 'DAILY' && (
+            <Button size="lg" className="min-h-[48px]" onClick={onReplay} loading={replaying} autoFocus>
+              Chơi lại
+            </Button>
+          )}
+          <Button
+            size="lg"
+            variant={summary.mode === 'DAILY' ? 'primary' : 'secondary'}
+            className="min-h-[48px]"
+            onClick={onChangeSource}
+            autoFocus={summary.mode === 'DAILY'}
+          >
+            {summary.mode === 'DAILY' ? 'Về sảnh trò chơi' : 'Đổi chế độ'}
           </Button>
         </div>
       </Card>
+
+      {summary.newBadges.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50">
+          <h2 className="text-base font-semibold text-amber-900">🏅 Huy hiệu mới!</h2>
+          <ul className="mt-3 flex flex-wrap gap-3" data-testid="new-badges">
+            {summary.newBadges.map((b) => (
+              <li key={b.code} className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 shadow-sm">
+                <span className="text-2xl" aria-hidden>
+                  {b.icon}
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-slate-900">{b.title}</span>
+                  <span className="block text-xs text-slate-500">{b.description}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {review.length > 0 && (
         <Card>

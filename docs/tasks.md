@@ -665,6 +665,47 @@ Quy ước chung: mọi endpoint admin cần Bearer token **và** email thuộc 
 - Nghĩa trùng chỉ so khớp nguyên đoạn nghĩa; từ đồng nghĩa không có trong hệ thống bị tính sai.
 - Giai đoạn 2 (Sinh tồn, Thử thách hằng ngày, bảng xếp hạng) và 3 (XP/cấp, huy hiệu, mục tiêu ngày) chưa làm.
 
+## T16 – "Dịch nhanh" Giai đoạn 2 + 3
+
+**Yêu cầu (người dùng, 2026-10-14):** làm tiếp đến khi hoàn thành đề xuất (Giai đoạn 2: Sinh tồn, Thử thách hằng ngày, bảng xếp hạng; Giai đoạn 3: XP/cấp, huy hiệu, mục tiêu ngày gắn streak). Nhánh `feat/T16-game-phase2-3`.
+**Status:** DONE
+
+### Chế độ (vocabulary-service, `GameMode`)
+- **SURVIVAL** (Premium, 403 nếu Free): 3 mạng, 15 s/từ, từ khó dần theo chặng A1–A2 (8) → B1 (12) → B2 (60) → C1–C2 (70), chặng thiếu từ được bù từ deck công khai. Sai / bỏ qua / quá giờ mất 1 mạng; hết mạng là kết thúc; không hỏi lại từ sai.
+- **DAILY**: 10 từ chung cho mọi người mỗi ngày (giờ VN) – 3 dễ, 3 trung bình, 4 khó từ deck công khai không Pro; bảng `daily_challenge` được tạo bởi người chơi đầu tiên trong ngày. 20 s/từ, **1 lượt/ngày** (unique index; lượt 2 → 409). Thoát giữa chừng thì lần sau **tiếp tục** đúng câu đang hỏi, đồng hồ của câu vẫn chạy.
+- Thời gian mỗi từ do server đo: trả lời sau `giới hạn + 2 s` bị chấm WRONG (`timedOut`). Client tự bỏ qua khi hết giờ.
+- Bắt đầu ván mới đóng các ván đang mở khác, **trừ** Thử thách hôm nay (để còn tiếp tục).
+
+### Bảng xếp hạng
+- `GET /vocabs/games/leaderboard?board=daily|sprint-week|survival-week` → top 20 + hàng của mình (kể cả ngoài top) + tổng người chơi. Tuần = thứ 2–CN giờ VN; mỗi người lấy ván cao nhất; hoà điểm thì ai đạt trước xếp trên; bỏ ván 0 điểm.
+- Chỉ ván `ranked`: Nước rút từ deck công khai / theo trình độ, Sinh tồn, Thử thách. **Không** tính ván từ sổ tay / từ tự thêm.
+- Tên hiển thị = 3 ký tự đầu email + `***` (lưu ở `game_session.display_name` khi bắt đầu).
+
+### Tiến độ (`GameProgressService`)
+- **XP** = tổng điểm các ván đã kết thúc (`game_profile.xp`). Cấp L → L+1 cần 100·L XP (cấp 2 ở 100, cấp 3 ở 300, cấp 4 ở 600…).
+- **Mục tiêu ngày** 100/200/300/500 điểm (`PUT /vocabs/games/me/goal`, mặc định 200). Khi tổng điểm trong ngày đạt mục tiêu, vocabulary-service gọi `POST /internal/goal-days` (X-Internal-Token) của practice-service → bảng `goal_day`; `distinctPracticeDatesDesc` UNION `goal_day` nên **ngày đạt mục tiêu được tính vào streak**. Gọi lỗi thì thử lại ở ván sau (`goal_recorded_day`).
+- **Huy hiệu** (`BadgeCatalog`, bảng `game_badge`): Khởi động, Nóng tay (combo 10), Combo 20, Tốc độ ánh sáng (10 câu < 3 s không gợi ý trong 1 ván), Cao thủ (500 điểm/ván), Bậc thầy B2 (100 từ B2 đúng), Người sống sót (30 câu đúng 1 ván Sinh tồn), Hoàn hảo (10/10 thử thách), Chuyên cần (7 thử thách).
+- `GET /vocabs/games/me` thêm `progress`, `badges` (cả chưa đạt), `daily` (đã chơi / đang dở / điểm / hạng). Summary thêm `xpGained`, `leveledUp`, `progress`, `goalJustMet`, `newBadges`, `board`/`rank`/`totalPlayers`.
+
+### DB
+- `scripts/migrations/005_practice_goal_day.sql` (practice_db), `006_vocab_game_phase2.sql` (vocabulary_db: cột mới của `game_session` + backfill, `daily_challenge`, `game_profile` + backfill XP, `game_badge`). `init-db.sql` cập nhật tương ứng. Compose: `INTERNAL_TOKEN` cho practice-service, `PRACTICE_SERVICE_URL` cho vocabulary-service.
+
+### Frontend
+- Sảnh `/games`: thẻ Cấp/XP + Mục tiêu hôm nay (chọn 100–500), chọn chế độ (Nước rút + nguồn từ / Sinh tồn – nhãn Premium, link nâng cấp / Thử thách hôm nay – trạng thái đã chơi, đang dở), Bảng xếp hạng 3 tab, lưới Huy hiệu, Cách tính điểm, Kỷ lục.
+- Màn chơi: Sinh tồn hiện ❤️❤️❤️ + đồng hồ từng từ, Thử thách hiện `x/10`; hết giờ tự bỏ qua ("⏰ Hết giờ", "−1 ❤️").
+- Tổng kết: +XP, cấp, "Lên cấp", mục tiêu ngày ("vừa đạt mục tiêu – chuỗi ngày học được giữ"), hạng, huy hiệu mới; Thử thách không có "Chơi lại".
+- Dashboard: widget Cấp/XP + mục tiêu + trạng thái thử thách + nút "Chơi Dịch nhanh".
+
+### Kiểm thử
+- vocabulary-service 83 test (mới: `GameProgressServiceTest` 8, `GameServiceTest` +4: sinh tồn, thử thách, giữ thử thách khi chơi chế độ khác, ranked); practice-service thêm `InternalGoalControllerTest` 2; frontend 183 test; tsc + lint sạch.
+- API smoke trên stack thật: thử thách 10/10 → 290 điểm, lên cấp 2, đạt mục tiêu, `/practice/streak` = 1 dù chưa luyện bài; lượt 2 → 409; Sinh tồn Free → 403, Premium → hết 3 mạng kết thúc.
+- E2E `e2e/tests/game-phase2.spec.ts` 2/2 (thử thách + XP + mục tiêu → streak trên Dashboard + huy hiệu + bảng xếp hạng + Sinh tồn bị khoá với Free; Sinh tồn Premium: đồng hồ 15 s hết giờ mất mạng, hết mạng kết thúc); hồi quy 8 test cũ qua; kiểm tra 390 px không tràn ngang.
+
+### Giới hạn đã biết
+- Danh sách thẻ của deck công khai vẫn xem được qua API nên vẫn có thể tra đáp án; giới hạn 15–20 s/từ ở Sinh tồn/Thử thách làm việc tra khó hơn nhưng không chặn hẳn. Nước rút tuần vẫn dễ bị gian lận hơn.
+- Dữ liệu hiện có ít từ A1–B1 (16 từ A1–A2, 8 từ B1 Pro) và chưa có C1, nên Sinh tồn chủ yếu là từ B2 và Thử thách ngày lặp từ dễ.
+- Nhóm C1 có điểm gốc 30 nhưng chưa có deck C1.
+
 ## Bảng đối chiếu spec → task (kiểm tra phủ 82 mục)
 
 | Module | Mục → Task |

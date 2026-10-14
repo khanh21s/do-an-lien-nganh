@@ -15,8 +15,6 @@ import com.parroto.vocabulary.entity.GameResult;
  */
 public final class GameScoring {
 
-    public static final String MODE_SPRINT = "SPRINT";
-    public static final int SPRINT_SECONDS = 60;
     public static final int MAX_HINTS = 3;
 
     private GameScoring() {

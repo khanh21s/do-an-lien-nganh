@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,4 +44,39 @@ public interface GameSessionRepository extends JpaRepository<GameSession, UUID> 
             ORDER BY s.finishedAt DESC
             """)
     List<GameSession> findBests(@Param("userId") UUID userId);
+
+    // --- T16 ---
+
+    Optional<GameSession> findByUserIdAndModeAndSourceKey(UUID userId, String mode, String sourceKey);
+
+    long countByUserIdAndModeAndStatus(UUID userId, String mode, String status);
+
+    /** Points of the user's rounds finished that started on {@code day} (daily goal). */
+    @Query("""
+            SELECT COALESCE(SUM(s.score), 0) FROM GameSession s
+            WHERE s.userId = :userId AND s.status = 'FINISHED' AND s.playDate = :day
+            """)
+    long pointsOn(@Param("userId") UUID userId, @Param("day") LocalDate day);
+
+    /**
+     * Leaderboard of a mode over [from, to]: each user's best ranked round (0-point rounds left out), ordered by score then
+     * by who got it first. Returns the top {@code limit} rows plus the row of {@code me}:
+     * [userId, displayName, score, bestCombo, rank, totalPlayers].
+     */
+    @Query(value = """
+            WITH best AS (
+              SELECT DISTINCT ON (user_id) user_id, display_name, score, best_combo, finished_at
+              FROM game_session
+              WHERE status = 'FINISHED' AND ranked AND score > 0 AND mode = :mode AND play_date BETWEEN :from AND :to
+              ORDER BY user_id, score DESC, finished_at ASC
+            ), ranked AS (
+              SELECT b.*, ROW_NUMBER() OVER (ORDER BY score DESC, finished_at ASC) AS rn,
+                     COUNT(*) OVER () AS total
+              FROM best b
+            )
+            SELECT CAST(user_id AS varchar), COALESCE(display_name, 'Người chơi'), score, best_combo, rn, total
+            FROM ranked WHERE rn <= :limit OR user_id = :me ORDER BY rn
+            """, nativeQuery = true)
+    List<Object[]> leaderboard(@Param("mode") String mode, @Param("from") LocalDate from, @Param("to") LocalDate to,
+                               @Param("limit") int limit, @Param("me") UUID me);
 }
