@@ -37,6 +37,7 @@ export const NAV_LESSONS = leaf('/lessons', 'Bài học', '📚');
 export const NAV_DECKS = leaf('/vocabulary', 'Bộ từ', '🗂️');
 export const NAV_REVIEW = leaf('/vocabulary/review', 'Ôn tập', '🧠', { badge: 'reviewDue' });
 export const NAV_NOTEBOOK = leaf('/vocabulary/notebook', 'Sổ tay', '📓');
+export const NAV_GAME = leaf('/games', 'Dịch nhanh', '⚡', { shortLabel: 'Trò chơi' });
 export const NAV_HISTORY = leaf('/practice/history', 'Lịch sử luyện tập', '📈', { shortLabel: 'Lịch sử' });
 export const NAV_PREMIUM = leaf('/subscription', 'Gói Premium', '💎');
 export const NAV_PROFILE = leaf('/profile', 'Hồ sơ', '👤');
@@ -45,6 +46,7 @@ export const MAIN_NAV: NavEntry[] = [
   NAV_DASHBOARD,
   NAV_LESSONS,
   { kind: 'group', key: 'vocabulary', label: 'Từ vựng', icon: '🔤', children: [NAV_DECKS, NAV_REVIEW, NAV_NOTEBOOK] },
+  NAV_GAME,
   NAV_HISTORY,
   NAV_PREMIUM,
   NAV_PROFILE,

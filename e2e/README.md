@@ -21,3 +21,9 @@ set -a; . ./.env; set +a
 docker run --rm --network host --ipc=host -u "$(id -u):$(id -g)" -e HOME=/tmp -e ADMIN_EMAIL -e ADMIN_PASSWORD \
   -v "$PWD/e2e":/work -w /work mcr.microsoft.com/playwright:v1.47.2-jammy npx playwright test admin-console
 ```
+
+`tests/translate-game.spec.ts` (T15 "Dịch nhanh") needs no credentials; the second test waits for a full 60-second round:
+```bash
+docker run --rm --network host --ipc=host -u "$(id -u):$(id -g)" -e HOME=/tmp \
+  -v "$PWD/e2e":/work -w /work mcr.microsoft.com/playwright:v1.47.2-jammy npx playwright test translate-game
+```

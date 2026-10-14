@@ -97,6 +97,8 @@ app.use('/vocabs/decks', requireAuthForWrites, proxyTo(SERVICES.vocabulary, { se
 app.use('/vocabs/cards', verifyToken, proxyTo(SERVICES.vocabulary, { serviceName: 'vocabulary' }));
 // Personal notebook/review endpoints always require a token.
 app.use('/vocabs/user', verifyToken, userLimiter, proxyTo(SERVICES.vocabulary, { serviceName: 'vocabulary' }));
+// T15 "Dịch nhanh" game rounds (scored server-side) always require a token.
+app.use('/vocabs/games', verifyToken, userLimiter, proxyTo(SERVICES.vocabulary, { serviceName: 'vocabulary' }));
 
 // ==================== SUBSCRIPTION SERVICE ====================
 // Public: plan listing, the VNPay browser return URL, and the VNPay server-to-server IPN (SUB-02),
