@@ -14,7 +14,8 @@ const REASON_MESSAGES: Record<string, string> = {
   invalid_reference: 'Mã giao dịch không hợp lệ.',
   not_found: 'Không tìm thấy giao dịch.',
   invalid_amount: 'Số tiền thanh toán không khớp với giá gói. Giao dịch đã bị huỷ.',
-  payment_declined: 'Giao dịch bị từ chối bởi ngân hàng/VNPay.',
+  payment_declined: 'Giao dịch bị từ chối hoặc chưa được thanh toán.',
+  payment_cancelled: 'Bạn đã huỷ giao dịch.',
 };
 
 function FailedMessage() {

@@ -89,6 +89,7 @@ export function transactionStatus(status: Transaction['status']) {
 
 const TX_METHOD: Record<string, string> = {
   vnpay: 'VNPay',
+  sepay: 'SePay',
   activation_code: 'Mã kích hoạt',
 };
 

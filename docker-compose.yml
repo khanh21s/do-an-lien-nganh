@@ -343,6 +343,15 @@ services:
       # FRONTEND_URL + /subscription/success|failed. Must NOT point directly at a frontend page.
       VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:8000/subscriptions/payment-callback}
 
+      # SePay Payment Gateway (money goes straight to your own bank account via VietQR).
+      # Used instead of VNPay when configured (PAYMENT_PROVIDER=sepay|vnpay forces one).
+      SEPAY_ENV: ${SEPAY_ENV:-sandbox}
+      SEPAY_MERCHANT_ID: ${SEPAY_MERCHANT_ID:-}
+      SEPAY_SECRET_KEY: ${SEPAY_SECRET_KEY:-}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-}
+      # Browser-facing API gateway URL: SePay checkout page + return URLs are built on it
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+
       # JWT (must match auth-service's secret)
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required - copy .env.example to .env and set a random value of at least 32 characters}
 

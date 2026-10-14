@@ -103,8 +103,10 @@ app.use('/vocabs/games', verifyToken, userLimiter, proxyTo(SERVICES.vocabulary, 
 // ==================== SUBSCRIPTION SERVICE ====================
 // Public: plan listing, the VNPay browser return URL, and the VNPay server-to-server IPN (SUB-02),
 // none of which carry a user token. subscription-service verifies the VNPay signature itself.
+// Same for SePay (/subscriptions/sepay/checkout|return|ipn): the service re-reads every result
+// from SePay's API and checks the IPN's X-Secret-Key header.
 app.use(
-  ['/subscriptions/plans', '/subscriptions/payment-callback', '/subscriptions/vnpay-ipn'],
+  ['/subscriptions/plans', '/subscriptions/payment-callback', '/subscriptions/vnpay-ipn', '/subscriptions/sepay'],
   proxyTo(SERVICES.subscription, { serviceName: 'subscription' })
 );
 app.use('/subscriptions', verifyToken, userLimiter, proxyTo(SERVICES.subscription, { serviceName: 'subscription' }));

@@ -38,6 +38,7 @@ export const TRANSACTION_STATUS_FILTERS: { value: AdminTransactionStatusFilter; 
 export const TRANSACTION_METHOD_FILTERS: { value: string; label: string }[] = [
   { value: '', label: 'Mọi phương thức' },
   { value: 'vnpay', label: 'VNPay' },
+  { value: 'sepay', label: 'SePay' },
   { value: 'momo', label: 'MoMo' },
   { value: 'gift_code', label: 'Quà tặng' },
   { value: 'activation_code', label: 'Mã kích hoạt' },

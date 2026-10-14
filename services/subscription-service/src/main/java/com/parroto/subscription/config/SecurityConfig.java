@@ -40,6 +40,11 @@ public class SecurityConfig {
                         .requestMatchers("/subscriptions/payment-callback").permitAll()
                         // VNPay server-to-server IPN (SUB-02): no user token; authenticity comes from the VNPay signature.
                         .requestMatchers(HttpMethod.GET, "/subscriptions/vnpay-ipn").permitAll()
+                        // SePay checkout page, browser return and IPN: no user token. The checkout page needs
+                        // an unguessable pending transaction id, the result is always re-read from SePay's
+                        // API and the IPN is checked against the X-Secret-Key header.
+                        .requestMatchers(HttpMethod.GET, "/subscriptions/sepay/checkout/*", "/subscriptions/sepay/return").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/subscriptions/sepay/ipn").permitAll()
                         // Internal, service-to-service only (not exposed through the API gateway).
                         // No user JWT here: InternalTokenFilter rejects calls without a valid X-Internal-Token first.
                         .requestMatchers("/internal/**").permitAll()

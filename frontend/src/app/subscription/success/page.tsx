@@ -118,7 +118,7 @@ function SubscriptionStatus() {
       <p className="mt-2 text-slate-500">
         {isError
           ? 'Chưa kiểm tra được trạng thái gói. Vui lòng thử lại sau ít phút.'
-          : 'Giao dịch đang được ngân hàng/VNPay xác nhận. Gói Premium sẽ được kích hoạt ngay khi có kết quả.'}
+          : 'Giao dịch đang được cổng thanh toán xác nhận. Gói Premium sẽ được kích hoạt ngay khi có kết quả.'}
       </p>
       <div className="mt-6 flex flex-col gap-2">
         <Button className="min-h-[44px] w-full" onClick={() => refetch()} loading={isFetching}>

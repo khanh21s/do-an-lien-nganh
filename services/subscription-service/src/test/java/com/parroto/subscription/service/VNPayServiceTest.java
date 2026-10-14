@@ -13,6 +13,9 @@ import org.springframework.data.redis.core.RedisTemplate;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -51,8 +54,8 @@ class VNPayServiceTest {
         planService = mock(PlanService.class);
         emailService = mock(EmailService.class);
         service = new SubscriptionService(subscriptionRepository, transactionRepository,
-                mock(ActivationCodeRepository.class), planService, vnPay, emailService,
-                mock(AuthServiceClient.class), new PremiumCacheEvictor(redisTemplate));
+                mock(ActivationCodeRepository.class), planService, vnPay, mock(SepayService.class), emailService,
+                mock(AuthServiceClient.class), new PremiumCacheEvictor(redisTemplate), "");
 
         UUID id = UUID.randomUUID();
         tx = PaymentTransaction.builder().id(id).transactionId(id.toString()).userId(UUID.randomUUID())
@@ -133,6 +136,35 @@ class VNPayServiceTest {
         }
         assertThat(query.get("vnp_Amount")).isEqualTo("7900000");
         assertThat(vnPay.verifySignature(query)).isTrue();
+    }
+
+    private static Map<String, String> queryOf(String url) {
+        Map<String, String> query = new HashMap<>();
+        for (String pair : URI.create(url).getRawQuery().split("&")) {
+            String[] kv = pair.split("=", 2);
+            query.put(URLDecoder.decode(kv[0], StandardCharsets.UTF_8), URLDecoder.decode(kv[1], StandardCharsets.UTF_8));
+        }
+        return query;
+    }
+
+    @Test
+    void paymentUrlDatesAreGmt7WithExpiry() {
+        // 2026-10-14 03:00 UTC = 10:00 in Vietnam, while the container clock is UTC
+        Clock utc = Clock.fixed(Instant.parse("2026-10-14T03:00:00Z"), ZoneOffset.UTC);
+        VNPayService fixed = new VNPayService("https://sandbox.vnpayment.vn/paymentv2/vpcpay.html", "TMNCODE01",
+                SECRET, "http://localhost:8000/subscriptions/payment-callback", utc);
+        Map<String, String> query = queryOf(fixed.buildPaymentUrl(79000, tx.getId().toString(), "x", "10.0.0.1"));
+
+        assertThat(query.get("vnp_CreateDate")).isEqualTo("20261014100000");
+        assertThat(query.get("vnp_ExpireDate")).isEqualTo("20261014101500");
+        assertThat(fixed.verifySignature(query)).isTrue();
+    }
+
+    @Test
+    void orderInfoIsSentWithoutDiacritics() {
+        Map<String, String> query = queryOf(vnPay.buildPaymentUrl(79000, tx.getId().toString(),
+                "Nâng cấp gói 1 tháng Premium (Đặc biệt)!", "10.0.0.1"));
+        assertThat(query.get("vnp_OrderInfo")).isEqualTo("Nang cap goi 1 thang Premium Dac biet");
     }
 
     // ---- IPN / return processing ----
