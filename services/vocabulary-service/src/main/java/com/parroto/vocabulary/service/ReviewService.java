@@ -49,16 +49,7 @@ public class ReviewService {
             throw ApiException.notFound("Vocabulary entry not found");
         }
 
-        SM2Calculator.Sm2Result result = sm2Calculator.calculate(
-                userVocab.getRepetitions(), userVocab.getIntervalDays(), userVocab.getEaseFactor(), request.quality());
-
-        OffsetDateTime now = OffsetDateTime.now();
-        userVocab.setIntervalDays(result.interval());
-        userVocab.setEaseFactor(result.easeFactor());
-        userVocab.setRepetitions(result.repetitions());
-        userVocab.setLastReviewAt(now);
-        userVocab.setNextReviewAt(now.plusDays(result.interval()));
-        userVocab.setQuality(request.quality());
+        SM2Calculator.Sm2Result result = applyQuality(userVocab, request.quality(), OffsetDateTime.now());
         userVocab = userVocabRepository.save(userVocab);
 
         return SubmitReviewResponse.builder()
@@ -69,6 +60,19 @@ public class ReviewService {
                 .repetitions(userVocab.getRepetitions())
                 .message(messageFor(request.quality(), result.interval()))
                 .build();
+    }
+
+    /** Applies one SM-2 review of {@code quality} at {@code now} to the entry (caller saves it). */
+    public SM2Calculator.Sm2Result applyQuality(UserVocab userVocab, int quality, OffsetDateTime now) {
+        SM2Calculator.Sm2Result result = sm2Calculator.calculate(
+                userVocab.getRepetitions(), userVocab.getIntervalDays(), userVocab.getEaseFactor(), quality);
+        userVocab.setIntervalDays(result.interval());
+        userVocab.setEaseFactor(result.easeFactor());
+        userVocab.setRepetitions(result.repetitions());
+        userVocab.setLastReviewAt(now);
+        userVocab.setNextReviewAt(now.plusDays(result.interval()));
+        userVocab.setQuality(quality);
+        return result;
     }
 
     @Transactional(readOnly = true)

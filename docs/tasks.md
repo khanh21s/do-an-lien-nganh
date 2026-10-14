@@ -632,6 +632,39 @@ Quy ước chung: mọi endpoint admin cần Bearer token **và** email thuộc 
 **Review notes:** (orchestrator, 2026-10-13) Merged T14-AUTH `4015fd0` (mvn 51/51), T14-SUB `e9746ed` (mvn 50/50, migration 003 applied to the running DB), T14-VOC `1f9e7c2` (mvn 50/50), T14-FE `037ad94` (vitest 173/173, build OK). Paged admin responses use the existing nested `{data, pagination}` shape; plan/user-status validation answers 422 (Bean Validation) — FE shows the backend text for 400/422. API smoke via gateway OK (stats, users, plans, transactions, deck PUT, non-admin 403). Browser E2E `e2e/tests/admin-console.spec.ts` 2/2 (admin lands on /admin with no learner UI; /dashboard, /vocabulary, /lessons redirect to /admin; lock → login 403 "Tài khoản đã bị khoá" → unlock; admin not lockable; plan off hides it from /subscriptions/plans, on again; transactions page; non-admin /admin → /dashboard). Learner regression E2E 4/4. Known: access tokens issued before a lock stay valid until expiry (≤ 1 h).
 **Review notes:**
 
+## T15 – Trò chơi "Dịch nhanh" (Việt → Anh) — Giai đoạn 1
+
+**Yêu cầu (người dùng, 2026-10-14):** random nghĩa tiếng Việt, người chơi gõ từ tiếng Anh; có cơ chế chơi và tính điểm khiến người chơi muốn chơi tiếp. Đề xuất 3 giai đoạn đã được đồng ý; T15 = **Giai đoạn 1**. Nhánh `feat/T15-translate-game`.
+**Status:** DONE
+
+### Phạm vi
+- Chế độ **Nước rút 60 giây** (`SPRINT`), nguồn từ: **Bộ từ** (deck công khai hoặc deck Pro nếu Premium), **Theo trình độ** (A1–C2, deck công khai), **Từ của tôi** (sổ tay, từ đến hạn trước).
+- Chấm đáp án (`GameAnswerChecker`): bỏ qua hoa/thường, khoảng trắng, dấu câu cuối, phần trong ngoặc, "to " ở đầu; "colour/color" nhận cả hai; **từ khác có nghĩa trùng** (một đoạn nghĩa tách bởi , ; /) trong deck mà người chơi thấy được → đúng; **sai 1 ký tự** (thêm/bớt/thay/đảo 2 chữ, từ ≥ 4 chữ) → gần đúng.
+- Tính điểm phía server (`GameScoring`): `round(gốc × combo × gợi ý) + thưởng tốc độ`; gốc A1–A2 10, B1 15, B2 20, C1–C2 30; combo (tính cả câu hiện tại) 5+ ×1.5, 10+ ×2, 20+ ×3; gợi ý 1/2/3 lần ×0.8/0.5/0.25; tốc độ < 3 s +5, < 6 s +2 (chỉ khi không gợi ý); gần đúng = nửa điểm, giữ combo; sai/bỏ qua = 0, combo về 0. Thời gian đo bằng giờ server; trả lời trễ ≤ 2 s sau khi hết giờ vẫn được chấm.
+- Gợi ý 3 bậc: từ loại + mặt nạ `_ _ _ _` → chữ cái đầu mỗi từ → câu ví dụ có chỗ trống (không có ví dụ thì lộ thêm chữ cuối).
+- Từ sai/bỏ qua được hỏi lại 1 lần sau 5 câu. Kết thúc: tổng kết, kỷ lục cá nhân theo (chế độ, nguồn), danh sách từ cần ôn + "Thêm tất cả vào sổ tay".
+- Lịch ôn SM-2: từ đã có trong sổ tay, lần trả lời đầu tiên của mỗi từ: sai/bỏ qua → Again (luôn áp dụng); gần đúng hoặc dùng gợi ý → Hard, đúng sạch → Good (chỉ áp dụng khi từ **đã đến hạn**, để chơi không đẩy lịch ôn ra xa).
+- Ván bỏ dở: khi bắt đầu ván mới, ván cũ đã có câu trả lời được chốt (FINISHED), chưa trả lời câu nào thì ABANDONED.
+
+### API (vocabulary-service, gateway `/vocabs/games` cần token)
+- `POST /vocabs/games/sessions` `{source: DECK|NOTEBOOK|LEVEL, deckId?, level?}` → 201 `GameState` (câu hỏi đầu, `remainingMs`, `previousBest`). Không lộ từ tiếng Anh trước khi trả lời.
+- `POST /vocabs/games/sessions/{id}/hint` → `Hint`; `POST .../answer` `{answer}` hoặc `{skip:true}` → `AnswerResult` (kết quả, điểm, combo, đáp án, câu kế tiếp, `finished`, `timeUp`); `POST .../finish` → `Summary` (idempotent); `GET /vocabs/games/me` → số ván, tổng điểm, kỷ lục theo nguồn.
+- Lỗi: 400 nguồn/trình độ sai, sổ tay trống, đáp án rỗng; 403 deck Pro; 404 ván của người khác; 409 ván đã kết thúc.
+- DB: `game_session`, `game_answer` (`scripts/migrations/004_vocab_game.sql`, cũng có trong `init-db.sql`).
+
+### Frontend
+- `/games` (menu "⚡ Dịch nhanh"): sảnh chọn nguồn + cách tính điểm + kỷ lục → màn chơi (đồng hồ, điểm, combo, gợi ý, bỏ qua, phản hồi đáp án + phát âm) → tổng kết (Chơi lại / Đổi nguồn từ).
+- Phím tắt tuỳ chỉnh nhóm "Trò chơi Dịch nhanh": Gợi ý `Ctrl+H`, Bỏ qua `Tab`; Enter giữ cho nộp đáp án.
+
+### Kiểm thử
+- vocabulary-service 71 test (mới: `GameAnswerCheckerTest` 6, `GameScoringTest` 6, `GameServiceTest` 9); frontend 181 test (mới `lib/game.test.ts` 8); tsc + lint sạch.
+- E2E `e2e/tests/translate-game.spec.ts` 2/2 (ván đầy đủ với combo/gợi ý/bỏ qua/tổng kết/sổ tay/chơi lại/nguồn sổ tay; ván tự kết thúc khi hết 60 s); hồi quy admin-console, custom-shortcuts, deck-typing-retry, t13 6/6.
+
+### Giới hạn đã biết
+- Danh sách thẻ của deck công khai vẫn xem được qua API, nên người cố tình tra đáp án có thể gian lận điểm — chấp nhận ở Giai đoạn 1 vì chưa có bảng xếp hạng (cần xử lý trước Giai đoạn 2).
+- Nghĩa trùng chỉ so khớp nguyên đoạn nghĩa; từ đồng nghĩa không có trong hệ thống bị tính sai.
+- Giai đoạn 2 (Sinh tồn, Thử thách hằng ngày, bảng xếp hạng) và 3 (XP/cấp, huy hiệu, mục tiêu ngày) chưa làm.
+
 ## Bảng đối chiếu spec → task (kiểm tra phủ 82 mục)
 
 | Module | Mục → Task |

@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 public interface VocabCardRepository extends JpaRepository<VocabCard, UUID> {
@@ -22,4 +24,33 @@ public interface VocabCardRepository extends JpaRepository<VocabCard, UUID> {
     long countByDeck_Id(UUID deckId);
 
     boolean existsByDeck_IdAndWordIgnoreCase(UUID deckId, String word);
+
+    // --- T15: game question pools (random order, cards without a meaning are useless here) ---
+
+    @Query(value = """
+            SELECT c.id FROM vocab_card c
+            WHERE c.deck_id = :deckId AND btrim(c.meaning) <> ''
+            ORDER BY random() LIMIT :limit
+            """, nativeQuery = true)
+    List<UUID> randomIdsInDeck(@Param("deckId") UUID deckId, @Param("limit") int limit);
+
+    /** Public decks of a CEFR level; Pro decks only when {@code includePro}. */
+    @Query(value = """
+            SELECT c.id FROM vocab_card c JOIN vocab_deck d ON d.id = c.deck_id
+            WHERE d.owner_id IS NULL AND d.level = :level AND btrim(c.meaning) <> ''
+              AND (:includePro OR COALESCE(d.is_pro_only, false) = false)
+            ORDER BY random() LIMIT :limit
+            """, nativeQuery = true)
+    List<UUID> randomIdsByLevel(@Param("level") String level, @Param("includePro") boolean includePro,
+                                @Param("limit") int limit);
+
+    @Query("SELECT c FROM VocabCard c JOIN FETCH c.deck WHERE c.id = :id")
+    java.util.Optional<VocabCard> findWithDeck(@Param("id") UUID id);
+
+    /** Cards spelled like the typed answer ({@code words} are lower-cased) that the user can see. */
+    @Query("""
+            SELECT c FROM VocabCard c JOIN c.deck d
+            WHERE LOWER(TRIM(c.word)) IN :words AND (d.ownerId IS NULL OR d.ownerId = :userId)
+            """)
+    List<VocabCard> findSameWordVisibleTo(@Param("words") Collection<String> words, @Param("userId") UUID userId);
 }

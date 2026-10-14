@@ -6,7 +6,7 @@ import { comboToLabels, parseCombo, type HotkeyBinding, type HotkeyEventLike } f
  * User overrides live in `store/shortcut-store.ts`; components read the effective combos with
  * `useShortcutKeys()` and the help modal / settings page render them with `comboToLabels`.
  */
-export type ShortcutScope = 'dictation' | 'shadowing' | 'flashcard';
+export type ShortcutScope = 'dictation' | 'shadowing' | 'flashcard' | 'game';
 
 export interface ShortcutAction {
   id: string;
@@ -28,6 +28,11 @@ export const SHORTCUT_SCOPES: { scope: ShortcutScope; title: string; note?: stri
   },
   { scope: 'shadowing', title: 'Shadowing' },
   { scope: 'flashcard', title: 'Flashcard (Bộ từ & Ôn tập)', note: 'Không hoạt động khi đang gõ trong chế độ gõ từ.' },
+  {
+    scope: 'game',
+    title: 'Trò chơi Dịch nhanh',
+    note: 'Các phím này hoạt động cả khi đang gõ đáp án, nên không dùng được chữ, số hay Space đơn lẻ. Enter luôn là nộp đáp án.',
+  },
 ];
 
 export const SHORTCUT_ACTIONS: ShortcutAction[] = [
@@ -48,6 +53,9 @@ export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   { id: 'flashcard.hard', scope: 'flashcard', description: 'Khó (Hard)', defaults: ['2'] },
   { id: 'flashcard.good', scope: 'flashcard', description: 'Tốt (Good)', defaults: ['3'] },
   { id: 'flashcard.easy', scope: 'flashcard', description: 'Dễ (Easy)', defaults: ['4'] },
+
+  { id: 'game.hint', scope: 'game', description: 'Gợi ý (mất một phần điểm)', defaults: ['Ctrl+H'], inInput: true },
+  { id: 'game.skip', scope: 'game', description: 'Bỏ qua câu này', defaults: ['Tab'], inInput: true },
 ];
 
 export type ShortcutActionId = (typeof SHORTCUT_ACTIONS)[number]['id'];
@@ -66,6 +74,9 @@ export function resolveCombos(id: string, overrides: ShortcutOverrides): string[
   const o = overrides[id];
   return o && o.length > 0 ? o : getAction(id).defaults;
 }
+
+/** Keys a screen uses itself (not customisable), per scope. */
+const SCOPE_RESERVED: Partial<Record<ShortcutScope, string[]>> = { game: ['Enter'] };
 
 /** Combos that the help modal (`?`) opens with — never assignable. */
 export const RESERVED_COMBOS = ['?', 'Shift+/'];
@@ -153,6 +164,9 @@ export function validateCombo(
   const action = getAction(actionId);
   if (RESERVED_COMBOS.some((r) => combosOverlap(r, combo))) {
     return 'Phím "?" dùng để mở bảng phím tắt, hãy chọn phím khác.';
+  }
+  if ((SCOPE_RESERVED[action.scope] ?? []).some((r) => combosOverlap(r, combo))) {
+    return 'Enter dùng để nộp đáp án, hãy chọn phím khác.';
   }
   if (action.inInput && typesText(combo)) {
     return 'Phím này sẽ gõ chữ vào ô đáp án. Hãy kết hợp với Ctrl hoặc Alt, hoặc dùng phím như Tab, mũi tên, F1–F12, `.';

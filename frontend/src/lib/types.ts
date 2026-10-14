@@ -718,3 +718,117 @@ export interface UpdateDeckInput {
   isProOnly: boolean;
 }
 // --- end T14 ---
+
+// --- T15: "Dịch nhanh" game (/vocabs/games) ---
+export type GameSource = 'DECK' | 'NOTEBOOK' | 'LEVEL';
+export type GameResult = 'CORRECT' | 'NEAR' | 'WRONG' | 'SKIPPED';
+
+export interface StartGameInput {
+  mode?: 'SPRINT';
+  source: GameSource;
+  deckId?: string;
+  level?: CefrLevel;
+}
+
+/** The prompt: the English word stays on the server until the question is answered. */
+export interface GameQuestion {
+  seq: number;
+  meaning: string;
+  level: CefrLevel | null;
+  basePoints: number;
+  retry: boolean;
+}
+
+export interface GameState {
+  sessionId: string;
+  mode: 'SPRINT';
+  source: GameSource;
+  sourceLabel: string;
+  durationSec: number;
+  remainingMs: number;
+  score: number;
+  combo: number;
+  previousBest: number | null;
+  question: GameQuestion;
+}
+
+export interface GameHint {
+  hintsUsed: number;
+  maxHints: number;
+  partOfSpeech: string | null;
+  letterCount: number;
+  mask: string;
+  example: string | null;
+}
+
+export interface GameAnswerResult {
+  result: GameResult | null;
+  points: number;
+  speedBonus: number;
+  multiplier: number;
+  combo: number;
+  score: number;
+  correctWord: string | null;
+  acceptedWord: string | null;
+  ipa: string | null;
+  partOfSpeech: string | null;
+  example: string | null;
+  exampleVi: string | null;
+  audioUrl: string | null;
+  timeUp: boolean;
+  finished: boolean;
+  remainingMs: number;
+  nextQuestion: GameQuestion | null;
+}
+
+export interface GameSummaryItem {
+  seq: number;
+  cardId: string;
+  word: string;
+  meaning: string;
+  ipa: string | null;
+  partOfSpeech: string | null;
+  example: string | null;
+  exampleVi: string | null;
+  audioUrl: string | null;
+  result: GameResult;
+  answer: string | null;
+  hintsUsed: number;
+  points: number;
+  retry: boolean;
+  userVocabId: string | null;
+}
+
+export interface GameSummary {
+  sessionId: string;
+  mode: 'SPRINT';
+  source: GameSource;
+  sourceLabel: string;
+  score: number;
+  correct: number;
+  near: number;
+  wrong: number;
+  skipped: number;
+  bestCombo: number;
+  accuracy: number;
+  previousBest: number | null;
+  newRecord: boolean;
+  srsUpdated: number;
+  finishedAt: string | null;
+  items: GameSummaryItem[];
+}
+
+export interface GameBest {
+  mode: 'SPRINT';
+  sourceKey: string;
+  sourceLabel: string;
+  score: number;
+  bestCombo: number;
+  playedAt: string;
+}
+
+export interface GameStats {
+  gamesPlayed: number;
+  totalScore: number;
+  bests: GameBest[];
+}

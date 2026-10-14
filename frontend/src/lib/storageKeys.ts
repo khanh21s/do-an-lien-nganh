@@ -11,6 +11,8 @@ export const storageKeys = {
   reviewDailyLimit: 'parroto:review-daily-limit',
   reviewPopupDate: 'parroto:review-popup-date',
   shortcuts: 'parroto:shortcuts',
+  /** T15: last word source picked in the game lobby. */
+  gameSource: 'parroto:game-source',
 
   // sessionStorage (see lib/practice-session.ts)
   practiceSession: (lessonId: string, mode: PracticeMode) => `parroto:session:${lessonId}:${mode}`,
