@@ -73,4 +73,16 @@ class GameAnswerCheckerTest {
         assertThat(GameAnswerChecker.blankedExample("Nothing here.", "huge")).isNull();
         assertThat(GameAnswerChecker.blankedExample(null, "huge")).isNull();
     }
+
+    @Test
+    void toeicPhrasesWithCurlyApostrophesAndEllipsis() {
+        assertThat(GameAnswerChecker.check("i'm afraid that", card("I’m afraid that", "Tôi e rằng"), List.of()).result())
+                .isEqualTo(GameResult.CORRECT);
+        assertThat(GameAnswerChecker.check("What's wrong with", card("What’s wrong with...?", "Có chuyện gì"), List.of()).result())
+                .isEqualTo(GameResult.CORRECT);
+        assertThat(GameAnswerChecker.check("make a last minute change to", card("make a last minute change to...", "Thay đổi"),
+                List.of()).result()).isEqualTo(GameResult.CORRECT);
+        assertThat(GameAnswerChecker.check("Give SB a ride", card("Give SB a ride", "Cho ai đi nhờ xe"), List.of()).result())
+                .isEqualTo(GameResult.CORRECT);
+    }
 }

@@ -706,6 +706,17 @@ Quy ước chung: mọi endpoint admin cần Bearer token **và** email thuộc 
 - Dữ liệu hiện có ít từ A1–B1 (16 từ A1–A2, 8 từ B1 Pro) và chưa có C1, nên Sinh tồn chủ yếu là từ B2 và Thử thách ngày lặp từ dễ.
 - Nhóm C1 có điểm gốc 30 nhưng chưa có deck C1.
 
+## T17 – Bộ từ "TOEIC cơ bản – Cụm từ thông dụng"
+
+**Yêu cầu (người dùng, 2026-10-14):** thêm danh sách "LỚP CƠ BẢN — 238 thẻ" (cụm từ | IPA | nghĩa) vào DB cho dữ liệu phong phú.
+**Status:** DONE
+
+- Nguồn giữ nguyên: `data/vocab/toeic-co-ban.txt`. `scripts/gen-toeic-seed.py` đọc nguồn, áp các sửa đổi (ghi trong docstring), kiểm tra (không trùng, IPA `/…/`, không còn dấu `/` trong cụm từ) và sinh `scripts/migrations/007_seed_toeic_basic_deck.sql` (idempotent, id deck cố định `…205`). Volume mới tự seed qua `initdb/03-seed-toeic-basic.sh`.
+- Deck công khai **miễn phí**, cấp **B1**, 240 thẻ, từ loại `phrase`; không có câu ví dụ (nguồn không có).
+- Sửa so với nguồn: IPA `əˈcaʊnt` → `əˈkaʊnt` (#164, #168), bỏ khoảng trắng thừa (#219, #238), IPA của "get a loan" (#167); bỏ #186 "fringe benefits" (trùng #75); tách #215 thành "take a look at" + "have a look at", #229 thành "make an arrangement" / "make an agreement" / "make a contract"; #225 chỉ giữ "be airsick" (phần jet lag trùng #137). Nhờ vậy mỗi thẻ có đúng một đáp án để gõ trong trò chơi (thẻ cùng nghĩa vẫn được chấp nhận lẫn nhau).
+- Ảnh hưởng: chặng B1 của Sinh tồn và 3 từ "trung bình" của Thử thách ngày giờ có từ miễn phí; chế độ Nước rút "Theo trình độ B1" có 240 cụm từ.
+- Kiểm thử: áp 2 lần (lần 2 thêm 0 thẻ); API danh sách deck/thẻ; chơi Nước rút 12 câu với deck mới đều CORRECT (kể cả `I’m afraid that` gõ `i'm afraid that`, `What’s wrong with...?`); `GameAnswerCheckerTest` thêm test cụm từ; vocabulary-service 84 test qua.
+
 ## Bảng đối chiếu spec → task (kiểm tra phủ 82 mục)
 
 | Module | Mục → Task |
