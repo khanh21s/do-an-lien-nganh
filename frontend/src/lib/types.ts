@@ -718,3 +718,186 @@ export interface UpdateDeckInput {
   isProOnly: boolean;
 }
 // --- end T14 ---
+
+// --- T15/T16: "Dịch nhanh" game (/vocabs/games) ---
+export type GameMode = 'SPRINT' | 'SURVIVAL' | 'DAILY';
+export type GameSource = 'DECK' | 'NOTEBOOK' | 'LEVEL';
+export type GameResult = 'CORRECT' | 'NEAR' | 'WRONG' | 'SKIPPED';
+export type GameBoard = 'daily' | 'sprint-week' | 'survival-week';
+
+export interface StartGameInput {
+  mode?: GameMode;
+  /** SPRINT only. */
+  source?: GameSource;
+  deckId?: string;
+  level?: CefrLevel;
+}
+
+/** The prompt: the English word stays on the server until the question is answered. */
+export interface GameQuestion {
+  seq: number;
+  meaning: string;
+  level: CefrLevel | null;
+  basePoints: number;
+  retry: boolean;
+  /** Time left for this word (SURVIVAL/DAILY), null in SPRINT. */
+  timeLeftMs: number | null;
+}
+
+export interface GameState {
+  sessionId: string;
+  mode: GameMode;
+  source: GameSource | 'MIXED';
+  sourceLabel: string;
+  /** Round timer (SPRINT), 0 when only the per-word timer counts. */
+  durationSec: number;
+  remainingMs: number;
+  score: number;
+  combo: number;
+  lives: number | null;
+  questionCount: number | null;
+  previousBest: number | null;
+  question: GameQuestion;
+}
+
+export interface GameHint {
+  hintsUsed: number;
+  maxHints: number;
+  partOfSpeech: string | null;
+  letterCount: number;
+  mask: string;
+  example: string | null;
+}
+
+export interface GameAnswerResult {
+  result: GameResult | null;
+  points: number;
+  speedBonus: number;
+  multiplier: number;
+  combo: number;
+  score: number;
+  lives: number | null;
+  correctWord: string | null;
+  acceptedWord: string | null;
+  ipa: string | null;
+  partOfSpeech: string | null;
+  example: string | null;
+  exampleVi: string | null;
+  audioUrl: string | null;
+  /** Answered after the word's time limit: graded WRONG. */
+  timedOut: boolean;
+  timeUp: boolean;
+  finished: boolean;
+  remainingMs: number;
+  nextQuestion: GameQuestion | null;
+}
+
+export interface GameSummaryItem {
+  seq: number;
+  cardId: string;
+  word: string;
+  meaning: string;
+  ipa: string | null;
+  partOfSpeech: string | null;
+  example: string | null;
+  exampleVi: string | null;
+  audioUrl: string | null;
+  result: GameResult;
+  answer: string | null;
+  hintsUsed: number;
+  points: number;
+  retry: boolean;
+  userVocabId: string | null;
+}
+
+export interface GameBadge {
+  code: string;
+  icon: string;
+  title: string;
+  description: string;
+  /** null while not earned yet. */
+  earnedAt: string | null;
+}
+
+export interface GameProgress {
+  xp: number;
+  level: number;
+  levelXp: number;
+  levelXpNeeded: number;
+  dailyGoal: number;
+  todayPoints: number;
+  goalMet: boolean;
+}
+
+export interface GameSummary {
+  sessionId: string;
+  mode: GameMode;
+  source: GameSource | 'MIXED';
+  sourceLabel: string;
+  score: number;
+  correct: number;
+  near: number;
+  wrong: number;
+  skipped: number;
+  bestCombo: number;
+  accuracy: number;
+  previousBest: number | null;
+  newRecord: boolean;
+  srsUpdated: number;
+  finishedAt: string | null;
+  items: GameSummaryItem[];
+  xpGained: number;
+  leveledUp: boolean;
+  progress: GameProgress;
+  goalJustMet: boolean;
+  newBadges: GameBadge[];
+  board: GameBoard | null;
+  rank: number | null;
+  totalPlayers: number | null;
+}
+
+export interface GameBest {
+  mode: GameMode;
+  sourceKey: string;
+  sourceLabel: string;
+  score: number;
+  bestCombo: number;
+  playedAt: string;
+}
+
+export interface GameDailyStatus {
+  date: string;
+  played: boolean;
+  /** Started but not finished (resumable). */
+  active: boolean;
+  score: number | null;
+  rank: number | null;
+  totalPlayers: number | null;
+}
+
+export interface GameStats {
+  gamesPlayed: number;
+  totalScore: number;
+  bests: GameBest[];
+  progress: GameProgress;
+  badges: GameBadge[];
+  daily: GameDailyStatus;
+}
+
+export interface GameLeaderboardEntry {
+  rank: number;
+  displayName: string;
+  score: number;
+  bestCombo: number;
+  me: boolean;
+}
+
+export interface GameLeaderboard {
+  board: GameBoard;
+  title: string;
+  from: string;
+  to: string;
+  entries: GameLeaderboardEntry[];
+  me: GameLeaderboardEntry | null;
+  totalPlayers: number;
+}

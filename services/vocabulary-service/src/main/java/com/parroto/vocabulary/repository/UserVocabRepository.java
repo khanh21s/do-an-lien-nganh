@@ -75,4 +75,16 @@ public interface UserVocabRepository extends JpaRepository<UserVocab, UUID> {
 
     @Query("SELECT AVG(CASE WHEN uv.quality >= 3 THEN 1.0 ELSE 0.0 END) FROM UserVocab uv WHERE uv.userId = :userId AND uv.quality IS NOT NULL")
     Double averageAccuracy(@Param("userId") UUID userId);
+
+    // --- T15 ---
+
+    /** Notebook cards for a game round: due ones first, then the rest, random within each group. */
+    @Query(value = """
+            SELECT uv.card_id FROM user_vocab uv JOIN vocab_card c ON c.id = uv.card_id
+            WHERE uv.user_id = :userId AND btrim(c.meaning) <> ''
+            ORDER BY (uv.next_review_at <= now()) DESC, random() LIMIT :limit
+            """, nativeQuery = true)
+    List<UUID> notebookCardIdsForGame(@Param("userId") UUID userId, @Param("limit") int limit);
+
+    List<UserVocab> findByUserIdAndCard_IdIn(UUID userId, Collection<UUID> cardIds);
 }

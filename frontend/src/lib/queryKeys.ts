@@ -1,4 +1,5 @@
 import type {
+  GameBoard,
   ListActivationCodesParams,
   ListAdminTransactionsParams,
   ListAdminUsersParams,
@@ -102,4 +103,13 @@ export const qk = {
   adminLessonCount: ['admin-lessons', 'count'] as const,
   adminDeckCount: ['admin-decks', 'count'] as const,
   // --- end T14 ---
+
+  // --- T15 additions ---
+  gameStats: ['game-stats'] as const,
+  // --- end T15 ---
+
+  // --- T16 additions ---
+  gameLeaderboardAll: ['game-leaderboard'] as const,
+  gameLeaderboard: (board: GameBoard) => ['game-leaderboard', board] as const,
+  // --- end T16 ---
 };

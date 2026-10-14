@@ -1,5 +1,6 @@
 package com.parroto.subscription.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -8,7 +9,10 @@ import javax.crypto.spec.SecretKeySpec;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.LocalDateTime;
+import java.text.Normalizer;
+import java.time.Clock;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Map;
@@ -25,20 +29,31 @@ import java.util.TreeMap;
 public class VNPayService {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    /** VNPay reads vnp_CreateDate / vnp_ExpireDate as GMT+7, whatever the server's timezone (docker = UTC). */
+    private static final ZoneId VNPAY_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    /** Payment link lifetime, same as CreatePaymentResponse.expiresIn. */
+    public static final long PAYMENT_TTL_MINUTES = 15;
 
     private final String payUrl;
     private final String tmnCode;
     private final String hashSecret;
     private final String returnUrl;
+    private final Clock clock;
 
+    @Autowired
     public VNPayService(@Value("${vnpay.pay-url}") String payUrl,
                          @Value("${vnpay.tmn-code}") String tmnCode,
                          @Value("${vnpay.hash-secret}") String hashSecret,
                          @Value("${vnpay.return-url}") String returnUrl) {
+        this(payUrl, tmnCode, hashSecret, returnUrl, Clock.systemUTC());
+    }
+
+    VNPayService(String payUrl, String tmnCode, String hashSecret, String returnUrl, Clock clock) {
         this.payUrl = payUrl;
-        this.tmnCode = tmnCode;
-        this.hashSecret = hashSecret;
+        this.tmnCode = tmnCode == null ? null : tmnCode.trim();
+        this.hashSecret = hashSecret == null ? null : hashSecret.trim();
         this.returnUrl = returnUrl;
+        this.clock = clock;
     }
 
     public boolean isConfigured() {
@@ -53,12 +68,14 @@ public class VNPayService {
         params.put("vnp_Amount", String.valueOf(amountVnd * 100));
         params.put("vnp_CurrCode", "VND");
         params.put("vnp_TxnRef", txnRef);
-        params.put("vnp_OrderInfo", orderInfo);
+        params.put("vnp_OrderInfo", toVnpayText(orderInfo));
         params.put("vnp_OrderType", "other");
         params.put("vnp_Locale", "vn");
         params.put("vnp_ReturnUrl", returnUrl);
         params.put("vnp_IpAddr", ipAddress == null || ipAddress.isBlank() ? "127.0.0.1" : ipAddress);
-        params.put("vnp_CreateDate", LocalDateTime.now().format(DATE_FORMAT));
+        ZonedDateTime now = ZonedDateTime.now(clock).withZoneSameInstant(VNPAY_ZONE);
+        params.put("vnp_CreateDate", now.format(DATE_FORMAT));
+        params.put("vnp_ExpireDate", now.plusMinutes(PAYMENT_TTL_MINUTES).format(DATE_FORMAT));
 
         String secureHash = sign(params);
 
@@ -99,6 +116,19 @@ public class VNPayService {
             }
         });
         return hmacSha512(hashSecret, buildHashData(toSign));
+    }
+
+    /**
+     * VNPay requires vnp_OrderInfo in Vietnamese without diacritics and without special
+     * characters ("Nâng cấp gói 1 tháng" -> "Nang cap goi 1 thang").
+     */
+    static String toVnpayText(String text) {
+        if (text == null) {
+            return "";
+        }
+        String ascii = Normalizer.normalize(text.replace('đ', 'd').replace('Đ', 'D'), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+        return ascii.replaceAll("[^A-Za-z0-9 ]", " ").replaceAll("\\s+", " ").trim();
     }
 
     private String buildHashData(Map<String, String> sortedParams) {

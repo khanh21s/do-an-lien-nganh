@@ -58,6 +58,18 @@ vnpay:
   hash-secret: ${VNPAY_SECRET:}
   return-url: ${VNPAY_RETURN_URL:http://localhost:8000/subscriptions/payment-callback}
 
+sepay:
+  # sandbox | production
+  env: ${SEPAY_ENV:sandbox}
+  merchant-id: ${SEPAY_MERCHANT_ID:}
+  secret-key: ${SEPAY_SECRET_KEY:}
+  # Public base URL of the API gateway (browser-facing): checkout page + return URLs are built on it
+  public-api-url: ${PUBLIC_API_URL:http://localhost:8000}
+
+payment:
+  # sepay | vnpay; empty = SePay when configured, else VNPay
+  provider: ${PAYMENT_PROVIDER:}
+
 admin:
   emails: ${ADMIN_EMAILS:admin@parroto.com}
 

@@ -22,7 +22,7 @@ const ALREADY_PREMIUM_MSG =
 function paymentErrorMessage(err: unknown): string {
   const status = apiErrorStatus(err);
   if (status === 409) return ALREADY_PREMIUM_MSG;
-  if (status === 503) return 'Cổng thanh toán VNPay chưa được cấu hình. Bạn có thể dùng mã kích hoạt.';
+  if (status === 503) return 'Cổng thanh toán chưa được cấu hình. Bạn có thể dùng mã kích hoạt.';
   return apiErrorMessage(err, 'Không thể khởi tạo thanh toán, vui lòng thử lại.');
 }
 
@@ -83,7 +83,7 @@ export default function SubscriptionPage() {
       )}
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold text-slate-900">Mua gói qua VNPay</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Mua gói Premium</h2>
         {isPremium && (
           <p className="mt-1 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800" role="note">
             {ALREADY_PREMIUM_MSG}
@@ -99,7 +99,7 @@ export default function SubscriptionPage() {
                 plan={plan}
                 highlight={plan.id === bestId}
                 showFeatures={false}
-                actionLabel={isPremium ? 'Đang là Premium' : 'Thanh toán qua VNPay'}
+                actionLabel={isPremium ? 'Đang là Premium' : 'Thanh toán ngay'}
                 disabled={isPremium || (payMutation.isPending && payMutation.variables !== plan.id)}
                 loading={payMutation.isPending && payMutation.variables === plan.id}
                 onAction={() => payMutation.mutate(plan.id)}

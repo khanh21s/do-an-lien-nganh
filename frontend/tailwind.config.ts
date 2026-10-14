@@ -34,6 +34,17 @@ const config: Config = {
       backgroundImage: {
         'pro-gradient': 'linear-gradient(135deg, #8b5cf6 0%, #3390fc 100%)',
       },
+      // T15 game: "+25" floating above the score after a correct answer
+      keyframes: {
+        'float-up': {
+          '0%': { opacity: '0', transform: 'translateY(6px)' },
+          '20%': { opacity: '1' },
+          '100%': { opacity: '0', transform: 'translateY(-18px)' },
+        },
+      },
+      animation: {
+        'float-up': 'float-up 0.9s ease-out forwards',
+      },
     },
   },
   plugins: [],

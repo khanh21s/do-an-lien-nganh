@@ -60,8 +60,8 @@ class ActivationCodeTest {
         when(codeRepository.findExistingCodes(anyCollection())).thenReturn(List.of());
 
         subscriptionService = new SubscriptionService(subscriptionRepository, mock(PaymentTransactionRepository.class),
-                codeRepository, planService, mock(VNPayService.class), mock(EmailService.class), authServiceClient,
-                new PremiumCacheEvictor(redisTemplate));
+                codeRepository, planService, mock(VNPayService.class), mock(SepayService.class), mock(EmailService.class),
+                authServiceClient, new PremiumCacheEvictor(redisTemplate), "");
         activationCodeService = new ActivationCodeService(codeRepository, planService, authServiceClient);
     }
 

@@ -96,11 +96,16 @@ public interface PracticeAttemptRepository extends JpaRepository<PracticeAttempt
                                                      @Param("lessonId") UUID lessonId,
                                                      @Param("sentenceId") UUID sentenceId);
 
-    /** PRA-07: distinct practice days ('YYYY-MM-DD', Vietnam time), most recent first. */
+    /**
+     * PRA-07: distinct practice days ('YYYY-MM-DD', Vietnam time), most recent first. T16: days on
+     * which a game daily goal was met ({@code goal_day}) count as practice days for the streak.
+     */
     @Query(value = """
-            SELECT DISTINCT to_char(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') AS day
+            SELECT to_char(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') AS day
             FROM practice_attempt
             WHERE user_id = :userId
+            UNION
+            SELECT to_char(day, 'YYYY-MM-DD') FROM goal_day WHERE user_id = :userId
             ORDER BY 1 DESC
             """, nativeQuery = true)
     List<String> distinctPracticeDatesDesc(@Param("userId") UUID userId);

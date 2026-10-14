@@ -11,6 +11,7 @@ import com.parroto.subscription.repository.PaymentTransactionRepository;
 import com.parroto.subscription.repository.SubscriptionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -30,17 +31,22 @@ import java.util.UUID;
 public class SubscriptionService {
 
     private static final Logger log = LoggerFactory.getLogger(SubscriptionService.class);
-    private static final long PAYMENT_URL_TTL_SECONDS = 900;
+    private static final long PAYMENT_URL_TTL_SECONDS = VNPayService.PAYMENT_TTL_MINUTES * 60;
 
     static final String STATUS_PENDING = "pending";
     static final String STATUS_SUCCESS = "success";
     static final String STATUS_FAILED = "failed";
+
+    static final String PROVIDER_VNPAY = "vnpay";
+    static final String PROVIDER_SEPAY = "sepay";
 
     private final SubscriptionRepository subscriptionRepository;
     private final PaymentTransactionRepository transactionRepository;
     private final ActivationCodeRepository activationCodeRepository;
     private final PlanService planService;
     private final VNPayService vnPayService;
+    private final SepayService sepayService;
+    private final String configuredProvider;
     private final EmailService emailService;
     private final AuthServiceClient authServiceClient;
     private final PremiumCacheEvictor premiumCacheEvictor;
@@ -48,14 +54,17 @@ public class SubscriptionService {
     public SubscriptionService(SubscriptionRepository subscriptionRepository,
                                 PaymentTransactionRepository transactionRepository,
                                 ActivationCodeRepository activationCodeRepository,
-                                PlanService planService, VNPayService vnPayService,
+                                PlanService planService, VNPayService vnPayService, SepayService sepayService,
                                 EmailService emailService, AuthServiceClient authServiceClient,
-                                PremiumCacheEvictor premiumCacheEvictor) {
+                                PremiumCacheEvictor premiumCacheEvictor,
+                                @Value("${payment.provider:}") String configuredProvider) {
         this.subscriptionRepository = subscriptionRepository;
         this.transactionRepository = transactionRepository;
         this.activationCodeRepository = activationCodeRepository;
         this.planService = planService;
         this.vnPayService = vnPayService;
+        this.sepayService = sepayService;
+        this.configuredProvider = configuredProvider == null ? "" : configuredProvider.trim().toLowerCase(Locale.ROOT);
         this.emailService = emailService;
         this.authServiceClient = authServiceClient;
         this.premiumCacheEvictor = premiumCacheEvictor;
@@ -96,16 +105,17 @@ public class SubscriptionService {
         if (isPremium(userId)) {
             throw ApiException.conflict("User already has an active Premium subscription");
         }
-        if (!vnPayService.isConfigured()) {
+        String provider = paymentProvider();
+        if (provider == null) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "VNPay is not configured (VNPAY_MERCHANT_ID / VNPAY_SECRET missing)");
+                    "No payment gateway is configured (SEPAY_MERCHANT_ID / SEPAY_SECRET_KEY or VNPAY_MERCHANT_ID / VNPAY_SECRET)");
         }
 
         PaymentTransaction transaction = PaymentTransaction.builder()
                 .userId(userId)
                 .planId(plan.getId())
                 .amount(plan.getPrice())
-                .method("vnpay")
+                .method(provider)
                 .status(STATUS_PENDING)
                 .description("Nâng cấp gói " + plan.getName())
                 .build();
@@ -115,7 +125,9 @@ public class SubscriptionService {
         transaction.setTransactionId(txnRef);
         transactionRepository.save(transaction);
 
-        String paymentUrl = vnPayService.buildPaymentUrl(plan.getPrice(), txnRef, transaction.getDescription(), clientIp);
+        String paymentUrl = PROVIDER_SEPAY.equals(provider)
+                ? sepayService.checkoutPageUrl(txnRef)
+                : vnPayService.buildPaymentUrl(plan.getPrice(), txnRef, transaction.getDescription(), clientIp);
 
         return new CreatePaymentResponse(txnRef, paymentUrl, PAYMENT_URL_TTL_SECONDS, plan.getPrice());
     }
@@ -159,19 +171,116 @@ public class SubscriptionService {
             return VnpayResult.of(VnpayResult.OK, "Confirm Success", STATUS_FAILED);
         }
 
+        completePayment(transaction);
+        return VnpayResult.of(VnpayResult.OK, "Confirm Success", STATUS_SUCCESS);
+    }
+
+    /**
+     * Gateway used for new payments: PAYMENT_PROVIDER when set and configured, otherwise SePay if
+     * configured, otherwise VNPay if configured; {@code null} when none is.
+     */
+    String paymentProvider() {
+        if (PROVIDER_SEPAY.equals(configuredProvider)) {
+            return sepayService.isConfigured() ? PROVIDER_SEPAY : null;
+        }
+        if (PROVIDER_VNPAY.equals(configuredProvider)) {
+            return vnPayService.isConfigured() ? PROVIDER_VNPAY : null;
+        }
+        if (sepayService.isConfigured()) {
+            return PROVIDER_SEPAY;
+        }
+        return vnPayService.isConfigured() ? PROVIDER_VNPAY : null;
+    }
+
+    /** Marks a locked pending transaction paid, grants the plan and mails a receipt after commit. */
+    private void completePayment(PaymentTransaction transaction) {
         transaction.setStatus(STATUS_SUCCESS);
         transactionRepository.save(transaction);
 
         Plan plan = planService.getPlanOrThrow(transaction.getPlanId());
-        Subscription subscription = activateSubscription(transaction.getUserId(), plan, "vnpay",
+        Subscription subscription = activateSubscription(transaction.getUserId(), plan, transaction.getMethod(),
                 transaction.getTransactionId());
 
         UUID userId = transaction.getUserId();
         String endDate = subscription.getEndAt().format(DateTimeFormatter.ISO_LOCAL_DATE);
         AfterCommit.run(() -> emailService.sendPaymentConfirmation(
                 authServiceClient.findEmail(userId), plan.getName(), endDate));
+    }
 
-        return VnpayResult.of(VnpayResult.OK, "Confirm Success", STATUS_SUCCESS);
+    /**
+     * Signed SePay checkout form for a pending SePay transaction (the browser auto-submits it).
+     *
+     * @return the fields in posting order, or {@code null} if the transaction is unknown or no longer pending
+     */
+    @Transactional(readOnly = true)
+    public Map<String, String> sepayCheckoutFields(String txnRef) {
+        UUID id = parseUuid(txnRef);
+        PaymentTransaction transaction = id == null ? null : transactionRepository.findById(id).orElse(null);
+        if (transaction == null || !PROVIDER_SEPAY.equals(transaction.getMethod())
+                || !STATUS_PENDING.equals(transaction.getStatus()) || !sepayService.isConfigured()) {
+            return null;
+        }
+        return sepayService.checkoutFields(transaction.getTransactionId(), transaction.getAmount(),
+                transaction.getDescription());
+    }
+
+    /**
+     * Settles a SePay transaction from the order status read back from SePay's API (never from the
+     * unsigned browser redirect). Idempotent: only a locked {@code pending} transaction changes.
+     *
+     * @return the transaction status afterwards, or {@code null} if the transaction is unknown
+     */
+    @Transactional
+    public String processSepayOrder(String txnRef) {
+        UUID id = parseUuid(txnRef);
+        PaymentTransaction transaction = id == null ? null : transactionRepository.findByIdForUpdate(id).orElse(null);
+        if (transaction == null || !PROVIDER_SEPAY.equals(transaction.getMethod())) {
+            return null;
+        }
+        if (!STATUS_PENDING.equals(transaction.getStatus())) {
+            return transaction.getStatus();
+        }
+        SepayService.SepayOrder order = sepayService.fetchOrder(transaction.getTransactionId());
+        if (order == null) {
+            return STATUS_PENDING;
+        }
+        if (order.isPaid()) {
+            if (order.amount() == null || !order.amount().equals(transaction.getAmount())) {
+                log.warn("SePay amount mismatch for transaction {}: expected {} got {}",
+                        id, transaction.getAmount(), order.amount());
+                transaction.setStatus(STATUS_FAILED);
+                transactionRepository.save(transaction);
+                return STATUS_FAILED;
+            }
+            completePayment(transaction);
+            return STATUS_SUCCESS;
+        }
+        if (SepayService.ORDER_CANCELLED.equals(order.status())) {
+            transaction.setStatus(STATUS_FAILED);
+            transactionRepository.save(transaction);
+            return STATUS_FAILED;
+        }
+        return STATUS_PENDING;
+    }
+
+    /**
+     * SePay success/error/cancel redirect: decides where to send the browser.
+     *
+     * @param result "success" | "error" | "cancel" (from our own return URL, informational only)
+     */
+    @Transactional
+    public String handleSepayReturn(String txnRef, String result) {
+        String status = processSepayOrder(txnRef);
+        if (status == null) {
+            return "/subscription/failed?reason=not_found";
+        }
+        return switch (status) {
+            case STATUS_SUCCESS -> "/subscription/success";
+            case STATUS_PENDING -> "success".equals(result)
+                    ? "/subscription/success"
+                    : "/subscription/failed?reason=" + ("cancel".equals(result) ? "payment_cancelled" : "payment_declined");
+            default -> "/subscription/failed?reason=payment_declined";
+        };
     }
 
     /**

@@ -50,8 +50,8 @@ class InactivePlanTest {
         when(planRepository.findById("plan-old")).thenReturn(Optional.of(retired));
         planService = new PlanService(planRepository);
         subscriptionService = new SubscriptionService(subscriptionRepository, transactionRepository, codeRepository,
-                planService, vnPay, mock(EmailService.class), mock(AuthServiceClient.class),
-                mock(PremiumCacheEvictor.class));
+                planService, vnPay, mock(SepayService.class), mock(EmailService.class), mock(AuthServiceClient.class),
+                mock(PremiumCacheEvictor.class), "");
     }
 
     @Test
