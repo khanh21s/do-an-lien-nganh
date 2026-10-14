@@ -1,5 +1,6 @@
 package com.parroto.practice.config;
 
+import com.parroto.practice.security.InternalTokenFilter;
 import com.parroto.practice.security.JwtAuthFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -24,6 +25,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthFilter jwtAuthFilter,
+                                            InternalTokenFilter internalTokenFilter,
                                             RestAuthEntryPoint restAuthEntryPoint) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
@@ -33,7 +35,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // T16: service-to-service only (not routed by the gateway); InternalTokenFilter
+                        // rejects calls without a valid X-Internal-Token first.
+                        .requestMatchers("/internal/**").permitAll()
                         .anyRequest().authenticated())
+                .addFilterBefore(internalTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

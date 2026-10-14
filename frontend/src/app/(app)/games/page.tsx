@@ -15,10 +15,10 @@ import toast from 'react-hot-toast';
 
 type Phase = { kind: 'lobby' } | { kind: 'play'; state: GameState } | { kind: 'summary'; summary: Summary };
 
-/** T15 "Dịch nhanh": lobby → 60-second round → summary (→ replay with the same source). */
+/** T15/T16 "Dịch nhanh": lobby → round (Sprint / Survival / Daily) → summary (→ replay). */
 export default function GamesPage() {
   const queryClient = useQueryClient();
-  const [choice, setChoice] = useLocalStorage<StartGameInput>(storageKeys.gameSource, { source: 'DECK' });
+  const [choice, setChoice] = useLocalStorage<StartGameInput>(storageKeys.gameSource, { mode: 'SPRINT', source: 'DECK' });
   const [lastStart, setLastStart] = useState<StartGameInput | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'lobby' });
 
@@ -28,7 +28,12 @@ export default function GamesPage() {
       setLastStart(input);
       setPhase({ kind: 'play', state });
     },
-    onError: (err) => toast.error(apiErrorMessage(err, 'Không thể bắt đầu ván chơi.')),
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Không thể bắt đầu ván chơi.'));
+      // e.g. today's challenge already played: refresh the lobby state
+      queryClient.invalidateQueries({ queryKey: qk.gameStats });
+      setPhase({ kind: 'lobby' });
+    },
   });
 
   function start(input: StartGameInput) {
@@ -43,6 +48,11 @@ export default function GamesPage() {
         initial={phase.state}
         onFinished={(summary) => {
           queryClient.invalidateQueries({ queryKey: qk.gameStats });
+          queryClient.invalidateQueries({ queryKey: qk.gameLeaderboardAll });
+          if (summary.goalJustMet) {
+            queryClient.invalidateQueries({ queryKey: qk.streak });
+            queryClient.invalidateQueries({ queryKey: qk.practiceStats });
+          }
           if (summary.srsUpdated > 0) {
             queryClient.invalidateQueries({ queryKey: qk.vocabStats });
             queryClient.invalidateQueries({ queryKey: qk.reviewQueue });

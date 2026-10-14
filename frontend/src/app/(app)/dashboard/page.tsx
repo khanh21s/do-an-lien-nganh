@@ -2,6 +2,7 @@
 
 import { ActivityHeatmap } from '@/components/dashboard/ActivityHeatmap';
 import { ContinueLearning } from '@/components/dashboard/ContinueLearning';
+import { GameWidget } from '@/components/dashboard/GameWidget';
 import { formatHours, formatPercent } from '@/components/dashboard/dashboard-data';
 import { StatCard, WidgetError } from '@/components/dashboard/StatCard';
 import { TrendingErrors } from '@/components/dashboard/TrendingErrors';
@@ -91,6 +92,8 @@ export default function DashboardPage() {
           href="/vocabulary/review"
         />
       </div>
+
+      <GameWidget />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

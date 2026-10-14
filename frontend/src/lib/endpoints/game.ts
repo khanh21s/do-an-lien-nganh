@@ -1,7 +1,17 @@
 import { api } from '@/lib/api';
-import type { GameAnswerResult, GameHint, GameState, GameStats, GameSummary, StartGameInput } from '@/lib/types';
+import type {
+  GameAnswerResult,
+  GameBoard,
+  GameHint,
+  GameLeaderboard,
+  GameProgress,
+  GameState,
+  GameStats,
+  GameSummary,
+  StartGameInput,
+} from '@/lib/types';
 
-/** T15 "Dịch nhanh": every answer is graded and scored by vocabulary-service. */
+/** T15/T16 "Dịch nhanh": every answer is graded and scored by vocabulary-service. */
 export const gameApi = {
   start: (data: StartGameInput) => api.post<GameState>('/vocabs/games/sessions', data).then((r) => r.data),
 
@@ -13,4 +23,9 @@ export const gameApi = {
   finish: (sessionId: string) => api.post<GameSummary>(`/vocabs/games/sessions/${sessionId}/finish`).then((r) => r.data),
 
   stats: () => api.get<GameStats>('/vocabs/games/me').then((r) => r.data),
+
+  setDailyGoal: (dailyGoal: number) => api.put<GameProgress>('/vocabs/games/me/goal', { dailyGoal }).then((r) => r.data),
+
+  leaderboard: (board: GameBoard) =>
+    api.get<GameLeaderboard>('/vocabs/games/leaderboard', { params: { board } }).then((r) => r.data),
 };

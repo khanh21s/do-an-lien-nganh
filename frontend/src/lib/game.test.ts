@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { comboMultiplier, formatClock, hintFactor, nextComboTier, posLabel, recordMessage, wordsToReview } from './game';
+import {
+  comboMultiplier,
+  formatClock,
+  goalMessage,
+  goalPercent,
+  hintFactor,
+  levelPercent,
+  nextComboTier,
+  percent,
+  posLabel,
+  rankMessage,
+  recordMessage,
+  wordsToReview,
+} from './game';
 import { validateCombo } from './shortcuts';
 import type { GameSummaryItem } from './types';
 
@@ -65,5 +78,23 @@ describe('game shortcuts', () => {
     expect(validateCombo('game.skip', 'S', {})).toMatch(/gõ chữ/);
     expect(validateCombo('game.skip', 'Ctrl+H', {})).toMatch(/Gợi ý/);
     expect(validateCombo('game.skip', 'Alt+S', {})).toBeNull();
+  });
+});
+
+describe('progress (T16)', () => {
+  const p = { xp: 350, level: 3, levelXp: 50, levelXpNeeded: 300, dailyGoal: 200, todayPoints: 160, goalMet: false };
+  it('computes bar widths', () => {
+    expect(percent(1, 3)).toBe(33);
+    expect(percent(5, 0)).toBe(100);
+    expect(percent(900, 200)).toBe(100);
+    expect(levelPercent(p)).toBe(17);
+    expect(goalPercent(p)).toBe(80);
+  });
+  it('goal and rank messages', () => {
+    expect(goalMessage(p)).toBe('Còn 40 điểm để đạt mục tiêu');
+    expect(goalMessage({ ...p, todayPoints: 210, goalMet: true })).toMatch(/Đã đạt mục tiêu/);
+    expect(rankMessage('sprint-week', 3, 25)).toBe('Hạng 3/25 · Nước rút tuần');
+    expect(rankMessage(null, 3, 25)).toBeNull();
+    expect(rankMessage('daily', null, null)).toBeNull();
   });
 });

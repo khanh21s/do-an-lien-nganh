@@ -3,15 +3,18 @@ package com.parroto.vocabulary.service;
 import com.parroto.vocabulary.dto.GameDtos.AnswerRequest;
 import com.parroto.vocabulary.dto.GameDtos.AnswerResult;
 import com.parroto.vocabulary.dto.GameDtos.GameState;
+import com.parroto.vocabulary.dto.GameDtos.Progress;
 import com.parroto.vocabulary.dto.GameDtos.Hint;
 import com.parroto.vocabulary.dto.GameDtos.StartGameRequest;
 import com.parroto.vocabulary.dto.GameDtos.Summary;
+import com.parroto.vocabulary.entity.DailyChallenge;
 import com.parroto.vocabulary.entity.GameAnswer;
 import com.parroto.vocabulary.entity.GameSession;
 import com.parroto.vocabulary.entity.UserVocab;
 import com.parroto.vocabulary.entity.VocabCard;
 import com.parroto.vocabulary.entity.VocabDeck;
 import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.vocabulary.repository.DailyChallengeRepository;
 import com.parroto.vocabulary.repository.GameAnswerRepository;
 import com.parroto.vocabulary.repository.GameSessionRepository;
 import com.parroto.vocabulary.repository.UserVocabRepository;
@@ -26,6 +29,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -82,6 +86,9 @@ class GameServiceTest {
     private VocabDeckRepository deckRepository;
     private UserVocabRepository userVocabRepository;
     private PremiumClient premiumClient;
+    private DailyChallengeRepository dailyRepository;
+    private GameProgressService progressService;
+    private final Map<LocalDate, DailyChallenge> dailies = new HashMap<>();
     private GameService service;
     private VocabDeck deck;
     private List<VocabCard> deckCards;
@@ -94,9 +101,23 @@ class GameServiceTest {
         deckRepository = mock(VocabDeckRepository.class);
         userVocabRepository = mock(UserVocabRepository.class);
         premiumClient = mock(PremiumClient.class);
+        dailyRepository = mock(DailyChallengeRepository.class);
+        progressService = mock(GameProgressService.class);
         ReviewService reviewService = new ReviewService(userVocabRepository, cardRepository, new SM2Calculator(), premiumClient);
         service = new GameService(sessionRepository, answerRepository, cardRepository, deckRepository,
-                userVocabRepository, reviewService, premiumClient, clock);
+                userVocabRepository, dailyRepository, reviewService, premiumClient, progressService, clock);
+
+        when(progressService.today()).thenReturn(LocalDate.of(2026, 10, 14));
+        when(progressService.progress(any())).thenReturn(Progress.builder().xp(0).level(1).levelXpNeeded(100)
+                .dailyGoal(200).build());
+        when(dailyRepository.findById(any())).thenAnswer(inv -> Optional.ofNullable(dailies.get(inv.getArgument(0))));
+        when(dailyRepository.insertIfAbsent(any(), any())).thenAnswer(inv -> {
+            dailies.putIfAbsent(inv.getArgument(0), new DailyChallenge(inv.getArgument(0), inv.getArgument(1)));
+            return 1;
+        });
+        when(sessionRepository.findByUserIdAndModeAndSourceKey(any(), any(), any())).thenAnswer(inv -> sessions.values().stream()
+                .filter(s -> s.getUserId().equals(inv.getArgument(0)) && s.getMode().equals(inv.getArgument(1))
+                        && s.getSourceKey().equals(inv.getArgument(2))).findFirst());
 
         when(sessionRepository.save(any(GameSession.class))).thenAnswer(inv -> {
             GameSession s = inv.getArgument(0);
@@ -137,13 +158,23 @@ class GameServiceTest {
         when(deckRepository.findById(deck.getId())).thenReturn(Optional.of(deck));
         deckCards = new ArrayList<>();
         for (String[] w : new String[][]{{"huge", "khổng lồ"}, {"decide", "quyết định"}, {"environment", "môi trường"},
-                {"borrow", "mượn"}, {"collect", "thu thập"}, {"protect", "bảo vệ"}, {"improve", "cải thiện"}}) {
+                {"borrow", "mượn"}, {"collect", "thu thập"}, {"protect", "bảo vệ"}, {"improve", "cải thiện"},
+                {"arrive", "đến nơi"}, {"believe", "tin tưởng"}, {"compare", "so sánh"}, {"discover", "khám phá"},
+                {"explain", "giải thích"}}) {
             VocabCard c = VocabCard.builder().id(UUID.randomUUID()).deck(deck).word(w[0]).meaning(w[1])
                     .example("I want to " + w[0] + " it.").partOfSpeech("verb").build();
             cards.put(c.getId(), c);
             deckCards.add(c);
         }
         when(cardRepository.randomIdsInDeck(eq(deck.getId()), anyInt()))
+                .thenReturn(deckCards.stream().map(VocabCard::getId).toList());
+        // only B2 words exist: the easier stages come back empty and are topped up
+        when(cardRepository.randomIdsByLevels(any(), anyBoolean(), anyInt())).thenAnswer(inv -> {
+            java.util.Collection<String> levels = inv.getArgument(0);
+            int limit = inv.getArgument(2);
+            return levels.contains("B2") ? deckCards.stream().map(VocabCard::getId).limit(limit).toList() : List.of();
+        });
+        when(cardRepository.randomPublicIds(anyBoolean(), anyInt()))
                 .thenReturn(deckCards.stream().map(VocabCard::getId).toList());
     }
 
@@ -327,5 +358,94 @@ class GameServiceTest {
         when(deckRepository.findById(someoneElses.getId())).thenReturn(Optional.of(someoneElses));
         assertThatThrownBy(() -> service.start(principal, new StartGameRequest(null, "DECK", someoneElses.getId(), null)))
                 .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    // ------------------------------------------------------------------ T16
+
+    private GameState startMode(String mode) {
+        return service.start(principal, new StartGameRequest(mode, null, null, null));
+    }
+
+    @Test
+    void survivalIsPremiumAndEndsWhenTheLivesRunOut() {
+        assertThatThrownBy(() -> startMode("SURVIVAL"))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.FORBIDDEN));
+        when(premiumClient.isPremium(userId.toString())).thenReturn(true);
+
+        GameState s = startMode("survival");
+        assertThat(s.lives()).isEqualTo(3);
+        assertThat(s.durationSec()).isZero();
+        assertThat(s.question().timeLeftMs()).isEqualTo(15_000);
+        assertThat(sessions.get(s.sessionId()).getRanked()).isTrue();
+        assertThat(sessions.get(s.sessionId()).getDisplayName()).isEqualTo("u***");
+
+        answer(s.sessionId(), currentCard(s.sessionId()).getWord());
+        AnswerResult miss1 = answer(s.sessionId(), "nope");
+        assertThat(miss1.lives()).isEqualTo(2);
+        // too slow: graded WRONG even though the word is right
+        clock.advance(Duration.ofSeconds(18));
+        AnswerResult slow = answer(s.sessionId(), currentCard(s.sessionId()).getWord());
+        assertThat(slow.timedOut()).isTrue();
+        assertThat(slow.result()).isEqualTo("WRONG");
+        assertThat(slow.lives()).isEqualTo(1);
+        AnswerResult last = service.answer(userId, s.sessionId(), new AnswerRequest(null, true));
+        assertThat(last.lives()).isZero();
+        assertThat(last.finished()).isTrue();
+        assertThat(last.nextQuestion()).isNull();
+        // no retries in survival
+        assertThat(answers.stream().noneMatch(GameAnswer::getIsRetry)).isTrue();
+    }
+
+    @Test
+    void dailyChallengeIsTheSameForEveryoneAndPlayedOnce() {
+        GameState s = startMode("DAILY");
+        assertThat(s.questionCount()).isEqualTo(10);
+        assertThat(s.question().timeLeftMs()).isEqualTo(20_000);
+        assertThat(s.sourceLabel()).isEqualTo("Thử thách 14/10");
+        String words = dailies.get(LocalDate.of(2026, 10, 14)).getCardIds();
+        assertThat(words.split(",")).hasSize(10);
+
+        // interrupted: starting again resumes the same question, its timer keeps running
+        clock.advance(Duration.ofSeconds(5));
+        GameState resumed = startMode("DAILY");
+        assertThat(resumed.sessionId()).isEqualTo(s.sessionId());
+        assertThat(resumed.question().seq()).isEqualTo(1);
+        assertThat(resumed.question().timeLeftMs()).isEqualTo(15_000);
+
+        AnswerResult r = null;
+        for (int i = 0; i < 10; i++) {
+            r = answer(s.sessionId(), currentCard(s.sessionId()).getWord());
+        }
+        assertThat(r.finished()).isTrue();
+        Summary sum = service.finish(userId, s.sessionId());
+        assertThat(sum.correct()).isEqualTo(10);
+        verify(progressService).onRoundFinished(any(), any());
+
+        assertThatThrownBy(() -> startMode("DAILY"))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT));
+
+        // another player gets the same words in the same order
+        UUID other = UUID.randomUUID();
+        GameState o = service.start(new AuthenticatedUser(other.toString(), "other@test.local", "B1"),
+                new StartGameRequest("DAILY", null, null, null));
+        assertThat(currentCard(o.sessionId()).getId().toString()).isEqualTo(words.split(",")[0]);
+    }
+
+    @Test
+    void startingAnotherModeKeepsTodaysDailyResumable() {
+        GameState daily = startMode("DAILY");
+        startDeck();
+        assertThat(sessions.get(daily.sessionId()).isActive()).isTrue();
+        assertThat(startMode("DAILY").sessionId()).isEqualTo(daily.sessionId());
+    }
+
+    @Test
+    void sprintRoundsFromTheNotebookAreNotRanked() {
+        when(userVocabRepository.notebookCardIdsForGame(any(), anyInt())).thenReturn(List.of(deckCards.get(0).getId()));
+        GameState nb = service.start(principal, new StartGameRequest(null, "NOTEBOOK", null, null));
+        assertThat(sessions.get(nb.sessionId()).getRanked()).isFalse();
+        GameState d = startDeck();
+        assertThat(sessions.get(d.sessionId()).getRanked()).isTrue();
+        assertThatThrownBy(() -> startMode("CHESS")).hasMessageContaining("SPRINT, SURVIVAL hoặc DAILY");
     }
 }
