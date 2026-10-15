@@ -132,6 +132,24 @@ class DictionaryServiceTest {
     }
 
     @Test
+    void afterAFailureTheApiRestsForAWhile() {
+        java.time.Instant t0 = java.time.Instant.parse("2026-10-15T00:00:00Z");
+        service.setClock(java.time.Clock.fixed(t0, java.time.ZoneOffset.UTC));
+        when(client.lookup(anyString())).thenReturn(new Lookup(Outcome.FAILED, null));
+
+        assertThat(service.lookup(null, "stopped").externalStatus()).isEqualTo("error");
+        verify(client, times(1)).lookup(anyString()); // no second guess once the API failed
+
+        assertThat(service.lookup(null, "apple").externalStatus()).isEqualTo("skipped");
+        verify(client, times(1)).lookup(anyString());
+
+        service.setClock(java.time.Clock.fixed(t0.plus(DictionaryService.COOL_DOWN).plusSeconds(1),
+                java.time.ZoneOffset.UTC));
+        when(client.lookup("apple")).thenReturn(new Lookup(Outcome.MISS, null));
+        assertThat(service.lookup(null, "apple").externalStatus()).isEqualTo("miss");
+    }
+
+    @Test
     void nothingKnownIsNotAnError() {
         when(client.lookup(anyString())).thenReturn(new Lookup(Outcome.MISS, null));
         DictionaryResponse r = service.lookup(null, "qwzx");

@@ -46,6 +46,11 @@ public class DictionaryService {
     static final int MAX_MEANINGS = 5;
     static final int MAX_EXAMPLES = 3;
     private static final UUID NOBODY = new UUID(0L, 0L);
+    /** After a failed API call, lookups skip the API for this long instead of each waiting for a timeout. */
+    static final Duration COOL_DOWN = Duration.ofSeconds(30);
+
+    private final java.util.concurrent.atomic.AtomicLong externalBlockedUntil = new java.util.concurrent.atomic.AtomicLong();
+    private java.time.Clock clock = java.time.Clock.systemUTC();
 
     private final VocabCardRepository cardRepository;
     private final FreeDictionaryClient client;
@@ -85,6 +90,10 @@ public class DictionaryService {
         return merge(query, resolved != null ? resolved : query, matched, ext);
     }
 
+    void setClock(java.time.Clock clock) {
+        this.clock = clock;
+    }
+
     record ExternalResult(String word, ExternalDictionaryEntry entry, String status) {
     }
 
@@ -102,6 +111,9 @@ public class DictionaryService {
             if (calls >= MAX_EXTERNAL_CALLS) {
                 break;
             }
+            if (clock.millis() < externalBlockedUntil.get()) {
+                return new ExternalResult(null, null, "skipped");
+            }
             calls++;
             Lookup lookup = client.lookup(w);
             if (lookup.outcome() == Outcome.FOUND) {
@@ -111,7 +123,10 @@ public class DictionaryService {
             if (lookup.outcome() == Outcome.MISS) {
                 cachePut(CACHE_PREFIX + w, MISS_MARKER, MISS_TTL);
             } else {
-                failed = true; // not cached: try again on the next lookup
+                // Not cached; the API is likely down or slow: stop here and let it rest for a while.
+                failed = true;
+                externalBlockedUntil.set(clock.millis() + COOL_DOWN.toMillis());
+                break;
             }
         }
         return new ExternalResult(null, null, failed ? "error" : "miss");

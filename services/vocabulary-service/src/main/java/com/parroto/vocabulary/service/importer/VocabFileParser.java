@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
  *       {@code #} comments are ignored. Tab-separated lines may carry the CSV columns in order.</li>
  *   <li><b>PDF</b> (best-effort): text extracted with PDFBox, wide horizontal gaps (table cells)
  *       become tabs, then every line goes through the TXT rules; lines without a separator
- *       (titles, page numbers) are skipped and counted.</li>
+ *       (titles, page numbers) and column headers ("Word / Meaning") are skipped and counted.</li>
  * </ul>
  */
 public final class VocabFileParser {
@@ -274,10 +274,18 @@ public final class VocabFileParser {
             String line = lines[i];
             if (isIgnorable(line)) continue;
             RawEntry e = parseLine(i + 1, line);
+            if (isHeaderEntry(e)) continue;
             entries.add(e != null ? e : new RawEntry(i + 1, truncate(line.trim(), 100), null, null, null, null, null,
                     MSG_NO_SEPARATOR));
         }
         return new ParseResult(Format.TXT, entries, 0, List.of());
+    }
+
+    /** "Word\tMeaning", "Từ - Nghĩa": a column header line of a list or table, not an entry. */
+    static boolean isHeaderEntry(RawEntry e) {
+        if (e == null || e.word() == null || e.meaning() == null) return false;
+        return Integer.valueOf(0).equals(HEADER_ALIASES.get(headerKey(e.word())))
+                && Integer.valueOf(1).equals(HEADER_ALIASES.get(headerKey(e.meaning())));
     }
 
     static boolean isIgnorable(String line) {
@@ -388,7 +396,7 @@ public final class VocabFileParser {
             String line = lines[i].replaceAll(" {3,}", "\t");
             if (isIgnorable(line)) continue;
             RawEntry e = parseLine(i + 1, line);
-            if (e == null) {
+            if (e == null || isHeaderEntry(e)) {
                 skipped++;
             } else {
                 entries.add(e);

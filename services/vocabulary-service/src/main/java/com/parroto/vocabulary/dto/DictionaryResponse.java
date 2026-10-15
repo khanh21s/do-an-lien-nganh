@@ -10,7 +10,8 @@ import java.util.List;
  * @param word           the word the data is about (a lemma when a fallback matched: "running" → "run")
  * @param source         {@code cards}, {@code dictionary}, {@code cards+dictionary} or {@code none}
  * @param externalStatus {@code ok}, {@code miss} (API has no entry), {@code error} (API unreachable;
- *                       the response still carries what the cards know), {@code skipped} or {@code disabled}
+ *                       the response still carries what the cards know), {@code skipped} (API failed
+ *                       moments ago, resting 30 s) or {@code disabled}
  */
 public record DictionaryResponse(
         String query,

@@ -139,6 +139,12 @@ class VocabFileParserTest {
     }
 
     @Test
+    void txtHeaderLineIsSkipped() {
+        ParseResult r = VocabFileParser.parseTxt("Từ\tNghĩa\nword - meaning\napple - táo");
+        assertThat(r.entries()).extracting(RawEntry::word).containsExactly("apple");
+    }
+
+    @Test
     void txtLineWithoutSeparatorBecomesAnErrorRow() {
         ParseResult r = VocabFileParser.parseTxt("apple quả táo\nbook - sách");
         assertThat(r.entries()).hasSize(2);
@@ -160,11 +166,11 @@ class VocabFileParserTest {
         ParseResult r = VocabFileParser.parse(Format.PDF, pdf);
         assertThat(r.format()).isEqualTo(Format.PDF);
         assertThat(r.entries()).extracting(RawEntry::word)
-                .containsExactly("airport", "luggage", "passport", "Word", "ticket", "boarding pass");
+                .containsExactly("airport", "luggage", "passport", "ticket", "boarding pass");
         assertThat(r.entries()).extracting(RawEntry::meaning)
-                .containsExactly("sân bay", "hành lý", "hộ chiếu", "Meaning", "vé", "thẻ lên máy bay");
-        // title and page number have no separator: skipped, and the UI is told so
-        assertThat(r.skippedLines()).isEqualTo(2);
+                .containsExactly("sân bay", "hành lý", "hộ chiếu", "vé", "thẻ lên máy bay");
+        // title and page number have no separator, "Word / Meaning" is the table header: skipped, UI is told
+        assertThat(r.skippedLines()).isEqualTo(3);
         assertThat(r.warnings()).anyMatch(w -> w.contains("gần đúng"));
     }
 
