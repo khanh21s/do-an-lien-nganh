@@ -22,4 +22,16 @@ const userLimiter = rateLimit({
   handler,
 });
 
-module.exports = { ipLimiter, userLimiter };
+/**
+ * P2-C: GET /vocabs/dictionary/{word} is public and may reach an external API on a cache miss,
+ * so it gets its own tighter budget per IP (clicking words while reading stays far below it).
+ */
+const dictionaryLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => sendError(res, 429, 'Tra từ quá nhanh, vui lòng thử lại sau ít phút', req.requestId),
+});
+
+module.exports = { ipLimiter, userLimiter, dictionaryLimiter };

@@ -36,6 +36,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.GET, "/vocabs/decks/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/vocabs/dictionary/**").permitAll() // P2-C
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
