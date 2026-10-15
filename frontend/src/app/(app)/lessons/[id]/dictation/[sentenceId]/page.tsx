@@ -1,6 +1,8 @@
 'use client';
 
 import { LessonNotFound } from '@/components/lessons/LessonNotFound';
+import { ProLessonLock } from '@/components/lessons/ProLessonLock';
+import { useLessonAccess } from '@/hooks/useLessonAccess';
 import { DictationPractice } from '@/components/practice/dictation/DictationPractice';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { FullPageSpinner } from '@/components/ui/Spinner';
@@ -26,9 +28,10 @@ export default function DictationPage() {
     'Normal'
   );
   const difficulty: Difficulty = isDifficulty(storedDifficulty) ? storedDifficulty : 'Normal';
+  const access = useLessonAccess(lessonQuery.data);
 
   // DIC-01: never an endless spinner.
-  if (lessonQuery.isLoading || !hydrated) return <FullPageSpinner />;
+  if (lessonQuery.isLoading || !hydrated || !access.ready) return <FullPageSpinner />;
   if (lessonQuery.isError) {
     const status = apiErrorStatus(lessonQuery.error);
     if (status === 404 || status === 400) return <LessonNotFound />;
@@ -36,6 +39,7 @@ export default function DictationPage() {
   }
   const lesson = lessonQuery.data;
   if (!lesson) return <LessonNotFound />;
+  if (access.locked) return <ProLessonLock lessonId={lesson.id} lessonTitle={lesson.title} />;
 
   const sentence = lesson.sentences.find((s) => s.id === params.sentenceId);
   if (!sentence) {

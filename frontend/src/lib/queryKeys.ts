@@ -119,4 +119,8 @@ export const qk = {
   gamification: ['gamification'] as const,
   xpLeaderboard: (period: XpLeaderboardPeriod) => ['xp-leaderboard', period] as const,
   // --- end P2-B ---
+  // --- P2-A ---
+  sentenceReviewQueue: ['sentence-review-queue'] as const,
+  sentenceReviewStats: ['sentence-review-stats'] as const,
+  // --- end P2-A ---
 };

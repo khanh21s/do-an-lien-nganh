@@ -30,9 +30,10 @@ public class LessonController {
     public ResponseEntity<PageResponse<LessonSummaryResponse>> list(
             @RequestParam(required = false) String cefrLevel,
             @RequestParam(required = false) String topicTag,
+            @RequestParam(required = false) Boolean isPro,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit) {
-        return ResponseEntity.ok(lessonService.listLessons(cefrLevel, topicTag, page, limit));
+        return ResponseEntity.ok(lessonService.listLessons(cefrLevel, topicTag, isPro, page, limit));
     }
 
     @GetMapping("/search")

@@ -50,6 +50,12 @@ services:
   content-service-url: ${CONTENT_SERVICE_URL:http://localhost:8002}
   # P2-B: XP events of saved attempts (POST /internal/gamification/events); empty = disabled
   vocabulary-service-url: ${VOCABULARY_SERVICE_URL:http://localhost:8004}
+  # P2-A1: premium check for Pro lessons (GET /internal/subscriptions/{userId}/active)
+  subscription-service-url: ${SUBSCRIPTION_SERVICE_URL:http://localhost:8005}
+
+# P2-A1: admins bypass the Pro-lesson practice gate (shared AdminGuard)
+admin:
+  emails: ${ADMIN_EMAILS:admin@parroto.com}
 
 aws:
   s3:

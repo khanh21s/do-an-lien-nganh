@@ -220,9 +220,13 @@ services:
       # P2-B: XP events of saved attempts -> vocabulary-service /internal/gamification/events
       # (fire-and-forget; no depends_on, vocabulary-service already depends on practice-service URL)
       VOCABULARY_SERVICE_URL: http://vocabulary-service:8004
+      # P2-A1: premium check for Pro lessons (GET /internal/subscriptions/{userId}/active)
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:8005
       # Service-to-service auth: vocabulary-service reports met game goals (T16); practice-service
-      # sends XP events to vocabulary-service (P2-B)
+      # sends XP events to vocabulary-service (P2-B) and calls subscription-service (P2-A1)
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
+      # P2-A1: admins bypass the Pro-lesson practice gate
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@parroto.com}
       
       # Azure Speech API (for Shadowing pronunciation scoring)
       AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}

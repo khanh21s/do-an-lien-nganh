@@ -8,8 +8,11 @@ import type {
   LessonAttempts,
   LessonStats,
   ListAttemptsParams,
+  MessageResponse,
   PageResponse,
   PracticeStats,
+  SentenceReviewItem,
+  SentenceReviewStats,
   ShadowingAttemptInput,
   ShadowingAttemptResult,
   ShadowingUploadUrlInput,
@@ -74,4 +77,16 @@ export const practiceApi = {
 
   // --- T11 additions ---
   // --- end T11 ---
+
+  // --- P2-A ---
+  /** Due sentences (oldest first) with sentence + lesson data; `limit` 1–100 (default 20). */
+  getReviewQueue: (limit?: number) =>
+    api
+      .get<SentenceReviewItem[]>('/practice/review/queue', { params: limit ? { limit } : undefined })
+      .then((r) => r.data),
+
+  getReviewStats: () => api.get<SentenceReviewStats>('/practice/review/stats').then((r) => r.data),
+
+  deleteReviewItem: (id: string) => api.delete<MessageResponse>(`/practice/review/${id}`).then((r) => r.data),
+  // --- end P2-A ---
 };

@@ -4,6 +4,7 @@ import { topicIcon, topicLabel } from '@/lib/constants';
 import type { LessonSummary } from '@/lib/types';
 import Link from 'next/link';
 import { formatNumber } from './lesson-progress';
+import { ProBadge } from './ProLessonLock';
 
 /** Minutes of a lesson: `durationMinutes`, else `duration` (seconds). */
 export function lessonMinutes(lesson: Pick<LessonSummary, 'duration' | 'durationMinutes'>): number | null {
@@ -19,9 +20,12 @@ export function LessonCard({ lesson }: { lesson: LessonSummary }) {
       <Card className="flex h-full flex-col transition-shadow hover:shadow-md">
         <div className="flex items-start justify-between gap-2">
           <h3 className="min-w-0 break-words font-semibold text-slate-900">{lesson.title}</h3>
-          <Badge tone="brand" className="shrink-0">
-            {lesson.cefrLevel}
-          </Badge>
+          <div className="flex shrink-0 items-center gap-1">
+            {lesson.isPro && <ProBadge />}
+            <Badge tone="brand" className="shrink-0">
+              {lesson.cefrLevel}
+            </Badge>
+          </div>
         </div>
         {lesson.description && <p className="mt-2 line-clamp-2 text-sm text-slate-500">{lesson.description}</p>}
         <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-4 text-xs text-slate-500">

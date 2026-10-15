@@ -15,6 +15,8 @@ public record ShadowingAttemptResponse(
         double duration,
         List<ShadowingWordScoreDto> wordScores,
         OffsetDateTime createdAt,
-        String scorer
+        String scorer,
+        /** P2-A2: effect on the sentence review queue, null when not queued. */
+        SentenceReviewOutcome review
 ) {
 }

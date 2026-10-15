@@ -1,6 +1,8 @@
 'use client';
 
+import { ProLessonLock } from '@/components/lessons/ProLessonLock';
 import { ShadowingPractice } from '@/components/practice/shadowing/ShadowingPractice';
+import { useLessonAccess } from '@/hooks/useLessonAccess';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { contentApi } from '@/lib/endpoints/content';
@@ -15,10 +17,12 @@ export default function ShadowingSentencePage() {
     queryKey: qk.lesson(params.id),
     queryFn: () => contentApi.getLesson(params.id),
   });
+  const access = useLessonAccess(lesson);
 
-  if (isLoading) return <FullPageSpinner />;
+  if (isLoading || !access.ready) return <FullPageSpinner />;
   if (isError) return <ErrorState error={error} onRetry={() => refetch()} backHref="/lessons" backLabel="Về danh sách bài học" />;
   if (!lesson) return <ErrorState notFound backHref="/lessons" backLabel="Về danh sách bài học" />;
+  if (access.locked) return <ProLessonLock lessonId={lesson.id} lessonTitle={lesson.title} />;
 
   const sentence = lesson.sentences.find((s) => s.id === params.sentenceId);
   if (!sentence) {

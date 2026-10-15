@@ -16,6 +16,8 @@ public record DictationAttemptResponse(
         int totalWords,
         int correctWords,
         List<WordScoreDto> wordScores,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        /** P2-A2: effect on the sentence review queue, null when not queued. */
+        SentenceReviewOutcome review
 ) {
 }
