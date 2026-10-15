@@ -17,7 +17,9 @@ public record CardResponse(
         String imageUrl,
         String partOfSpeech,
         /** user_vocab.id when the requesting user already learned this card, else null (VOC-04). */
-        UUID userVocabId
+        UUID userVocabId,
+        /** P2-C: group inside the deck, null = ungrouped. */
+        UUID groupId
 ) {
     public static CardResponse from(VocabCard card) {
         return CardResponse.builder()
@@ -31,11 +33,12 @@ public record CardResponse(
                 .imageUrl(card.getImageUrl())
                 .partOfSpeech(card.getPartOfSpeech())
                 .userVocabId(null)
+                .groupId(card.getGroupId())
                 .build();
     }
 
     public CardResponse withUserVocabId(UUID newUserVocabId) {
         return new CardResponse(id, word, meaning, example, exampleVi, ipa, audioUrl, imageUrl, partOfSpeech,
-                newUserVocabId);
+                newUserVocabId, groupId);
     }
 }

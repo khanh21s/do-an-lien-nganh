@@ -42,9 +42,10 @@ public class DeckController {
             @PathVariable UUID id,
             @RequestParam(required = false) String searchWord,
             @RequestParam(required = false) String seed,
+            @RequestParam(required = false) String groupId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit) {
-        return ResponseEntity.ok(deckService.getDeckCards(principal, id, searchWord, seed, page, limit));
+        return ResponseEntity.ok(deckService.getDeckCards(principal, id, searchWord, seed, groupId, page, limit));
     }
 
     @PostMapping
@@ -66,9 +67,10 @@ public class DeckController {
     @PostMapping("/{id}/cards")
     public ResponseEntity<List<CardResponse>> addCards(@AuthenticationPrincipal AuthenticatedUser principal,
                                                          @PathVariable UUID id,
+                                                         @RequestParam(required = false) UUID groupId,
                                                          @Valid @RequestBody CreateCardsRequest request) {
         adminGuard.requireAdmin(principal);
-        return ResponseEntity.status(HttpStatus.CREATED).body(deckService.addCards(id, request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(deckService.addCards(id, request, groupId));
     }
 
     @DeleteMapping("/{id}")

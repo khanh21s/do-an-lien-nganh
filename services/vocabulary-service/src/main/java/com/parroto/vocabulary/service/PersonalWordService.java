@@ -97,7 +97,8 @@ public class PersonalWordService {
         if (!card.getDeck().isOwnedBy(userId)) {
             throw ApiException.forbidden(MSG_NOT_CUSTOM);
         }
-        deckRepository.findByOwnerIdForUpdate(userId); // serialize with concurrent adds/edits
+        // Serialize with concurrent adds/edits of that deck (P2-C: a user may own several personal decks).
+        deckRepository.findByIdForUpdate(card.getDeck().getId());
 
         if (userVocabRepository.existsWordExcluding(userId, normalize(in.word()), userVocab.getId())) {
             throw ApiException.conflict(MSG_DUPLICATE);
@@ -111,7 +112,8 @@ public class PersonalWordService {
 
     /**
      * DELETE /vocabs/user/{userVocabId}: removes the word from the notebook. A word the user added
-     * also loses its card, and the personal deck's card_count is recomputed in the same transaction.
+     * to the notebook also loses its card, and the notebook's card_count is recomputed in the same
+     * transaction. Cards of the user's other personal decks (P2-C) keep their card.
      */
     @Transactional
     public void remove(UUID userId, UUID userVocabId) {
@@ -125,6 +127,12 @@ public class PersonalWordService {
             return;
         }
         VocabDeck locked = deckRepository.findByOwnerIdForUpdate(userId).orElse(deck);
+        if (!locked.getId().equals(deck.getId()) && !deck.isNotebookDeck()) {
+            // P2-C: a card of one of the user's other decks only leaves the notebook (SRS); the card stays.
+            userVocabRepository.delete(userVocab);
+            invalidateAfterCommit(userId, null);
+            return;
+        }
         userVocabRepository.delete(userVocab);
         cardRepository.delete(card);
         cardRepository.flush();
