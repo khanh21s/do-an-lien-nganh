@@ -141,7 +141,8 @@ if pro:
 
 # FIX-R1 error mapping
 for cid, path, exp in (("FIX-ERR-LES", "/content/lessons/abc", 400), ("FIX-ERR-DECK", "/vocabs/decks/xyz/cards", 400),
-                       ("FIX-ERR-DECKGET", "/vocabs/decks/22222222-2222-2222-2222-222222222201", None),
+                       # P2-C: deck detail (with groups) is a real endpoint now
+                       ("FIX-ERR-DECKGET", "/vocabs/decks/22222222-2222-2222-2222-222222222201", 200),
                        ("FIX-ERR-404", "/content/no-such-route", 404), ("FIX-ERR-404V", "/vocabs/nope/nope", 404),
                        ("FIX-ERR-GW404", "/nonexistent-route", 404)):
     s, b, _ = req("GET", path, token=TA)

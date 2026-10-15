@@ -80,6 +80,8 @@ services:
       dockerfile: auth-service/Dockerfile
     container_name: parroto-auth-service
     environment:
+      # Allowed CORS origin of this service (the gateway forwards the browser Origin header)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       # Server
       SERVER_PORT: 8001
       
@@ -150,6 +152,8 @@ services:
       dockerfile: content-service/Dockerfile
     container_name: parroto-content-service
     environment:
+      # Allowed CORS origin of this service (the gateway forwards the browser Origin header)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       SERVER_PORT: 8002
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/content_db
       SPRING_DATASOURCE_USERNAME: content_user
@@ -206,6 +210,8 @@ services:
       dockerfile: practice-service/Dockerfile
     container_name: parroto-practice-service
     environment:
+      # Allowed CORS origin of this service (the gateway forwards the browser Origin header)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       SERVER_PORT: 8003
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/practice_db
       SPRING_DATASOURCE_USERNAME: practice_user
@@ -278,6 +284,8 @@ services:
       dockerfile: vocabulary-service/Dockerfile
     container_name: parroto-vocabulary-service
     environment:
+      # Allowed CORS origin of this service (the gateway forwards the browser Origin header)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       SERVER_PORT: 8004
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/vocabulary_db
       SPRING_DATASOURCE_USERNAME: vocabulary_user
@@ -328,6 +336,8 @@ services:
       dockerfile: subscription-service/Dockerfile
     container_name: parroto-subscription-service
     environment:
+      # Allowed CORS origin of this service (the gateway forwards the browser Origin header)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       SERVER_PORT: 8005
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/subscription_db
       SPRING_DATASOURCE_USERNAME: subscription_user
