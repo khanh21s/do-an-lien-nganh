@@ -177,7 +177,7 @@ class LessonServiceSentenceTest {
 
     @Test
     void updateLessonAppliesFieldsAndEvictsCaches() {
-        var res = service.updateLesson(lessonId, new UpdateLessonRequest("New title", "desc", "travel", "B2"));
+        var res = service.updateLesson(lessonId, new UpdateLessonRequest("New title", "desc", "travel", "B2", null));
 
         assertThat(res.title()).isEqualTo("New title");
         assertThat(res.cefrLevel()).isEqualTo("B2");

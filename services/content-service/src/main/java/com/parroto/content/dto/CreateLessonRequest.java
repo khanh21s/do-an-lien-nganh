@@ -11,6 +11,8 @@ public record CreateLessonRequest(
         String topicTag,
         String description,
         @NotBlank String audioUrl,
-        Integer duration
+        Integer duration,
+        /** P2-A1: optional, null → false. */
+        Boolean isPro
 ) {
 }
