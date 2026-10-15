@@ -11,6 +11,7 @@ import com.parroto.vocabulary.repository.GameAnswerRepository;
 import com.parroto.vocabulary.repository.GameBadgeRepository;
 import com.parroto.vocabulary.repository.GameProfileRepository;
 import com.parroto.vocabulary.repository.GameSessionRepository;
+import com.parroto.vocabulary.service.gamification.GamificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -41,6 +42,7 @@ class GameProgressServiceTest {
     private GameSessionRepository sessionRepository;
     private GameAnswerRepository answerRepository;
     private PracticeClient practiceClient;
+    private GamificationService gamificationService;
     private GameProgressService service;
     private GameProfile profile;
 
@@ -51,8 +53,9 @@ class GameProgressServiceTest {
         sessionRepository = mock(GameSessionRepository.class);
         answerRepository = mock(GameAnswerRepository.class);
         practiceClient = mock(PracticeClient.class);
+        gamificationService = mock(GamificationService.class);
         service = new GameProgressService(profileRepository, badgeRepository, sessionRepository, answerRepository,
-                practiceClient, clock);
+                practiceClient, gamificationService, clock);
         profile = GameProfile.builder().userId(userId).xp(0L).build();
         when(profileRepository.findForUpdate(userId)).thenReturn(Optional.of(profile));
         when(profileRepository.findById(userId)).thenReturn(Optional.of(profile));
@@ -86,6 +89,17 @@ class GameProgressServiceTest {
     }
 
     @Test
+    void progressReportsTheAppWideXpTotal() {
+        // P2-B: game XP 50 in game_profile, but 450 XP in the shared ledger (dictation, reviews …)
+        profile.setXp(50L);
+        when(gamificationService.totalXp(userId)).thenReturn(450L);
+        Progress p = service.progress(userId);
+        assertThat(p.xp()).isEqualTo(450);
+        assertThat(p.level()).isEqualTo(3);
+        assertThat(p.levelXp()).isEqualTo(150);
+    }
+
+    @Test
     void todayAndWeekUseVietnamTime() {
         assertThat(service.today()).isEqualTo(LocalDate.of(2026, 10, 14));
         assertThat(GameProgressService.weekStart(LocalDate.of(2026, 10, 18))).isEqualTo(LocalDate.of(2026, 10, 12));
@@ -99,6 +113,8 @@ class GameProgressServiceTest {
         service.onRoundFinished(r, OffsetDateTime.now(clock));
 
         assertThat(profile.getXp()).isEqualTo(250);
+        // P2-B: the round's score goes to the app-wide XP ledger, keyed by the round
+        verify(gamificationService).recordGameRound(userId, r.getId(), 250, LocalDate.of(2026, 10, 14));
         verify(practiceClient).recordGoalDay(userId, LocalDate.of(2026, 10, 14));
         assertThat(profile.getGoalRecordedDay()).isEqualTo(LocalDate.of(2026, 10, 14));
         assertThat(badges).extracting(GameBadge::getCode).containsExactlyInAnyOrder("FIRST_GAME", "COMBO_10");

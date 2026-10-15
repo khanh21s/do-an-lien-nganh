@@ -13,6 +13,8 @@ import com.parroto.vocabulary.repository.GameAnswerRepository;
 import com.parroto.vocabulary.repository.GameBadgeRepository;
 import com.parroto.vocabulary.repository.GameProfileRepository;
 import com.parroto.vocabulary.repository.GameSessionRepository;
+import com.parroto.vocabulary.service.gamification.GamificationService;
+import com.parroto.vocabulary.service.gamification.XpRules;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,7 +38,9 @@ import java.util.stream.Collectors;
 /**
  * Long-term progress of "Dịch nhanh" players (T16):
  * <ul>
- *   <li>XP = sum of finished round scores; level L → L+1 needs 100·L XP (level L starts at 50·L·(L−1)).</li>
+ *   <li>XP: P2-B made XP app-wide ({@link GamificationService}); a finished round adds its score to the
+ *       shared ledger and {@link Progress#xp()} is the shared total. Level L → L+1 needs 100·L XP
+ *       (level L starts at 50·L·(L−1)). {@code game_profile.xp} still sums the game rounds only.</li>
  *   <li>Daily points goal (100/200/300/500): when the day's finished rounds reach it, the day is
  *       reported to practice-service so it counts for the practice streak.</li>
  *   <li>Badges ({@link BadgeCatalog}) checked when a round finishes.</li>
@@ -60,23 +64,26 @@ public class GameProgressService {
     private final GameSessionRepository sessionRepository;
     private final GameAnswerRepository answerRepository;
     private final PracticeClient practiceClient;
+    private final GamificationService gamificationService;
     private final Clock clock;
 
     @Autowired
     public GameProgressService(GameProfileRepository profileRepository, GameBadgeRepository badgeRepository,
                                GameSessionRepository sessionRepository, GameAnswerRepository answerRepository,
-                               PracticeClient practiceClient) {
-        this(profileRepository, badgeRepository, sessionRepository, answerRepository, practiceClient, Clock.systemUTC());
+                               PracticeClient practiceClient, GamificationService gamificationService) {
+        this(profileRepository, badgeRepository, sessionRepository, answerRepository, practiceClient,
+                gamificationService, Clock.systemUTC());
     }
 
     GameProgressService(GameProfileRepository profileRepository, GameBadgeRepository badgeRepository,
                         GameSessionRepository sessionRepository, GameAnswerRepository answerRepository,
-                        PracticeClient practiceClient, Clock clock) {
+                        PracticeClient practiceClient, GamificationService gamificationService, Clock clock) {
         this.profileRepository = profileRepository;
         this.badgeRepository = badgeRepository;
         this.sessionRepository = sessionRepository;
         this.answerRepository = answerRepository;
         this.practiceClient = practiceClient;
+        this.gamificationService = gamificationService;
         this.clock = clock;
     }
 
@@ -84,15 +91,11 @@ public class GameProgressService {
 
     /** XP at which {@code level} starts: 0, 100, 300, 600, 1000 … */
     public static long levelStart(int level) {
-        return 50L * level * (level - 1);
+        return XpRules.levelStart(level);
     }
 
     public static int levelFor(long xp) {
-        int level = 1;
-        while (levelStart(level + 1) <= Math.max(xp, 0)) {
-            level++;
-        }
-        return level;
+        return XpRules.levelFor(xp);
     }
 
     public LocalDate today() {
@@ -115,12 +118,16 @@ public class GameProgressService {
                 .orElseGet(() -> GameProfile.builder().userId(userId).build());
     }
 
+    /** Level/XP are the app-wide numbers (P2-B); the daily points goal stays game-only. */
     public Progress progress(UUID userId) {
-        return progress(profile(userId), sessionRepository.pointsOn(userId, today()));
+        return progress(profile(userId), gamificationService.totalXp(userId), sessionRepository.pointsOn(userId, today()));
     }
 
     static Progress progress(GameProfile profile, long todayPoints) {
-        long xp = profile.getXp() == null ? 0 : profile.getXp();
+        return progress(profile, profile.getXp() == null ? 0 : profile.getXp(), todayPoints);
+    }
+
+    static Progress progress(GameProfile profile, long xp, long todayPoints) {
         int level = levelFor(xp);
         return Progress.builder()
                 .xp(xp)
@@ -143,7 +150,7 @@ public class GameProgressService {
         long todayPoints = sessionRepository.pointsOn(userId, today());
         reportGoalIfMet(profile, todayPoints, today());
         profileRepository.save(profile);
-        return progress(profile, todayPoints);
+        return progress(profile, gamificationService.totalXp(userId), todayPoints);
     }
 
     /** Reports the day to practice-service once per day when the goal is met (retried on failure). */
@@ -160,6 +167,8 @@ public class GameProgressService {
     void onRoundFinished(GameSession session, OffsetDateTime now) {
         GameProfile profile = profileForUpdate(session.getUserId());
         profile.setXp(profile.getXp() + session.getScore());
+        // P2-B: the round's score is also its XP in the app-wide ledger (once per round)
+        gamificationService.recordGameRound(session.getUserId(), session.getId(), session.getScore(), session.getPlayDate());
         LocalDate today = today();
         reportGoalIfMet(profile, sessionRepository.pointsOn(session.getUserId(), today), today);
         profileRepository.save(profile);
