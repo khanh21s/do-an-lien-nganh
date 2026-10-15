@@ -6,6 +6,7 @@ import com.parroto.vocabulary.dto.*;
 import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.vocabulary.service.PersonalWordService;
 import com.parroto.vocabulary.service.ReviewService;
+import com.parroto.vocabulary.service.StudyService;
 import com.parroto.vocabulary.service.gamification.GamificationService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -28,12 +29,22 @@ public class ReviewController {
     private final PersonalWordService personalWordService;
     // --- P2-B ---
     private final GamificationService gamificationService;
+    // --- P2-anki ---
+    private final StudyService studyService;
 
     public ReviewController(ReviewService reviewService, PersonalWordService personalWordService,
-                            GamificationService gamificationService) {
+                            GamificationService gamificationService, StudyService studyService) {
         this.reviewService = reviewService;
         this.personalWordService = personalWordService;
         this.gamificationService = gamificationService;
+        this.studyService = studyService;
+    }
+
+    /** P2-anki: the global review session ("Ôn tập"): counters + the next card with server previews. */
+    @GetMapping("/study")
+    public ResponseEntity<StudyDtos.StudySession> study(@AuthenticationPrincipal AuthenticatedUser principal,
+                                                        @RequestParam(required = false) String seed) {
+        return ResponseEntity.ok(studyService.globalSession(principal.userUuid(), seed));
     }
 
     @GetMapping("/review-queue")
@@ -44,7 +55,7 @@ public class ReviewController {
     @PostMapping("/review")
     public ResponseEntity<SubmitReviewResponse> submitReview(@AuthenticationPrincipal AuthenticatedUser principal,
                                                                @Valid @RequestBody SubmitReviewRequest request) {
-        SubmitReviewResponse response = reviewService.submitReview(principal.userUuid(), request);
+        SubmitReviewResponse response = studyService.grade(principal, request);
         // P2-B: +2 XP once per card per day, after the review itself is committed; a ledger
         // failure must not turn a saved review into an error.
         try {

@@ -93,7 +93,9 @@ class PersonalWordServiceTest {
         assertThat(r.example()).isEqualTo("What a serendipity!");
         assertThat(r.exampleVi()).isNull();
         assertThat(r.repetitions()).isZero();
-        assertThat(r.nextReviewAt()).isBeforeOrEqualTo(OffsetDateTime.now()); // due now
+        assertThat(r.nextReviewAt()).isBeforeOrEqualTo(OffsetDateTime.now());
+        assertThat(r.state()).isEqualTo("NEW"); // P2-anki: a new card in the review session
+        assertThat(r.intervalDays()).isZero();
         assertThat(deck.getCardCount()).isEqualTo(1);
         verify(userVocabRepository).existsWord(userId, "serendipity");
         verify(cacheService).invalidateByPattern("vocab:user:" + userId + ":*");

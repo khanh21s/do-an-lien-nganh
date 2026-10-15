@@ -18,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.UUID;
@@ -26,7 +25,7 @@ import java.util.UUID;
 /**
  * T13: words a user adds to the notebook. Each one is a {@link VocabCard} in the user's hidden
  * personal deck ({@code vocab_deck.owner_id = userId}, created lazily) plus a {@link UserVocab}
- * due immediately, so it is reviewed with SM-2 like any other card. Also owns notebook removal.
+ * in state NEW, so it shows up as a new card in the review session (P2-anki scheduler). Also owns notebook removal.
  */
 @Service
 public class PersonalWordService {
@@ -72,13 +71,11 @@ public class PersonalWordService {
         apply(card, in);
         card = cardRepository.save(card);
 
+        // A NEW card (P2-anki): it appears as "new" in the review session at once.
         UserVocab userVocab = UserVocab.builder()
                 .userId(userId)
                 .card(card)
-                .nextReviewAt(OffsetDateTime.now()) // due now -> appears in the review queue at once
-                .intervalDays(1)
-                .easeFactor(BigDecimal.valueOf(2.5))
-                .repetitions(0)
+                .nextReviewAt(OffsetDateTime.now())
                 .build();
         userVocab = userVocabRepository.save(userVocab);
 

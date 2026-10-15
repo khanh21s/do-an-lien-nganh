@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -152,8 +151,7 @@ public class VocabImportService {
             OffsetDateTime now = OffsetDateTime.now();
             List<UserVocab> schedule = new ArrayList<>(saved.size());
             for (VocabCard card : saved) {
-                schedule.add(UserVocab.builder().userId(deck.getOwnerId()).card(card).nextReviewAt(now)
-                        .intervalDays(1).easeFactor(BigDecimal.valueOf(2.5)).repetitions(0).build());
+                schedule.add(UserVocab.builder().userId(deck.getOwnerId()).card(card).nextReviewAt(now).build()); // NEW card
             }
             userVocabRepository.saveAll(schedule);
         }
