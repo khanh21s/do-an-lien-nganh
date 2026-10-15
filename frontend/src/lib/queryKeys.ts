@@ -112,4 +112,17 @@ export const qk = {
   gameLeaderboardAll: ['game-leaderboard'] as const,
   gameLeaderboard: (board: GameBoard) => ['game-leaderboard', board] as const,
   // --- end T16 ---
+
+  // --- P2-C ---
+  myDecks: ['my-decks'] as const,
+  deckDetailAll: ['deck-detail'] as const,
+  deckDetail: (deckId: string) => ['deck-detail', deckId] as const,
+  /** Study pages with the group filter; prefix stays `deck-cards` so deck invalidation refreshes them. */
+  deckCardsGroupInfinite: (deckId: string, seed: string, groupId: string | null) =>
+    ['deck-cards', deckId, 'infinite', seed, groupId ?? 'all'] as const,
+  /** Card manager of a personal/public deck (paged, searchable, group filter). */
+  deckCardsManage: (deckId: string, params: import('./types').DeckCardsQuery = {}) =>
+    ['deck-cards', deckId, 'manage', params] as const,
+  dictionary: (word: string) => ['dictionary', word] as const,
+  // --- end P2-C ---
 };

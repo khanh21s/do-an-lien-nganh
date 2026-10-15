@@ -81,4 +81,75 @@ export const vocabularyApi = {
   updateDeck: (deckId: string, data: import('@/lib/types').UpdateDeckInput) =>
     api.put<VocabDeck>(`/vocabs/decks/${deckId}`, data).then((r) => r.data),
   // --- end T14 ---
+
+  // --- P2-C ---
+  /** Deck cards with the group filter (`groupId`: a group id or `UNGROUPED`); `seed` keeps the shuffle. */
+  listDeckCards: (deckId: string, params: import('@/lib/types').DeckCardsQuery = {}) =>
+    api.get<PageResponse<VocabCard>>(`/vocabs/decks/${deckId}/cards`, { params }).then((r) => r.data),
+
+  /** Public deck, or a personal deck of the caller (others → 404), with its groups. */
+  getDeckDetail: (deckId: string) =>
+    api.get<import('@/lib/types').DeckDetail>(`/vocabs/decks/${deckId}`).then((r) => r.data),
+
+  createGroup: (deckId: string, data: import('@/lib/types').GroupInput) =>
+    api.post<import('@/lib/types').VocabGroup>(`/vocabs/decks/${deckId}/groups`, data).then((r) => r.data),
+
+  updateGroup: (deckId: string, groupId: string, data: import('@/lib/types').GroupInput) =>
+    api.put<import('@/lib/types').VocabGroup>(`/vocabs/decks/${deckId}/groups/${groupId}`, data).then((r) => r.data),
+
+  /** Cards of the group stay in the deck, ungrouped. */
+  deleteGroup: (deckId: string, groupId: string) =>
+    api.delete<MessageResponse>(`/vocabs/decks/${deckId}/groups/${groupId}`).then((r) => r.data),
+
+  /** `groupIds` must list every group of the deck once, in the new order. */
+  reorderGroups: (deckId: string, groupIds: string[]) =>
+    api
+      .put<import('@/lib/types').VocabGroup[]>(`/vocabs/decks/${deckId}/groups/order`, { groupIds })
+      .then((r) => r.data),
+
+  /** `groupId` null = ungroup. */
+  moveCardsToGroup: (deckId: string, cardIds: string[], groupId: string | null) =>
+    api
+      .put<import('@/lib/types').MoveCardsResult>(`/vocabs/decks/${deckId}/cards/group`, { cardIds, groupId })
+      .then((r) => r.data),
+
+  listMyDecks: () => api.get<import('@/lib/types').PersonalDeckList>('/vocabs/user/decks').then((r) => r.data),
+
+  createMyDeck: (data: import('@/lib/types').PersonalDeckInput) =>
+    api.post<import('@/lib/types').PersonalDeck>('/vocabs/user/decks', data).then((r) => r.data),
+
+  updateMyDeck: (deckId: string, data: import('@/lib/types').PersonalDeckInput) =>
+    api.put<import('@/lib/types').PersonalDeck>(`/vocabs/user/decks/${deckId}`, data).then((r) => r.data),
+
+  deleteMyDeck: (deckId: string) => api.delete<MessageResponse>(`/vocabs/user/decks/${deckId}`).then((r) => r.data),
+
+  /** Notebook: also schedules the word for review (409 when it is already in the notebook). */
+  addMyCard: (deckId: string, data: import('@/lib/types').PersonalCardInput) =>
+    api.post<VocabCard>(`/vocabs/user/decks/${deckId}/cards`, data).then((r) => r.data),
+
+  updateMyCard: (cardId: string, data: import('@/lib/types').PersonalCardInput) =>
+    api.put<VocabCard>(`/vocabs/user/cards/${cardId}`, data).then((r) => r.data),
+
+  deleteMyCard: (cardId: string) => api.delete<MessageResponse>(`/vocabs/user/cards/${cardId}`).then((r) => r.data),
+
+  /** Parses a CSV/TXT/PDF file (≤ 2 MB) without saving; with `deckId`, words already there are flagged. */
+  importPreview: (file: File, deckId?: string) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api
+      .post<import('@/lib/types').ImportPreview>('/vocabs/decks/import/preview', form, {
+        params: deckId ? { deckId } : undefined,
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then((r) => r.data);
+  },
+
+  importCommit: (deckId: string, data: import('@/lib/types').ImportCommitInput) =>
+    api.post<import('@/lib/types').ImportCommitResult>(`/vocabs/decks/${deckId}/import`, data).then((r) => r.data),
+
+  lookupWord: (word: string) =>
+    api
+      .get<import('@/lib/types').DictionaryEntry>(`/vocabs/dictionary/${encodeURIComponent(word)}`)
+      .then((r) => r.data),
+  // --- end P2-C ---
 };
