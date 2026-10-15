@@ -41,8 +41,10 @@ export const vocabularyApi = {
 
   deleteCard: (cardId: string) => api.delete<MessageResponse>(`/vocabs/cards/${cardId}`).then((r) => r.data),
 
+  /** Legacy due list (learning + review); the review page uses `getStudy`. */
   getReviewQueue: () => api.get<ReviewQueueResponse>('/vocabs/user/review-queue').then((r) => r.data),
 
+  /** P2-anki: grade a card (rating 1–4); the response carries the refreshed session. */
   submitReview: (data: SubmitReviewInput) =>
     api.post<SubmitReviewResult>('/vocabs/user/review', data).then((r) => r.data),
 
@@ -152,4 +154,16 @@ export const vocabularyApi = {
       .get<import('@/lib/types').DictionaryEntry>(`/vocabs/dictionary/${encodeURIComponent(word)}`)
       .then((r) => r.data),
   // --- end P2-C ---
+
+  // --- P2-anki ---
+  /** Anki-style session of a deck: counters + next card with server previews (401 guests, 403 Pro). */
+  getDeckStudy: (deckId: string, params: import('@/lib/types').StudyParams = {}) =>
+    api
+      .get<import('@/lib/types').StudySession>(`/vocabs/decks/${deckId}/study`, { params })
+      .then((r) => r.data),
+
+  /** Global "Ôn tập" session over all the user's cards (notebook words are new cards). */
+  getStudy: (params: Pick<import('@/lib/types').StudyParams, 'seed'> = {}) =>
+    api.get<import('@/lib/types').StudySession>('/vocabs/user/study', { params }).then((r) => r.data),
+  // --- end P2-anki ---
 };

@@ -409,6 +409,8 @@ export interface ReviewQueueItem {
   repetitions: number;
   easeFactor: number;
   intervalDays: number;
+  /** P2-anki: LEARNING, REVIEW or RELEARNING. */
+  state?: CardStateName;
 }
 
 export interface ReviewQueueResponse {
@@ -417,23 +419,100 @@ export interface ReviewQueueResponse {
   totalCards: number;
 }
 
-/** Again = 1, Hard = 3, Good = 4, Easy = 5 (architecture §4.6); BE accepts 0–5. */
-export type ReviewQuality = 0 | 1 | 2 | 3 | 4 | 5;
-
+/**
+ * Body of `POST /vocabs/user/review` (P2-anki): a card the user has (`userVocabId`) or a deck card
+ * (`cardId`, its row is created on the first grade); `rating` 1 Again, 2 Hard, 3 Good, 4 Easy.
+ * `deckId`/`groupId`/`seed` pick the session whose counters and next card come back
+ * (none = the global "Ôn tập" session).
+ */
 export interface SubmitReviewInput {
-  userVocabId: string;
-  /** 0–5, see `ReviewQuality`. */
-  quality: number;
+  userVocabId?: string | null;
+  cardId?: string;
+  rating: 1 | 2 | 3 | 4;
+  deckId?: string;
+  groupId?: string;
+  seed?: string;
 }
 
 export interface SubmitReviewResult {
   userVocabId: string;
-  nextReviewAt: string;
-  easeFactor: number;
+  cardId: string;
+  rating: number;
+  state: CardStateName;
+  step: number;
+  intervalDays: number;
+  /** Same as `intervalDays` (Phase-1 name). */
   interval: number;
+  easeFactor: number;
   repetitions: number;
+  lapses: number;
+  nextReviewAt: string;
+  /** The label the button showed ("10 phút", "4 ngày"). */
+  label: string;
   message: string | null;
+  session: StudySession;
 }
+
+// --- P2-anki ---
+export type CardStateName = 'NEW' | 'LEARNING' | 'REVIEW' | 'RELEARNING';
+/** Counter a card belongs to: Mới (blue), Đang học (red), Ôn (green). */
+export type StudyQueue = 'new' | 'learning' | 'review';
+
+export interface StudyCounts {
+  new: number;
+  learning: number;
+  review: number;
+}
+
+/** What one button does, computed by vocabulary-service. */
+export interface RatingPreview {
+  rating: number;
+  label: string;
+  state: CardStateName;
+  intervalDays: number;
+  nextReviewAt: string;
+}
+
+/** `StudyDtos.StudyCard`: a card of the session with its four previews. */
+export interface StudyCardItem {
+  /** null = deck card never graded (grade it with `cardId`). */
+  userVocabId: string | null;
+  cardId: string;
+  deckId: string | null;
+  groupId: string | null;
+  word: string;
+  meaning: string;
+  example: string | null;
+  exampleVi: string | null;
+  ipa: string | null;
+  partOfSpeech: string | null;
+  audioUrl: string | null;
+  imageUrl: string | null;
+  state: CardStateName;
+  queue: StudyQueue;
+  intervalDays: number;
+  easeFactor: number;
+  lapses: number;
+  repetitions: number;
+  nextReviewAt: string | null;
+  /** Again, Hard, Good, Easy. */
+  previews: RatingPreview[];
+}
+
+/** `GET /vocabs/decks/{id}/study` and `GET /vocabs/user/study`. `card` null = done for today. */
+export interface StudySession {
+  counts: StudyCounts;
+  card: StudyCardItem | null;
+  /** When nothing is left: the time the next learning/review card falls due (null = none scheduled). */
+  nextDueAt: string | null;
+  now: string;
+}
+
+export interface StudyParams {
+  groupId?: string;
+  seed?: string;
+}
+// --- end P2-anki ---
 
 export interface AddFromLessonResult {
   userVocabId: string;
@@ -560,6 +639,11 @@ export interface LearnedWordSchedule {
   nextReviewAt?: string | null;
   intervalDays?: number | null;
   easeFactor?: number | null;
+  /** P2-anki */
+  state?: CardStateName;
+  lapses?: number;
+  /** "4 ngày", "1,2 tháng" for review cards, null while new/learning. */
+  intervalLabel?: string | null;
 }
 // --- end T10 ---
 
