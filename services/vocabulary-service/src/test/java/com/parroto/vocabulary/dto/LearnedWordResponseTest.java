@@ -1,5 +1,6 @@
 package com.parroto.vocabulary.dto;
 
+import com.parroto.vocabulary.entity.CardState;
 import com.parroto.vocabulary.entity.UserVocab;
 import com.parroto.vocabulary.entity.VocabCard;
 import com.parroto.vocabulary.entity.VocabDeck;
@@ -18,15 +19,17 @@ class LearnedWordResponseTest {
         OffsetDateTime next = OffsetDateTime.parse("2026-10-20T08:00:00+07:00");
         VocabCard card = VocabCard.builder().id(UUID.randomUUID()).word("apple").meaning("quả táo").build();
         UserVocab uv = UserVocab.builder().id(UUID.randomUUID()).userId(UUID.randomUUID()).card(card)
-                .repetitions(3).intervalDays(25).easeFactor(new BigDecimal("2.36")).nextReviewAt(next).quality(3)
-                .build();
+                .state(CardState.REVIEW).repetitions(3).intervalDays(36).easeFactor(new BigDecimal("2.36"))
+                .nextReviewAt(next).quality(3).build();
 
         LearnedWordResponse r = LearnedWordResponse.from(uv);
 
         assertThat(r.userVocabId()).isEqualTo(uv.getId());
         assertThat(r.cardId()).isEqualTo(card.getId());
         assertThat(r.nextReviewAt()).isEqualTo(next);
-        assertThat(r.intervalDays()).isEqualTo(25);
+        assertThat(r.intervalDays()).isEqualTo(36);
+        assertThat(r.intervalLabel()).isEqualTo("1,2 tháng");
+        assertThat(r.state()).isEqualTo("REVIEW");
         assertThat(r.easeFactor()).isEqualTo(2.36);
         assertThat(r.repetitions()).isEqualTo(3);
         assertThat(r.accuracy()).isEqualTo(100.0);
@@ -46,6 +49,8 @@ class LearnedWordResponseTest {
         LearnedWordResponse fromDeck = LearnedWordResponse.from(UserVocab.builder().userId(userId).card(pubCard).build());
 
         assertThat(mine.custom()).isTrue();
+        assertThat(mine.state()).isEqualTo("NEW");
+        assertThat(mine.intervalLabel()).isNull();
         assertThat(mine.ipa()).isEqualTo("/w/");
         assertThat(mine.partOfSpeech()).isEqualTo("noun");
         assertThat(mine.example()).isEqualTo("ex");

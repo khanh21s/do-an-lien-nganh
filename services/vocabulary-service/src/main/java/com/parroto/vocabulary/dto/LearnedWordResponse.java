@@ -1,6 +1,8 @@
 package com.parroto.vocabulary.dto;
 
+import com.parroto.vocabulary.entity.CardState;
 import com.parroto.vocabulary.entity.UserVocab;
+import com.parroto.vocabulary.service.srs.IntervalLabels;
 import com.parroto.vocabulary.entity.VocabCard;
 import lombok.Builder;
 
@@ -27,7 +29,9 @@ public record LearnedWordResponse(
         String exampleVi,
         /** P2-anki: NEW, LEARNING, REVIEW or RELEARNING. */
         String state,
-        int lapses
+        int lapses,
+        /** Interval as shown on the buttons ("4 ngày", "1,2 tháng"); null while the card is new/learning. */
+        String intervalLabel
 ) {
     /** Reads {@code uv.card} and {@code uv.card.deck}: fetch both with the query (no N+1). */
     public static LearnedWordResponse from(UserVocab uv) {
@@ -50,6 +54,8 @@ public record LearnedWordResponse(
                 .exampleVi(card.getExampleVi())
                 .state(uv.getState() != null ? uv.getState().name() : "NEW")
                 .lapses(uv.getLapses() != null ? uv.getLapses() : 0)
+                .intervalLabel(uv.getState() == CardState.REVIEW && uv.getIntervalDays() != null && uv.getIntervalDays() > 0
+                        ? IntervalLabels.days(uv.getIntervalDays()) : null)
                 .build();
     }
 }
