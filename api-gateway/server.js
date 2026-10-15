@@ -99,6 +99,9 @@ app.use('/vocabs/cards', verifyToken, proxyTo(SERVICES.vocabulary, { serviceName
 app.use('/vocabs/user', verifyToken, userLimiter, proxyTo(SERVICES.vocabulary, { serviceName: 'vocabulary' }));
 // T15 "Dịch nhanh" game rounds (scored server-side) always require a token.
 app.use('/vocabs/games', verifyToken, userLimiter, proxyTo(SERVICES.vocabulary, { serviceName: 'vocabulary' }));
+// P2-B app-wide XP / diamonds / check-in / missions / XP leaderboard always require a token.
+// (vocabulary-service's /internal/** is never routed: it is not under /vocabs.)
+app.use('/vocabs/gamification', verifyToken, userLimiter, proxyTo(SERVICES.vocabulary, { serviceName: 'vocabulary' }));
 
 // ==================== SUBSCRIPTION SERVICE ====================
 // Public: plan listing, the VNPay browser return URL, and the VNPay server-to-server IPN (SUB-02),
