@@ -75,8 +75,9 @@ services:
   # Auth Service - Port 8001
   auth-service:
     build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+      # Context = services/ so the Dockerfile can build the shared module services/common first.
+      context: ./services
+      dockerfile: auth-service/Dockerfile
     container_name: parroto-auth-service
     environment:
       # Server
@@ -144,8 +145,9 @@ services:
   # Content Service - Port 8002
   content-service:
     build:
-      context: ./services/content-service
-      dockerfile: Dockerfile
+      # Context = services/ so the Dockerfile can build the shared module services/common first.
+      context: ./services
+      dockerfile: content-service/Dockerfile
     container_name: parroto-content-service
     environment:
       SERVER_PORT: 8002
@@ -199,8 +201,9 @@ services:
   # Practice Service - Port 8003
   practice-service:
     build:
-      context: ./services/practice-service
-      dockerfile: Dockerfile
+      # Context = services/ so the Dockerfile can build the shared module services/common first.
+      context: ./services
+      dockerfile: practice-service/Dockerfile
     container_name: parroto-practice-service
     environment:
       SERVER_PORT: 8003
@@ -262,8 +265,9 @@ services:
   # Vocabulary Service - Port 8004
   vocabulary-service:
     build:
-      context: ./services/vocabulary-service
-      dockerfile: Dockerfile
+      # Context = services/ so the Dockerfile can build the shared module services/common first.
+      context: ./services
+      dockerfile: vocabulary-service/Dockerfile
     container_name: parroto-vocabulary-service
     environment:
       SERVER_PORT: 8004
@@ -310,8 +314,9 @@ services:
   # Subscription Service - Port 8005
   subscription-service:
     build:
-      context: ./services/subscription-service
-      dockerfile: Dockerfile
+      # Context = services/ so the Dockerfile can build the shared module services/common first.
+      context: ./services
+      dockerfile: subscription-service/Dockerfile
     container_name: parroto-subscription-service
     environment:
       SERVER_PORT: 8005

@@ -1,7 +1,8 @@
 package com.parroto.subscription.controller;
 
+import com.parroto.common.dto.PageResponse;
 import com.parroto.subscription.dto.*;
-import com.parroto.subscription.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.subscription.service.PlanService;
 import com.parroto.subscription.service.SepayService;
 import com.parroto.subscription.service.SubscriptionService;

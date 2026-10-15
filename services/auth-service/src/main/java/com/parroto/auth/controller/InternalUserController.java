@@ -1,7 +1,7 @@
 package com.parroto.auth.controller;
 
 import com.parroto.auth.dto.InternalUserResponse;
-import com.parroto.auth.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.auth.repository.UserRepository;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

@@ -2,11 +2,11 @@ package com.parroto.subscription.controller;
 
 import com.parroto.subscription.dto.AdminStatsResponse;
 import com.parroto.subscription.dto.AdminTransactionResponse;
-import com.parroto.subscription.dto.PageResponse;
+import com.parroto.common.dto.PageResponse;
 import com.parroto.subscription.dto.UserPremiumStatusResponse;
 import com.parroto.subscription.dto.UserStatusRequest;
-import com.parroto.subscription.security.AdminGuard;
-import com.parroto.subscription.security.AuthenticatedUser;
+import com.parroto.common.security.AdminGuard;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.subscription.service.AdminReportService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;

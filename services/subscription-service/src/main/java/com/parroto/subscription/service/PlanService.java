@@ -3,7 +3,7 @@ package com.parroto.subscription.service;
 import com.parroto.subscription.dto.PlanResponse;
 import com.parroto.subscription.dto.PlansListResponse;
 import com.parroto.subscription.entity.Plan;
-import com.parroto.subscription.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.subscription.repository.PlanRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

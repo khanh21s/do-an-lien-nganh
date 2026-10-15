@@ -1,11 +1,12 @@
 package com.parroto.vocabulary.service;
 
+import com.parroto.common.cache.CacheService;
 import com.parroto.vocabulary.dto.CreatePersonalWordRequest;
 import com.parroto.vocabulary.dto.LearnedWordResponse;
 import com.parroto.vocabulary.entity.UserVocab;
 import com.parroto.vocabulary.entity.VocabCard;
 import com.parroto.vocabulary.entity.VocabDeck;
-import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.vocabulary.repository.UserVocabRepository;
 import com.parroto.vocabulary.repository.VocabCardRepository;
 import com.parroto.vocabulary.repository.VocabDeckRepository;

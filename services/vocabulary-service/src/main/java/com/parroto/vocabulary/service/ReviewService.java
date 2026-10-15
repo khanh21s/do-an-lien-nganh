@@ -1,9 +1,10 @@
 package com.parroto.vocabulary.service;
 
+import com.parroto.common.dto.PageResponse;
 import com.parroto.vocabulary.dto.*;
 import com.parroto.vocabulary.entity.UserVocab;
 import com.parroto.vocabulary.entity.VocabCard;
-import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.vocabulary.repository.UserVocabRepository;
 import com.parroto.vocabulary.repository.VocabCardRepository;
 import org.springframework.data.domain.Page;

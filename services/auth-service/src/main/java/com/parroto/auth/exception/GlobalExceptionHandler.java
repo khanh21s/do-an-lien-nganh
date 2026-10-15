@@ -1,6 +1,7 @@
 package com.parroto.auth.exception;
 
-import com.parroto.auth.dto.ErrorResponse;
+import com.parroto.common.exception.ApiException;
+import com.parroto.common.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

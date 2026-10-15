@@ -2,7 +2,7 @@ package com.parroto.auth.service;
 
 import com.parroto.auth.dto.AuthResponse;
 import com.parroto.auth.entity.User;
-import com.parroto.auth.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.auth.repository.UserRepository;
 import com.parroto.auth.security.JwtService;
 import io.jsonwebtoken.Claims;

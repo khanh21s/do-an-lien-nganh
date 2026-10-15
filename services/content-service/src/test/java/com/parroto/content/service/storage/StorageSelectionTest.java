@@ -1,6 +1,6 @@
 package com.parroto.content.service.storage;
 
-import com.parroto.content.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockHttpServletResponse;

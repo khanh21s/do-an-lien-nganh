@@ -28,6 +28,13 @@
   </properties>
 
   <dependencies>
+    <!-- services/common: JWT validation, AdminGuard, InternalTokenFilter, DTOs, CacheService -->
+    <dependency>
+      <groupId>com.parroto</groupId>
+      <artifactId>parroto-common</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>

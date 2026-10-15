@@ -4,7 +4,7 @@ import com.parroto.subscription.dto.CreateActivationCodesRequest;
 import com.parroto.subscription.dto.PlanResponse;
 import com.parroto.subscription.entity.ActivationCode;
 import com.parroto.subscription.entity.Plan;
-import com.parroto.subscription.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.subscription.repository.ActivationCodeRepository;
 import com.parroto.subscription.repository.PaymentTransactionRepository;
 import com.parroto.subscription.repository.PlanRepository;

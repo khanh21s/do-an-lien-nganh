@@ -1,7 +1,8 @@
 package com.parroto.practice.config;
 
-import com.parroto.practice.security.InternalTokenFilter;
-import com.parroto.practice.security.JwtAuthFilter;
+import com.parroto.common.web.RestAuthEntryPoint;
+import com.parroto.common.security.InternalTokenFilter;
+import com.parroto.common.security.JwtAuthFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

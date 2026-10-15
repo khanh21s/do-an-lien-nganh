@@ -69,9 +69,11 @@ jobs:
           - practice-service
           - vocabulary-service
           - subscription-service
+    # Run from the services/ aggregator so the shared module services/common (parroto-common)
+    # is built and tested together with the service (-am = also make dependencies).
     defaults:
       run:
-        working-directory: services/${{ matrix.service }}
+        working-directory: services
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -79,9 +81,12 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-          cache-dependency-path: services/${{ matrix.service }}/pom.xml
-      - name: Compile + unit tests
-        run: mvn -B test
+          cache-dependency-path: |
+            services/pom.xml
+            services/common/pom.xml
+            services/${{ matrix.service }}/pom.xml
+      - name: Compile + unit tests (common + service)
+        run: mvn -B -pl ${{ matrix.service }} -am test
 
   compose:
     name: docker-compose config

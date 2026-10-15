@@ -1,5 +1,6 @@
 package com.parroto.content.service;
 
+import com.parroto.common.cache.CacheService;
 import com.parroto.content.dto.CreateSentencesRequest;
 import com.parroto.content.dto.SentenceInput;
 import com.parroto.content.dto.SentenceResponse;
@@ -7,7 +8,7 @@ import com.parroto.content.dto.UpdateLessonRequest;
 import com.parroto.content.dto.UpdateSentenceRequest;
 import com.parroto.content.entity.Lesson;
 import com.parroto.content.entity.Sentence;
-import com.parroto.content.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.content.repository.LessonRepository;
 import com.parroto.content.repository.SentenceRepository;
 import com.parroto.content.service.storage.LessonAudioStorage;

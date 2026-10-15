@@ -1,6 +1,6 @@
 package com.parroto.practice.service.storage;
 
-import com.parroto.practice.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.util.Locale;

@@ -1,6 +1,6 @@
 package com.parroto.auth.service;
 
-import com.parroto.auth.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;

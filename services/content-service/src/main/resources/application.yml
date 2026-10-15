@@ -38,6 +38,8 @@ internal:
 
 admin:
   emails: ${ADMIN_EMAILS:admin@parroto.com}
+  # 403 text of the shared AdminGuard (services/common); content-service has always used English.
+  forbidden-message: Admin privileges required
 
 aws:
   s3:

@@ -1,8 +1,8 @@
 package com.parroto.practice.controller;
 
-import com.parroto.practice.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.practice.repository.GoalDayRepository;
-import com.parroto.practice.service.CacheService;
+import com.parroto.common.cache.CacheService;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;

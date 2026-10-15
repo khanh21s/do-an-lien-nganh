@@ -1,8 +1,10 @@
 package com.parroto.content.controller;
 
+import com.parroto.common.dto.MessageResponse;
+import com.parroto.common.dto.PageResponse;
 import com.parroto.content.dto.*;
-import com.parroto.content.security.AdminGuard;
-import com.parroto.content.security.AuthenticatedUser;
+import com.parroto.common.security.AdminGuard;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.content.service.LessonService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
