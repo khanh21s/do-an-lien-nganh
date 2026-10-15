@@ -24,6 +24,12 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  # P2-C import uploads: the service itself rejects files > 2 MB with a Vietnamese 400; the
+  # container limit is a bit higher so that check (not a generic multipart error) answers.
+  servlet:
+    multipart:
+      max-file-size: 3MB
+      max-request-size: 4MB
   data:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
@@ -48,6 +54,13 @@ cors:
 services:
   subscription-service-url: ${SUBSCRIPTION_SERVICE_URL:http://localhost:8005}
   practice-service-url: ${PRACTICE_SERVICE_URL:http://localhost:8003}
+
+# P2-C dictionary: Free Dictionary API (English definitions/IPA/audio), results cached in Redis.
+dictionary:
+  api-url: ${DICTIONARY_API_URL:https://api.dictionaryapi.dev/api/v2/entries/en}
+  external-enabled: ${DICTIONARY_EXTERNAL_ENABLED:true}
+  connect-timeout-ms: ${DICTIONARY_CONNECT_TIMEOUT_MS:1500}
+  read-timeout-ms: ${DICTIONARY_READ_TIMEOUT_MS:2500}
 
 management:
   endpoints:
