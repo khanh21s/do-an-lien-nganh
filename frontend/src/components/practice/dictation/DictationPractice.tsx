@@ -37,6 +37,7 @@ import { AddableSentence } from './AddableSentence';
 import { DifficultyPopover } from './DifficultyPopover';
 import { playCorrectFeedback } from './feedback';
 import { DICTATION_INPUT_ATTR, WordBlanks } from './WordBlanks';
+import { refreshGamification } from '@/components/gamification/useGamification'; // P2-B
 
 const MODE = 'dictation' as const;
 /** Cap per visit so a tab left open overnight does not distort "tổng thời gian". */
@@ -148,6 +149,7 @@ export function DictationPractice({
       ]) {
         void queryClient.invalidateQueries({ queryKey });
       }
+      refreshGamification(queryClient, { delayed: true }); // P2-B: XP arrives asynchronously
     },
     onError: (err) => toast.error(apiErrorMessage(err, 'Không thể chấm điểm, vui lòng thử lại.')),
   });

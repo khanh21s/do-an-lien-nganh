@@ -901,3 +901,72 @@ export interface GameLeaderboard {
   me: GameLeaderboardEntry | null;
   totalPlayers: number;
 }
+
+// --- P2-B ---
+// App-wide gamification (vocabulary-service GamificationDtos, /vocabs/gamification).
+
+export interface GamificationCheckInState {
+  checkedInToday: boolean;
+  /** Current check-in streak (0 when broken). */
+  streak: number;
+  lastCheckInDay: string | null;
+  /** Diamonds of today's check-in: received (checked in) or on offer (not yet). */
+  todayReward: number;
+  /** Check-ins left (today's included when pending) until the next 7-day bonus. */
+  daysToBonus: number;
+}
+
+export type MissionCode = 'DICTATION_5' | 'SHADOWING_3' | 'REVIEW_10' | 'GAME_1' | 'XP_50' | 'DICTATION_PERFECT_3';
+
+export interface GamificationMission {
+  code: MissionCode | string;
+  icon: string;
+  title: string;
+  target: number;
+  progress: number;
+  /** The +30 💎 reward was granted (automatically, on completion). */
+  completed: boolean;
+  reward: number;
+}
+
+export interface GamificationMe {
+  xp: number;
+  level: number;
+  levelXp: number;
+  levelXpNeeded: number;
+  todayXp: number;
+  weekXp: number;
+  diamonds: number;
+  /** Today in Vietnam time, ISO date. */
+  today: string;
+  checkIn: GamificationCheckInState;
+  missions: GamificationMission[];
+}
+
+export interface CheckInResult {
+  alreadyCheckedIn: boolean;
+  diamondsGained: number;
+  bonusDiamonds: number;
+  streak: number;
+  diamonds: number;
+}
+
+export type XpLeaderboardPeriod = 'week';
+
+export interface XpLeaderboardEntry {
+  rank: number;
+  displayName: string;
+  xp: number;
+  me: boolean;
+}
+
+export interface XpLeaderboard {
+  period: XpLeaderboardPeriod;
+  title: string;
+  from: string;
+  to: string;
+  entries: XpLeaderboardEntry[];
+  me: XpLeaderboardEntry | null;
+  totalPlayers: number;
+}
+// --- end P2-B ---

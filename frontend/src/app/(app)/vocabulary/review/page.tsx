@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import { refreshGamification } from '@/components/gamification/useGamification'; // P2-B
 
 interface SessionResult {
   quality: number;
@@ -68,6 +69,7 @@ export default function VocabReviewPage() {
       queryClient.invalidateQueries({ queryKey: qk.vocabStats });
       queryClient.invalidateQueries({ queryKey: qk.reviewQueue });
       queryClient.invalidateQueries({ queryKey: qk.learnedWordsAll });
+      refreshGamification(queryClient); // P2-B: +2 XP per card per day
     },
     onError: (err) => toast.error(apiErrorMessage(err, 'Không thể lưu kết quả ôn tập.')),
   });

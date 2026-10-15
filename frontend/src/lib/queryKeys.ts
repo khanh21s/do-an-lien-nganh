@@ -8,6 +8,7 @@ import type {
   ListLearnedParams,
   ListLessonsParams,
   PageParams,
+  XpLeaderboardPeriod,
 } from './types';
 
 /**
@@ -112,4 +113,10 @@ export const qk = {
   gameLeaderboardAll: ['game-leaderboard'] as const,
   gameLeaderboard: (board: GameBoard) => ['game-leaderboard', board] as const,
   // --- end T16 ---
+
+  // --- P2-B ---
+  /** App-wide XP / level / diamonds / check-in / missions (topbar, dashboard card). */
+  gamification: ['gamification'] as const,
+  xpLeaderboard: (period: XpLeaderboardPeriod) => ['xp-leaderboard', period] as const,
+  // --- end P2-B ---
 };

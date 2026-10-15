@@ -105,6 +105,7 @@ public class ShadowingService {
                 .build();
         attempt = attemptRepository.saveAndFlush(attempt);
         cacheService.invalidateByPattern("practice:stats:" + user.userId());
+        notifyGamification(attempt); // P2-B
 
         return ShadowingAttemptResponse.builder()
                 .attemptId(attempt.getId())
@@ -138,4 +139,21 @@ public class ShadowingService {
     private BigDecimal round(double value) {
         return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
     }
+
+    // --- P2-B gamification ---
+    private GamificationClient gamificationClient;
+
+    /** Setter injection keeps the constructor (and its tests) unchanged; null = no XP events. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setGamificationClient(GamificationClient gamificationClient) {
+        this.gamificationClient = gamificationClient;
+    }
+
+    /** Fire-and-forget XP event for vocabulary-service; never throws, never delays the attempt. */
+    private void notifyGamification(PracticeAttempt attempt) {
+        if (gamificationClient != null) {
+            gamificationClient.attemptSaved(attempt);
+        }
+    }
+    // --- end P2-B ---
 }

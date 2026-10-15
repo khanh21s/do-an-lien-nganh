@@ -7,6 +7,8 @@ import { formatHours, formatPercent } from '@/components/dashboard/dashboard-dat
 import { StatCard, WidgetError } from '@/components/dashboard/StatCard';
 import { TrendingErrors } from '@/components/dashboard/TrendingErrors';
 import { WeeklyAccuracyChart } from '@/components/dashboard/WeeklyAccuracyChart';
+// --- P2-B ---
+import { GamificationCard } from '@/components/gamification/GamificationCard';
 import { Card } from '@/components/ui/Card';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { FullPageSpinner, Spinner } from '@/components/ui/Spinner';
@@ -92,6 +94,9 @@ export default function DashboardPage() {
           href="/vocabulary/review"
         />
       </div>
+
+      {/* --- P2-B --- app-wide XP, diamonds, check-in, daily missions */}
+      <GamificationCard />
 
       <GameWidget />
 

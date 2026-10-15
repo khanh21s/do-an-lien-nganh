@@ -217,7 +217,11 @@ services:
       
       # Microservices communication
       CONTENT_SERVICE_URL: http://content-service:8002
-      # Service-to-service auth: vocabulary-service reports met game goals (T16)
+      # P2-B: XP events of saved attempts -> vocabulary-service /internal/gamification/events
+      # (fire-and-forget; no depends_on, vocabulary-service already depends on practice-service URL)
+      VOCABULARY_SERVICE_URL: http://vocabulary-service:8004
+      # Service-to-service auth: vocabulary-service reports met game goals (T16); practice-service
+      # sends XP events to vocabulary-service (P2-B)
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
       
       # Azure Speech API (for Shadowing pronunciation scoring)
@@ -290,7 +294,8 @@ services:
       # T16: game daily goal met -> practice streak day
       PRACTICE_SERVICE_URL: http://practice-service:8003
 
-      # Service-to-service auth (architecture §5.3)
+      # Service-to-service auth (architecture §5.3); since P2-B also checked on inbound
+      # /internal/gamification/events from practice-service
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
 
       # Logging
@@ -331,7 +336,8 @@ services:
       # Microservices communication
       AUTH_SERVICE_URL: http://auth-service:8001
 
-      # Service-to-service auth (architecture §5.3)
+      # Service-to-service auth (architecture §5.3); since P2-B also checked on inbound
+      # /internal/gamification/events from practice-service
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
 
       # Comma-separated emails allowed to call admin-only endpoints (activation codes)

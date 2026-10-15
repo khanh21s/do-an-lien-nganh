@@ -6,7 +6,11 @@ import com.parroto.vocabulary.dto.*;
 import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.vocabulary.service.PersonalWordService;
 import com.parroto.vocabulary.service.ReviewService;
+import com.parroto.vocabulary.service.gamification.GamificationService;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,12 +22,18 @@ import java.util.UUID;
 @RequestMapping("/vocabs/user")
 public class ReviewController {
 
+    private static final Logger log = LoggerFactory.getLogger(ReviewController.class);
+
     private final ReviewService reviewService;
     private final PersonalWordService personalWordService;
+    // --- P2-B ---
+    private final GamificationService gamificationService;
 
-    public ReviewController(ReviewService reviewService, PersonalWordService personalWordService) {
+    public ReviewController(ReviewService reviewService, PersonalWordService personalWordService,
+                            GamificationService gamificationService) {
         this.reviewService = reviewService;
         this.personalWordService = personalWordService;
+        this.gamificationService = gamificationService;
     }
 
     @GetMapping("/review-queue")
@@ -34,7 +44,15 @@ public class ReviewController {
     @PostMapping("/review")
     public ResponseEntity<SubmitReviewResponse> submitReview(@AuthenticationPrincipal AuthenticatedUser principal,
                                                                @Valid @RequestBody SubmitReviewRequest request) {
-        return ResponseEntity.ok(reviewService.submitReview(principal.userUuid(), request));
+        SubmitReviewResponse response = reviewService.submitReview(principal.userUuid(), request);
+        // P2-B: +2 XP once per card per day, after the review itself is committed; a ledger
+        // failure must not turn a saved review into an error.
+        try {
+            gamificationService.recordCardReview(principal.userUuid(), response.userVocabId());
+        } catch (DataAccessException e) {
+            log.warn("Could not record review XP for user {}: {}", principal.userId(), e.getMessage());
+        }
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/stats")
