@@ -1,5 +1,7 @@
 package com.parroto.vocabulary.service;
 
+import com.parroto.vocabulary.service.srs.Rating;
+
 import com.parroto.vocabulary.entity.GameResult;
 
 /**
@@ -75,10 +77,10 @@ public final class GameScoring {
         };
     }
 
-    /** SM-2 quality a game answer stands for: miss -> Again (1), hint or typo -> Hard (3), clean -> Good (4). */
-    public static int srsQuality(GameResult result, int hints) {
-        if (result.isMiss()) return SM2Calculator.QUALITY_AGAIN;
-        if (result == GameResult.NEAR || hints > 0) return SM2Calculator.QUALITY_HARD;
-        return SM2Calculator.QUALITY_GOOD;
+    /** Answer button a game answer stands for: miss -> Again, hint or typo -> Hard, clean -> Good. */
+    public static Rating srsRating(GameResult result, int hints) {
+        if (result.isMiss()) return Rating.AGAIN;
+        if (result == GameResult.NEAR || hints > 0) return Rating.HARD;
+        return Rating.GOOD;
     }
 }

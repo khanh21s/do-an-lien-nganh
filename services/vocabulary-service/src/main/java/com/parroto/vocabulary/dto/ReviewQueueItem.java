@@ -22,7 +22,9 @@ public record ReviewQueueItem(
         OffsetDateTime nextReviewAt,
         int repetitions,
         double easeFactor,
-        int intervalDays
+        int intervalDays,
+        /** P2-anki: LEARNING, REVIEW or RELEARNING (the legacy queue never lists NEW cards). */
+        String state
 ) {
     public static ReviewQueueItem from(UserVocab uv) {
         return ReviewQueueItem.builder()
@@ -41,6 +43,7 @@ public record ReviewQueueItem(
                 .repetitions(uv.getRepetitions())
                 .easeFactor(uv.getEaseFactor().doubleValue())
                 .intervalDays(uv.getIntervalDays())
+                .state(uv.getState().name())
                 .build();
     }
 }

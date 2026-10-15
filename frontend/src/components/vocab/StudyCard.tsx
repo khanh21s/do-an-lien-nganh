@@ -7,7 +7,8 @@ import { pronounce } from '@/components/vocab/pronounce';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { bindAction } from '@/lib/shortcuts';
 import { useShortcutKeys } from '@/store/shortcut-store';
-import { SRS_RATINGS, isTypedAnswerCorrect, maskWord, suggestedQuality, type SrsState } from '@/lib/srs';
+import { SRS_RATINGS, isTypedAnswerCorrect, maskWord, suggestedRating } from '@/lib/srs';
+import type { RatingPreview } from '@/lib/types';
 import { useRef, useState } from 'react';
 
 interface TypingResult {
@@ -21,21 +22,22 @@ interface TypingResult {
  * One flashcard + rating buttons + keyboard shortcuts, shared by `decks/[id]` and `review` (VOC-02).
  * Shortcuts (customisable, defaults Space/Enter flip; 1–4 rate when flipped, otherwise they only flip).
  * Typing mode (VOC-09): front shows the meaning + masked example, Enter checks the typed word;
- * correct → Good is suggested, wrong → Again.
+ * correct → Good is suggested, wrong → Again. Button labels come from the server (`previews`).
  *
- * Render with `key={cardId}` so the flip/typing state resets for every card.
+ * Render with a key that changes for every shown card (a learning card can come back right after
+ * itself) so the flip/typing state resets.
  */
 export function StudyCard({
   card,
-  srsState,
+  previews,
   onRate,
   busy,
   typingMode,
   badge,
 }: {
   card: FlashcardContent;
-  srsState: SrsState | null | undefined;
-  onRate: (quality: number) => void;
+  previews: readonly RatingPreview[] | undefined;
+  onRate: (rating: number) => void;
   busy: boolean;
   typingMode: boolean;
   badge?: React.ReactNode;
@@ -57,9 +59,9 @@ export function StudyCard({
     setFlipped((f) => !f);
   }
 
-  function rate(quality: number) {
+  function rate(rating: number) {
     if (busy) return;
-    onRate(quality);
+    onRate(rating);
   }
 
   function check(given: string) {
@@ -75,7 +77,7 @@ export function StudyCard({
   useHotkeys([
     ...bindAction(keys('flashcard.flip'), { handler: flip }),
     ...SRS_RATINGS.flatMap((r) =>
-      bindAction(keys(`flashcard.${r.name}`), { handler: () => (flipped ? rate(r.quality) : flip()) })
+      bindAction(keys(`flashcard.${r.name}`), { handler: () => (flipped ? rate(r.rating) : flip()) })
     ),
   ]);
 
@@ -146,10 +148,10 @@ export function StudyCard({
 
       {flipped ? (
         <RatingButtons
-          state={srsState}
+          previews={previews}
           onRate={rate}
           disabled={busy}
-          suggestedQuality={result ? suggestedQuality(result.correct && !result.afterPeek) : null}
+          suggestedRating={result ? suggestedRating(result.correct && !result.afterPeek) : null}
         />
       ) : (
         !typingFront && (

@@ -160,8 +160,8 @@ Không thêm/xoá/sửa bảng hoặc cột (không có migration tool, `ddl-aut
 | `practice_attempt.score` | Luôn 0–100: `score = accuracy × weight(difficulty)`, weight Easy 0.6 / Normal 0.8 / Hard 1.0 (shadowing: `score = accuracy`). Dữ liệu cũ > 100: README hướng dẫn `UPDATE practice_attempt SET score = LEAST(score, 100);` (thủ công, không tự chạy). |
 | `practice_attempt.duration` | Giây (integer). Dùng để tính `minutes` trong activity/heatmap. |
 | `lesson.audio_url`, `sentence.audio_url` | Một trong 3 dạng: (a) `https://<bucket>.s3.<region>.amazonaws.com/<key>` hoặc key S3 trần → đọc từ S3; (b) `local:<path>` → đọc file `${MEDIA_ROOT}/<path>`; (c) `NULL` (chỉ sentence) → FE phát đoạn `start_ms–end_ms` của audio bài. |
-| `user_vocab.quality` | quality SM-2 cuối cùng (1/3/4/5 từ 4 nút; BE vẫn chấp nhận 0–5). |
-| `user_vocab.interval_days` | Số ngày (≥ 1); `next_review_at = now + interval_days` ngày. |
+| `user_vocab.quality` | quality SM-2 cuối cùng (1/3/4/5 từ 4 nút; BE vẫn chấp nhận 0–5). Từ P2-anki: nút cuối quy về 1/3/4/5 (Học lại/Khó/Tốt/Dễ). |
+| `user_vocab.interval_days` | Số ngày (≥ 1); `next_review_at = now + interval_days` ngày. Từ P2-anki (V4): 0 khi NEW/LEARNING, khoảng REVIEW (hoặc khoảng sẽ nhận lại khi RELEARNING); thêm `state`, `step`, `lapses` — xem §4.6. |
 | `vocab_deck.created_by` | userId admin tạo deck (ADM-07). |
 | `activation_code.expires_at` | NOT NULL → nếu admin không nhập thì mặc định `now + 365 ngày`. Định dạng code `PROMO-XXXXX-XXXXX` (A–Z, 2–9, bỏ ký tự dễ nhầm 0/O/1/I). |
 
@@ -212,25 +212,41 @@ Path ghi theo gateway. "+" = thêm field (không xoá field cũ, trừ khi ghi r
 | `POST /auth/login-google` | `GOOGLE_CLIENT_ID` rỗng → 503 "Google login chưa cấu hình". Tương tự Apple. | T02 |
 | `PUT /auth/change-password` | `authProvider != 'local'` → 400. | T02 |
 
-### 4.6 Thuật toán SM-2 (quyết định của người dùng, sửa B11)
+### 4.6 Lịch ôn từ vựng: Anki SM-2 (P2-anki, thay cho SM-2 thuần của Phase 1)
 
-4 nút → quality: **Again = 1, Hard = 3, Good = 4, Easy = 5** (phím 1–4). Áp dụng SM-2 chuẩn (Wikipedia/SuperMemo):
+Từ Phase 2 (nhánh `feat/phase2-anki`, báo cáo `docs/reports/P2-anki.md`) mọi thẻ từ vựng — học theo bộ thẻ, trang "Ôn tập" (`/vocabulary/review`) và từ trong sổ tay — dùng **một bộ lập lịch kiểu Anki** (`vocabulary-service` `service/srs/AnkiScheduler`, hằng số trong `AnkiDefaults`). Ôn câu sai (practice-service) không đổi. 4 nút **Học lại / Khó / Tốt / Dễ = rating 1 / 2 / 3 / 4** (phím 1–4).
+
+Trạng thái `user_vocab.state`: `NEW` (chưa chấm lần nào), `LEARNING` (bước học 1m, 10m; `step` = chỉ số bước), `REVIEW` (khoảng cách theo ngày), `RELEARNING` (quên thẻ REVIEW; bước 10m).
 
 ```
-input: n = repetitions, I = interval_days, EF = ease_factor, q
-if q >= 3:
-    if n == 0: I' = 1
-    elif n == 1: I' = 6
-    else: I' = round(I × EF)          # EF trước khi cập nhật
-    n' = n + 1
-else:                                  # Again
-    n' = 0
-    I' = 1
-EF' = max(1.3, EF + (0.1 − (5−q) × (0.08 + (5−q) × 0.02)))   # làm tròn 2 chữ số (HALF_UP)
-next_review_at = now + I' ngày
+Hằng số (mặc định của Anki): bước học 1m 10m; graduating 1 ngày; easy 4 ngày; ease khởi đầu 2.50;
+easy bonus 1.30; hard 1.20; bước học lại 10m; sau khi quên: khoảng mới = 0% cũ, tối thiểu 1 ngày;
+ease ≥ 1.30; khoảng ≤ 36500 ngày; ngày mới bắt đầu 04:00 Asia/Ho_Chi_Minh; learn ahead 20 phút;
+không giới hạn số thẻ mỗi ngày; không fuzz.
+
+NEW / LEARNING (bước i)
+  Học lại → bước 0 (1m)
+  Khó     → giữ bước i; ở bước đầu = trung bình bước 1 và 2 (5,5m ≈ "6 phút")
+  Tốt     → bước i+1; sau bước cuối → REVIEW, 1 ngày
+  Dễ      → REVIEW ngay, 4 ngày            (thẻ NEW nhận ease 2.50; trả lời khi đang học không đổi ease)
+REVIEW (khoảng I, ease E, trễ d = ngày hôm nay − ngày đến hạn ≥ 0)
+  Học lại → quên: E − 0.20, lapses + 1, RELEARNING bước 0 (10m); khoảng giữ lại = max(1, I × 0)
+  Khó     → I × 1.2                 (≥ I + 1),     E − 0.15
+  Tốt     → (I + d/2) × E           (≥ Khó + 1)
+  Dễ      → (I + d) × E × 1.3       (≥ Tốt + 1),   E + 0.15
+  (trả lời trước ngày đến hạn — chỉ xảy ra qua game: công thức "early review" của Anki)
+RELEARNING
+  Học lại → bước 0;  Khó → lặp bước (1 bước: ×1.5 = 15m);  Tốt → REVIEW với khoảng giữ lại;
+  Dễ → REVIEW với khoảng giữ lại + 1 ngày
+Khoảng làm tròn half-up, kẹp [1, 36500]; thẻ REVIEW đến hạn lúc 04:00 (giờ VN) của ngày đến hạn,
+bước học dùng mốc thời gian chính xác.
 ```
 
-Ví dụ kiểm thử (thẻ n=3, I=10, EF=2.5): Again → n=0, I=1, EF=1.96; Hard → I=25, EF=2.36; Good → I=25, EF=2.50; Easy → I=25, EF=2.60. Ở SM-2 chuẩn, Hard/Good/Easy chỉ khác nhau qua EF (ảnh hưởng lần ôn sau) — đây là hệ quả chấp nhận được của quyết định. FE `lib/srs.ts` cài **cùng công thức** để hiển thị nhãn "1 ngày / 25 ngày" trên nút.
+Ví dụ kiểm thử (thẻ REVIEW I=10, E=2.50, đến hạn hôm nay): Học lại → "10 phút" (RELEARNING, E=2.30); Khó → 12 ngày (E=2.35); Tốt → 25 ngày; Dễ → 33 ngày "1,1 tháng" (E=2.65). Thẻ mới: "<1 phút / 6 phút / 10 phút / 4 ngày".
+
+**Phiên học** (`StudyService`): thẻ kế tiếp = (1) thẻ đang học đã đến bước, (2) thẻ REVIEW đến hạn hôm nay, (3) thẻ mới — trong bộ thẻ là mọi thẻ chưa từng chấm (thứ tự ngẫu nhiên theo `seed`), ở trang Ôn tập là các dòng `NEW` (từ sổ tay, "thêm vào sổ tay") theo thứ tự thêm, (4) thẻ đang học đến hạn trong 20 phút khi không còn gì khác. Bộ đếm Mới / Đang học / Ôn. **Nhãn trên nút do server tính** (`previews` của mỗi thẻ, cùng hàm với lúc chấm), FE không còn bản sao công thức (`lib/srs.ts` chỉ còn tên nút, phím, chế độ gõ). `GET /vocabs/user/stats.dueToday` = thẻ LEARNING/RELEARNING/REVIEW có `next_review_at` trước 04:00 sáng hôm sau.
+
+Endpoint: `GET /vocabs/decks/{id}/study?groupId=&seed=`, `GET /vocabs/user/study?seed=` → `{counts {new, learning, review}, card {…, previews[4]}, nextDueAt, now}`; `POST /vocabs/user/review {userVocabId | cardId, rating 1–4 (quality 0–5 cũ vẫn nhận), answeredAt?, deckId?, groupId?, seed?}` → lịch mới + `session` đã cập nhật. Chi tiết: `docs/reports/P2-anki.md`.
 
 ### 4.7 Chấm điểm Dictation (quyết định của người dùng, sửa B10)
 

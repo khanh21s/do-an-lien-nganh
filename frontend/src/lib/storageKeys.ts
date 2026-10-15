@@ -8,7 +8,6 @@ export const storageKeys = {
   transcriptIpa: 'parroto:transcript-ipa',
   transcriptTranslation: 'parroto:transcript-translation',
   sidebarCollapsed: 'parroto:sidebar-collapsed',
-  reviewDailyLimit: 'parroto:review-daily-limit',
   reviewPopupDate: 'parroto:review-popup-date',
   shortcuts: 'parroto:shortcuts',
   /** T15: last word source picked in the game lobby. */

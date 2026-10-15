@@ -92,7 +92,11 @@ export function AddWordModal({
     },
     onSuccess: (saved) => {
       toast.success(
-        isEdit ? 'Đã cập nhật' : toNotebook || targetDeck?.isNotebook ? 'Đã thêm vào sổ tay' : `Đã thêm vào bộ “${targetDeck?.label}”`
+        isEdit
+          ? 'Đã cập nhật'
+          : toNotebook || targetDeck?.isNotebook
+            ? 'Đã thêm vào sổ tay – từ mới có trong phiên Ôn tập' // P2-anki: a NEW card
+            : `Đã thêm vào bộ “${targetDeck?.label}”`
       );
       for (const queryKey of [qk.learnedWordsAll, qk.vocabStats, qk.reviewQueue, qk.myDecks, qk.deckCardsAll, qk.deckDetailAll]) {
         void queryClient.invalidateQueries({ queryKey });

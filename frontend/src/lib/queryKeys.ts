@@ -135,4 +135,11 @@ export const qk = {
     ['deck-cards', deckId, 'manage', params] as const,
   dictionary: (word: string) => ['dictionary', word] as const,
   // --- end P2-C ---
+  // --- P2-anki ---
+  /** Global "Ôn tập" session; nested under `review-queue` so existing invalidations refresh it. */
+  studySession: (seed: string) => ['review-queue', 'study', seed] as const,
+  /** Deck session; nested under `deck-cards` so deck/card invalidations refresh it. */
+  deckStudy: (deckId: string, groupId: string | null, seed: string) =>
+    ['deck-cards', deckId, 'study', groupId ?? 'all', seed] as const,
+  // --- end P2-anki ---
 };

@@ -1,5 +1,9 @@
 package com.parroto.vocabulary.service;
 
+import com.parroto.vocabulary.service.srs.AnkiScheduler;
+import com.parroto.vocabulary.service.srs.Rating;
+import com.parroto.vocabulary.service.srs.SrsCard;
+
 import com.parroto.vocabulary.dto.GameDtos.AnswerRequest;
 import com.parroto.vocabulary.dto.GameDtos.AnswerResult;
 import com.parroto.vocabulary.dto.GameDtos.Best;
@@ -442,26 +446,27 @@ public class GameService {
         return summary(session);
     }
 
-    /** Ends a round: drops the unanswered question, applies SM-2 to notebook words, stores the result. */
+    /** Ends a round: drops the unanswered question, applies the Anki scheduler to notebook words, stores the result. */
     void finalizeSession(GameSession session, OffsetDateTime now) {
         answerRepository.deletePending(session.getId());
         List<GameAnswer> answers = answerRepository.findAnswered(session.getId());
 
         // first attempt per card decides the review quality (the retry is practice, not a new grade)
-        Map<UUID, Integer> quality = new LinkedHashMap<>();
+        Map<UUID, Rating> quality = new LinkedHashMap<>();
         for (GameAnswer a : answers) {
             if (!Boolean.TRUE.equals(a.getIsRetry())) {
                 quality.putIfAbsent(a.getCard().getId(),
-                        GameScoring.srsQuality(GameResult.valueOf(a.getResult()), a.getHintsUsed()));
+                        GameScoring.srsRating(GameResult.valueOf(a.getResult()), a.getHintsUsed()));
             }
         }
         int updated = 0;
         if (!quality.isEmpty()) {
             for (UserVocab uv : userVocabRepository.findByUserIdAndCard_IdIn(session.getUserId(), quality.keySet())) {
-                int q = quality.get(uv.getCard().getId());
-                boolean due = uv.getNextReviewAt() == null || !uv.getNextReviewAt().isAfter(now);
-                if (q < SM2Calculator.QUALITY_HARD || due) {
-                    reviewService.applyQuality(uv, q, now);
+                Rating q = quality.get(uv.getCard().getId());
+                // P2-anki: a miss always counts (Again); a correct answer only grades a card that is due.
+                boolean due = AnkiScheduler.isDue(SrsCard.of(uv), now);
+                if (q == Rating.AGAIN || due) {
+                    reviewService.applyRating(uv, q, now);
                     userVocabRepository.save(uv);
                     updated++;
                 }

@@ -312,6 +312,9 @@ test('08 mobile 375×812 tab bar, Thêm drawer; 360px no horizontal scroll', asy
   await page.goto('/dashboard');
   const tabbar = page.getByRole('navigation', { name: 'Điều hướng di động' });
   await expect(tabbar).toBeVisible();
+  // P2-anki: cards 05b left in a learning step are due today, so the daily review reminder may open first.
+  const later = page.getByRole('button', { name: 'Để sau' });
+  if (await later.waitFor({ timeout: 3000 }).then(() => true, () => false)) await later.click();
   await shot(page, '08-mobile-dashboard');
   await tabbar.getByRole('button', { name: /Thêm/ }).click();
   await expect(page.getByRole('dialog')).toBeVisible();

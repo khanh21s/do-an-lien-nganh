@@ -1,9 +1,10 @@
 package com.parroto.vocabulary.service;
 
 import com.parroto.vocabulary.dto.AddFromLessonRequest;
-import com.parroto.vocabulary.dto.SubmitReviewRequest;
-import com.parroto.vocabulary.dto.SubmitReviewResponse;
+import com.parroto.vocabulary.entity.CardState;
 import com.parroto.vocabulary.entity.UserVocab;
+import com.parroto.vocabulary.service.srs.AnkiScheduler;
+import com.parroto.vocabulary.service.srs.Rating;
 import com.parroto.vocabulary.entity.VocabCard;
 import com.parroto.vocabulary.entity.VocabDeck;
 import com.parroto.common.exception.ApiException;
@@ -13,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,7 +35,7 @@ class ReviewServiceTest {
         userVocabRepository = mock(UserVocabRepository.class);
         cardRepository = mock(VocabCardRepository.class);
         premiumClient = mock(PremiumClient.class);
-        service = new ReviewService(userVocabRepository, cardRepository, new SM2Calculator(), premiumClient);
+        service = new ReviewService(userVocabRepository, cardRepository, new AnkiScheduler(), premiumClient);
         when(userVocabRepository.save(any(UserVocab.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -79,44 +79,30 @@ class ReviewServiceTest {
     }
 
     @Test
-    void submitAgainResetsRepetitionsAndSchedulesOneDay() {
+    void addFromLessonCreatesANewCard() {
         UUID userId = UUID.randomUUID();
-        UserVocab uv = UserVocab.builder().id(UUID.randomUUID()).userId(userId).card(card(false))
-                .repetitions(3).intervalDays(10).easeFactor(new BigDecimal("2.50")).build();
-        when(userVocabRepository.findById(uv.getId())).thenReturn(Optional.of(uv));
+        VocabCard card = card(false);
+        when(cardRepository.findById(card.getId())).thenReturn(Optional.of(card));
 
-        OffsetDateTime before = OffsetDateTime.now();
-        SubmitReviewResponse r = service.submitReview(userId, new SubmitReviewRequest(uv.getId(), 1));
+        service.addFromLesson(userId, new AddFromLessonRequest(card.getId(), null));
 
-        assertThat(r.repetitions()).isZero();
-        assertThat(r.interval()).isEqualTo(1);
-        assertThat(r.easeFactor()).isEqualTo(1.96);
-        assertThat(uv.getNextReviewAt()).isAfterOrEqualTo(before.plusDays(1));
-        assertThat(uv.getNextReviewAt()).isBefore(before.plusDays(1).plusMinutes(1));
-        assertThat(uv.getQuality()).isEqualTo(1);
+        org.mockito.ArgumentCaptor<UserVocab> saved = org.mockito.ArgumentCaptor.forClass(UserVocab.class);
+        verify(userVocabRepository).save(saved.capture());
+        assertThat(saved.getValue().getState()).isEqualTo(CardState.NEW);
+        assertThat(saved.getValue().getIntervalDays()).isZero();
+        assertThat(saved.getValue().getEaseFactor()).isEqualByComparingTo("2.50");
     }
 
     @Test
-    void submitGoodOnMatureCard() {
-        UUID userId = UUID.randomUUID();
-        UserVocab uv = UserVocab.builder().id(UUID.randomUUID()).userId(userId).card(card(false))
-                .repetitions(3).intervalDays(10).easeFactor(new BigDecimal("2.50")).build();
-        when(userVocabRepository.findById(uv.getId())).thenReturn(Optional.of(uv));
-
-        SubmitReviewResponse r = service.submitReview(userId, new SubmitReviewRequest(uv.getId(), 4));
-
-        assertThat(r.repetitions()).isEqualTo(4);
-        assertThat(r.interval()).isEqualTo(25);
-        assertThat(uv.getIntervalDays()).isEqualTo(25);
-    }
-
-    @Test
-    void submitReviewOfOtherUsersCardIs404() {
+    void gameRatingGoesThroughTheAnkiScheduler() {
         UserVocab uv = UserVocab.builder().id(UUID.randomUUID()).userId(UUID.randomUUID()).card(card(false)).build();
-        when(userVocabRepository.findById(uv.getId())).thenReturn(Optional.of(uv));
+        OffsetDateTime now = OffsetDateTime.parse("2026-10-15T10:00:00+07:00");
 
-        assertThatThrownBy(() -> service.submitReview(UUID.randomUUID(), new SubmitReviewRequest(uv.getId(), 4)))
-                .isInstanceOfSatisfying(ApiException.class,
-                        e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+        service.applyRating(uv, Rating.GOOD, now);
+
+        assertThat(uv.getState()).isEqualTo(CardState.LEARNING);
+        assertThat(uv.getNextReviewAt()).isEqualTo(now.plusMinutes(10));
+        assertThat(uv.getRepetitions()).isEqualTo(1);
+        assertThat(uv.getQuality()).isEqualTo(4);
     }
 }
