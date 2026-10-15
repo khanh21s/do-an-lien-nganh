@@ -41,6 +41,9 @@ export const NAV_GAME = leaf('/games', 'Dịch nhanh', '⚡', { shortLabel: 'Tr�
 export const NAV_HISTORY = leaf('/practice/history', 'Lịch sử luyện tập', '📈', { shortLabel: 'Lịch sử' });
 export const NAV_PREMIUM = leaf('/subscription', 'Gói Premium', '💎');
 export const NAV_PROFILE = leaf('/profile', 'Hồ sơ', '👤');
+// --- P2-C ---
+export const NAV_MY_DECKS = leaf('/vocabulary/my-decks', 'Bộ thẻ của tôi', '🗃️', { shortLabel: 'Bộ thẻ' });
+// --- end P2-C ---
 
 // --- P2-A ---
 /** Due count of the sentence review queue (`GET /practice/review/stats`.dueCount). */
@@ -55,7 +58,7 @@ export const MAIN_NAV: NavEntry[] = [
   NAV_DASHBOARD,
   NAV_LESSONS,
   NAV_SENTENCE_REVIEW, // P2-A
-  { kind: 'group', key: 'vocabulary', label: 'Từ vựng', icon: '🔤', children: [NAV_DECKS, NAV_REVIEW, NAV_NOTEBOOK] },
+  { kind: 'group', key: 'vocabulary', label: 'Từ vựng', icon: '🔤', children: [NAV_DECKS, NAV_REVIEW, NAV_NOTEBOOK, NAV_MY_DECKS /* P2-C */] },
   NAV_GAME,
   NAV_HISTORY,
   NAV_PREMIUM,

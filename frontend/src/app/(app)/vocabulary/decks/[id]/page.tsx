@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { FullPageSpinner, Spinner } from '@/components/ui/Spinner';
 import { deckIcon } from '@/components/vocab/deckIcon';
+import { GroupFilterChips } from '@/components/vocab/decks/GroupFilterChips';
 import { StudyCard } from '@/components/vocab/StudyCard';
 import { StudyToolbar } from '@/components/vocab/StudyToolbar';
 import { UpgradeCard } from '@/components/vocab/UpgradeCard';
@@ -35,19 +36,56 @@ export default function DeckDetailPage() {
     queryFn: () => vocabularyApi.listDecks(DECK_LIST_PARAMS),
   });
   const deckList = decks?.data ?? [];
+  // P2-C: name + groups of any deck the user can see (public or own personal deck).
+  const { data: detail } = useQuery({
+    queryKey: qk.deckDetail(params.id),
+    queryFn: () => vocabularyApi.getDeckDetail(params.id),
+    retry: false,
+  });
   const currentDeck = deckList.find((d) => d.id === params.id);
+  const [groupId, setGroupId] = useState<string | null>(null);
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
       <TopicList decks={deckList} activeId={params.id} />
-      {/* Remount per deck so the study position resets. */}
-      <DeckStudy key={params.id} deckId={params.id} deck={currentDeck} />
+      <div className="min-w-0">
+        {detail && detail.groups.length > 0 && (
+          <GroupFilterChips
+            className="mb-3"
+            groups={detail.groups}
+            total={detail.cardCount}
+            ungroupedCount={detail.ungroupedCount}
+            value={groupId}
+            onChange={setGroupId}
+          />
+        )}
+        {/* Remount per deck/group so the study position resets. */}
+        <DeckStudy
+          key={`${params.id}:${groupId ?? 'all'}`}
+          deckId={params.id}
+          deck={currentDeck ?? (detail ? { name: detail.name } : undefined)}
+          groupId={groupId}
+          personal={!!detail?.personal}
+        />
+      </div>
     </div>
   );
 }
 
-function DeckStudy({ deckId, deck }: { deckId: string; deck?: VocabDeck }) {
+function DeckStudy({
+  deckId,
+  deck,
+  groupId,
+  personal,
+}: {
+  deckId: string;
+  deck?: Pick<VocabDeck, 'name'>;
+  /** P2-C group filter (null = whole deck). */
+  groupId: string | null;
+  personal: boolean;
+}) {
   const queryClient = useQueryClient();
+  const backHref = personal ? '/vocabulary/my-decks' : '/vocabulary';
   const [index, setIndex] = useState(0);
   // Cards come in a random order, reshuffled on every visit and on "Học lại từ đầu".
   const [seed, setSeed] = useState(newShuffleSeed);
@@ -58,8 +96,9 @@ function DeckStudy({ deckId, deck }: { deckId: string; deck?: VocabDeck }) {
   const [added, setAdded] = useState<Record<string, string>>({});
 
   const cardsQuery = useInfiniteQuery({
-    queryKey: qk.deckCardsInfinite(deckId, seed),
-    queryFn: ({ pageParam }) => vocabularyApi.getDeckCards(deckId, { page: pageParam, limit: PAGE_SIZE, seed }),
+    queryKey: qk.deckCardsGroupInfinite(deckId, seed, groupId),
+    queryFn: ({ pageParam }) =>
+      vocabularyApi.listDeckCards(deckId, { page: pageParam, limit: PAGE_SIZE, seed, ...(groupId ? { groupId } : {}) }),
     initialPageParam: 1,
     getNextPageParam: (last) =>
       last.pagination.page < last.pagination.totalPages ? last.pagination.page + 1 : undefined,
@@ -124,17 +163,17 @@ function DeckStudy({ deckId, deck }: { deckId: string; deck?: VocabDeck }) {
   if (isLoading) return <FullPageSpinner />;
   if (isError) {
     if (apiErrorStatus(error) === 403) return <UpgradeCard message={apiErrorMessage(error)} deckName={deck?.name} />;
-    return <ErrorState error={error} onRetry={refetch} backHref="/vocabulary" backLabel="Danh sách bộ từ" />;
+    return <ErrorState error={error} onRetry={refetch} backHref={backHref} backLabel="Danh sách bộ từ" />;
   }
-  if (!data) return <ErrorState notFound backHref="/vocabulary" backLabel="Danh sách bộ từ" />;
+  if (!data) return <ErrorState notFound backHref={backHref} backLabel="Danh sách bộ từ" />;
   if (proBlocked) return <UpgradeCard message={proBlocked} deckName={deck?.name} />;
 
   if (total === 0) {
     return (
       <Card className="text-center">
-        <p className="text-slate-600">Bộ từ này chưa có thẻ nào.</p>
-        <Link href="/vocabulary" className="mt-3 inline-block text-sm font-medium text-brand-600 hover:underline">
-          Chọn bộ từ khác
+        <p className="text-slate-600">{groupId ? 'Nhóm này chưa có thẻ nào.' : 'Bộ từ này chưa có thẻ nào.'}</p>
+        <Link href={personal ? `/vocabulary/my-decks/${deckId}` : '/vocabulary'} className="mt-3 inline-block text-sm font-medium text-brand-600 hover:underline">
+          {personal ? 'Thêm thẻ vào bộ này' : 'Chọn bộ từ khác'}
         </Link>
       </Card>
     );
@@ -145,8 +184,8 @@ function DeckStudy({ deckId, deck }: { deckId: string; deck?: VocabDeck }) {
 
   return (
     <div className="min-w-0">
-      <Link href="/vocabulary" className="mb-3 inline-flex min-h-[44px] items-center text-sm text-slate-500 hover:text-slate-700 lg:hidden">
-        ← Tất cả bộ từ
+      <Link href={backHref} className="mb-3 inline-flex min-h-[44px] items-center text-sm text-slate-500 hover:text-slate-700 lg:hidden">
+        {personal ? '← Bộ thẻ của tôi' : '← Tất cả bộ từ'}
       </Link>
       <Card className="p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">

@@ -1053,3 +1053,173 @@ export interface SentenceReviewStats {
   nextDueAt: string | null;
 }
 // --- end P2-A ---
+// --- P2-C ---
+// Personal decks ("Bộ thẻ của tôi"), groups, import and dictionary (vocabulary-service P2-C).
+
+/** `CardResponse.groupId` (declaration merging keeps the base interface untouched). */
+export interface VocabCard {
+  /** Group inside the deck; null = ungrouped. */
+  groupId?: string | null;
+}
+
+/** `PersonalDeckResponse` (GET /vocabs/user/decks). The notebook comes first and is `isNotebook`. */
+export interface PersonalDeck {
+  id: string;
+  name: string;
+  description: string | null;
+  isNotebook: boolean;
+  cardCount: number;
+  groupCount: number;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+/** `DeckUsage`: free/premium limits for decks other than the notebook (which has its own cap). */
+export interface DeckUsage {
+  premium: boolean;
+  decks: number;
+  maxDecks: number;
+  cards: number;
+  maxCards: number;
+  notebookCards: number;
+  maxNotebookCards: number;
+}
+
+export interface PersonalDeckList {
+  decks: PersonalDeck[];
+  usage: DeckUsage;
+}
+
+/** Body of POST /vocabs/user/decks and PUT /vocabs/user/decks/{id}. */
+export interface PersonalDeckInput {
+  name: string;
+  description?: string | null;
+}
+
+/** Body of POST /vocabs/user/decks/{id}/cards and PUT /vocabs/user/cards/{cardId} (`PersonalCardRequest`). */
+export interface PersonalCardInput extends CreatePersonalWordInput {
+  /** null = ungrouped (on PUT the card moves accordingly). */
+  groupId?: string | null;
+}
+
+/** `GroupResponse`. */
+export interface VocabGroup {
+  id: string;
+  deckId: string;
+  name: string;
+  sortOrder: number;
+  cardCount: number;
+}
+
+/** Body of POST/PUT /vocabs/decks/{deckId}/groups[/{groupId}]. */
+export interface GroupInput {
+  name?: string;
+  sortOrder?: number;
+}
+
+/** `DeckDetailResponse` (GET /vocabs/decks/{deckId}). */
+export interface DeckDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  level: CefrLevel | null;
+  isProOnly: boolean;
+  cardCount: number;
+  personal: boolean;
+  isNotebook: boolean;
+  /** Owner of a personal deck or admin of a public one. */
+  canManage: boolean;
+  groups: VocabGroup[];
+  ungroupedCount: number;
+  createdAt: string;
+}
+
+/** `?groupId=` value for cards without a group. */
+export const UNGROUPED = 'none';
+
+/** Query of GET /vocabs/decks/{id}/cards with the P2-C group filter. */
+export interface DeckCardsQuery extends PageParams {
+  searchWord?: string;
+  seed?: string;
+  /** A group id of the deck, or `UNGROUPED`. */
+  groupId?: string;
+}
+
+export interface MoveCardsResult {
+  moved: number;
+}
+
+export type ImportFormat = 'csv' | 'txt' | 'pdf';
+
+/** `ImportRow` of the preview. */
+export interface ImportRow {
+  line: number;
+  word: string | null;
+  meaning: string | null;
+  ipa: string | null;
+  partOfSpeech: string | null;
+  example: string | null;
+  exampleVi: string | null;
+  errors: string[];
+  duplicateInFile: boolean;
+  existsInDeck: boolean;
+}
+
+/** `ImportPreviewResponse` (POST /vocabs/decks/import/preview). */
+export interface ImportPreview {
+  format: ImportFormat;
+  fileName: string | null;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  duplicateRows: number;
+  skippedLines: number;
+  rows: ImportRow[];
+  warnings: string[];
+}
+
+export interface ImportRowInput {
+  word: string | null;
+  meaning: string | null;
+  ipa?: string | null;
+  partOfSpeech?: string | null;
+  example?: string | null;
+  exampleVi?: string | null;
+}
+
+/** Body of POST /vocabs/decks/{deckId}/import. */
+export interface ImportCommitInput {
+  groupId?: string | null;
+  newGroupName?: string | null;
+  rows: ImportRowInput[];
+}
+
+export interface ImportCommitResult {
+  deckId: string;
+  groupId: string | null;
+  received: number;
+  imported: number;
+  skippedDuplicate: number;
+  skippedInvalid: number;
+  errors: { index: number; word: string | null; message: string }[];
+}
+
+export type DictionarySource = 'cards' | 'dictionary' | 'cards+dictionary' | 'none';
+export type DictionaryExternalStatus = 'ok' | 'miss' | 'error' | 'skipped' | 'disabled';
+
+/** `DictionaryResponse` (GET /vocabs/dictionary/{word}). */
+export interface DictionaryEntry {
+  query: string;
+  word: string;
+  found: boolean;
+  /** Without slashes. */
+  ipa: string | null;
+  audioUrl: string | null;
+  meaningsVi: string[];
+  partsOfSpeech: string[];
+  definitionsEn: { partOfSpeech: string | null; definition: string; example: string | null }[];
+  examples: { en: string; vi: string | null }[];
+  source: DictionarySource;
+  externalStatus: DictionaryExternalStatus;
+}
+// --- end P2-C ---

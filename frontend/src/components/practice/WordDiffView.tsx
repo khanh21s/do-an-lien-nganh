@@ -50,8 +50,8 @@ export function WordDiffView({
               key={w.position}
               type="button"
               onClick={() => onWordClick?.(clickWord)}
-              aria-label={`Thêm '${clickWord}' vào sổ tay`}
-              title={`${title} · Bấm để thêm vào sổ tay`}
+              aria-label={`Tra từ '${clickWord}'`}
+              title={`${title} · Bấm để tra từ`}
               className={clsx(
                 cls,
                 'cursor-pointer transition-shadow hover:ring-2 hover:ring-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'

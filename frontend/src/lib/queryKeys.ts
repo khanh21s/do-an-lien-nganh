@@ -123,4 +123,16 @@ export const qk = {
   sentenceReviewQueue: ['sentence-review-queue'] as const,
   sentenceReviewStats: ['sentence-review-stats'] as const,
   // --- end P2-A ---
+  // --- P2-C ---
+  myDecks: ['my-decks'] as const,
+  deckDetailAll: ['deck-detail'] as const,
+  deckDetail: (deckId: string) => ['deck-detail', deckId] as const,
+  /** Study pages with the group filter; prefix stays `deck-cards` so deck invalidation refreshes them. */
+  deckCardsGroupInfinite: (deckId: string, seed: string, groupId: string | null) =>
+    ['deck-cards', deckId, 'infinite', seed, groupId ?? 'all'] as const,
+  /** Card manager of a personal/public deck (paged, searchable, group filter). */
+  deckCardsManage: (deckId: string, params: import('./types').DeckCardsQuery = {}) =>
+    ['deck-cards', deckId, 'manage', params] as const,
+  dictionary: (word: string) => ['dictionary', word] as const,
+  // --- end P2-C ---
 };

@@ -41,6 +41,7 @@ public class SecurityConfig {
                         // P2-B: service-to-service only (never routed by the gateway); InternalTokenFilter
                         // rejects calls without a valid X-Internal-Token first.
                         .requestMatchers("/internal/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/vocabs/dictionary/**").permitAll() // P2-C
                         .anyRequest().authenticated())
                 .addFilterBefore(internalTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

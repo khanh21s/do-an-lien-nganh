@@ -5,7 +5,7 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const { requestId, requestLogger } = require('./middleware/logger');
 const { verifyToken, requireAuthForWrites } = require('./middleware/auth');
-const { ipLimiter, userLimiter } = require('./middleware/rateLimiter');
+const { ipLimiter, userLimiter, dictionaryLimiter } = require('./middleware/rateLimiter');
 const { notFoundHandler, errorHandler, sendError } = require('./middleware/errorHandler');
 
 const PORT = process.env.PORT || 8000;
@@ -97,6 +97,9 @@ app.use('/vocabs/decks', requireAuthForWrites, proxyTo(SERVICES.vocabulary, { se
 app.use('/vocabs/cards', verifyToken, proxyTo(SERVICES.vocabulary, { serviceName: 'vocabulary' }));
 // Personal notebook/review endpoints always require a token.
 app.use('/vocabs/user', verifyToken, userLimiter, proxyTo(SERVICES.vocabulary, { serviceName: 'vocabulary' }));
+// P2-C dictionary lookups are public (a Bearer, when sent, is forwarded so the user's own cards are
+// included); writes do not exist there, so anything but GET is rejected by vocabulary-service.
+app.use('/vocabs/dictionary', dictionaryLimiter, proxyTo(SERVICES.vocabulary, { serviceName: 'vocabulary' }));
 // T15 "Dịch nhanh" game rounds (scored server-side) always require a token.
 app.use('/vocabs/games', verifyToken, userLimiter, proxyTo(SERVICES.vocabulary, { serviceName: 'vocabulary' }));
 // P2-B app-wide XP / diamonds / check-in / missions / XP leaderboard always require a token.
