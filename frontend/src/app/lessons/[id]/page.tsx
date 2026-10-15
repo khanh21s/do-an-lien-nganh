@@ -4,6 +4,7 @@ import { AudioPlayer } from '@/components/audio/AudioPlayer';
 import { lessonMinutes } from '@/components/lessons/LessonCard';
 import { LessonNotFound } from '@/components/lessons/LessonNotFound';
 import { LessonTranscript } from '@/components/lessons/LessonTranscript';
+import { ProBadge } from '@/components/lessons/ProLessonLock';
 import { formatNumber, progressBySentence } from '@/components/lessons/lesson-progress';
 import { Badge } from '@/components/ui/Badge';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -15,6 +16,8 @@ import { practiceApi } from '@/lib/endpoints/practice';
 import { firstUndoneSentence, practiceSentencePath, sortSentences } from '@/lib/practice-nav';
 import { qk } from '@/lib/queryKeys';
 import type { PracticeMode } from '@/lib/types';
+import { useLessonAccess } from '@/hooks/useLessonAccess';
+import { PRO_LESSON_MESSAGE } from '@/lib/pro-lesson';
 import { useAuthStore } from '@/store/auth-store';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
@@ -40,6 +43,9 @@ export default function LessonDetailPage() {
     queryFn: () => practiceApi.getLessonAttempts(lessonId),
     enabled: signedIn && lessonQuery.isSuccess,
   });
+
+  // P2-A1: Pro lesson → preview stays open, practice entry points show the lock.
+  const { locked } = useLessonAccess(signedIn ? lessonQuery.data : null);
 
   const progress = useMemo(() => {
     if (!signedIn || !attemptsQuery.data) return null;
@@ -88,6 +94,7 @@ export default function LessonDetailPage() {
       <header className="mt-1">
         <h1 className="break-words text-2xl font-bold text-slate-900">{lesson.title}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
+          {lesson.isPro && <ProBadge />}
           <Badge tone="brand">{lesson.cefrLevel}</Badge>
           {lesson.topicTag && (
             <span>
@@ -100,6 +107,18 @@ export default function LessonDetailPage() {
         {lesson.description && <p className="mt-3 text-slate-600">{lesson.description}</p>}
       </header>
 
+      {lesson.isPro && (locked || !signedIn) && (
+        <div className="mt-4 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+          <p>👑 Bài học Premium. {PRO_LESSON_MESSAGE}</p>
+          <Link
+            href="/subscription"
+            className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-lg bg-pro-gradient px-4 text-sm font-semibold text-white hover:opacity-90"
+          >
+            Nâng cấp Premium
+          </Link>
+        </div>
+      )}
+
       {lesson.audioUrl && (
         <div className="mt-4">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Audio cả bài</p>
@@ -110,7 +129,7 @@ export default function LessonDetailPage() {
       <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {(['dictation', 'shadowing'] as const).map((mode) => {
           const href = startHref(mode);
-          const label = mode === 'dictation' ? '✍️ Luyện Dictation' : '🗣️ Luyện Shadowing';
+          const label = `${locked ? '🔒' : mode === 'dictation' ? '✍️' : '🗣️'} Luyện ${mode === 'dictation' ? 'Dictation' : 'Shadowing'}`;
           const done = mode === 'dictation' ? doneD : doneS;
           const cls = clsx(
             'flex min-h-[52px] flex-col items-center justify-center rounded-xl px-4 py-2 text-center font-semibold transition-colors',
@@ -128,7 +147,8 @@ export default function LessonDetailPage() {
           return (
             <Link key={mode} href={href} className={cls}>
               {label}
-              {signedIn && (
+              {signedIn && locked && <span className="text-xs font-normal opacity-80">Dành cho Premium</span>}
+              {signedIn && !locked && (
                 <span className="text-xs font-normal opacity-80">
                   Đã làm {done}/{sorted.length} câu
                 </span>

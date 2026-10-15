@@ -1,6 +1,7 @@
 'use client';
 
 import { ConfirmModal } from '@/components/admin/ConfirmModal';
+import { ProBadge } from '@/components/lessons/ProLessonLock';
 import { invalidateLessonCaches } from '@/components/admin/invalidate';
 import { optional } from '@/components/admin/validation';
 import { Badge } from '@/components/ui/Badge';
@@ -30,9 +31,18 @@ interface LessonForm {
   sourceUrl: string;
   topicTag: string;
   description: string;
+  isPro: boolean;
 }
 
-const emptyForm: LessonForm = { title: '', cefrLevel: 'A1', audioUrl: '', sourceUrl: '', topicTag: '', description: '' };
+const emptyForm: LessonForm = {
+  title: '',
+  cefrLevel: 'A1',
+  audioUrl: '',
+  sourceUrl: '',
+  topicTag: '',
+  description: '',
+  isPro: false,
+};
 
 export default function AdminLessonsPage() {
   const queryClient = useQueryClient();
@@ -82,6 +92,7 @@ export default function AdminLessonsPage() {
       sourceUrl: optional(form.sourceUrl),
       topicTag: optional(form.topicTag),
       description: optional(form.description),
+      isPro: form.isPro,
     });
   }
 
@@ -114,6 +125,7 @@ export default function AdminLessonsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="break-words font-semibold text-slate-900">{lesson.title}</h3>
                     <Badge tone="brand">{lesson.cefrLevel}</Badge>
+                    {lesson.isPro && <ProBadge />}
                     {lesson.topicTag && <Badge tone="slate">{topicLabel(lesson.topicTag)}</Badge>}
                   </div>
                   <p className="text-sm text-slate-500">{lesson.sentenceCount} câu</p>
@@ -179,6 +191,16 @@ export default function AdminLessonsPage() {
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
+          <label className="flex min-h-[44px] items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={form.isPro}
+              onChange={(e) => setForm({ ...form, isPro: e.target.checked })}
+            />
+            Chỉ dành cho Premium
+            <span className="text-xs text-slate-400">(người dùng free vẫn xem được bài và transcript)</span>
+          </label>
           <Button type="submit" loading={createMutation.isPending} className="mt-2 min-h-[44px] w-full">
             Tạo bài học
           </Button>

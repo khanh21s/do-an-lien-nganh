@@ -901,3 +901,87 @@ export interface GameLeaderboard {
   me: GameLeaderboardEntry | null;
   totalPlayers: number;
 }
+
+// --- P2-A ---
+// Premium lessons (A1) + sentence review SRS (A2). Interface declaration merging adds the new
+// fields to the interfaces declared above without touching their lines.
+
+/** `LessonSummaryResponse.isPro` (content-service V2). */
+export interface LessonSummary {
+  isPro: boolean;
+}
+/** `LessonDetailResponse.isPro`: practice on a Pro lesson needs premium (preview stays free). */
+export interface LessonDetail {
+  isPro: boolean;
+}
+export interface ListLessonsParams {
+  /** Omit = all lessons. */
+  isPro?: boolean;
+}
+export interface CreateLessonInput {
+  isPro?: boolean;
+}
+/** `UpdateLessonRequest.isPro` (null/omitted = unchanged). */
+export interface UpdateLessonInput {
+  isPro?: boolean;
+}
+
+export interface DictationAttemptInput {
+  /** Sent by the review screen to grade that queue item. */
+  reviewId?: string;
+}
+export interface ShadowingAttemptInput {
+  reviewId?: string;
+}
+export interface DictationAttemptResult {
+  /** Effect on the review queue; null when the sentence is not queued. */
+  review: SentenceReviewOutcome | null;
+}
+export interface ShadowingAttemptResult {
+  review: SentenceReviewOutcome | null;
+}
+
+/** `queued` = failed attempt (added/reset, due now); `graded` = SM-2 applied; `unchanged` = schedule kept. */
+export type SentenceReviewAction = 'queued' | 'graded' | 'unchanged';
+
+/** Mirrors `SentenceReviewOutcome`. */
+export interface SentenceReviewOutcome {
+  reviewId: string;
+  action: SentenceReviewAction;
+  /** SM-2 quality when `action = 'graded'`. */
+  quality: number | null;
+  repetitions: number;
+  intervalDays: number;
+  easeFactor: number;
+  nextReviewAt: string;
+}
+
+/** Mirrors `SentenceReviewItemResponse` (`GET /practice/review/queue`). */
+export interface SentenceReviewItem {
+  id: string;
+  lessonId: string;
+  sentenceId: string;
+  mode: PracticeMode;
+  repetitions: number;
+  intervalDays: number;
+  easeFactor: number;
+  nextReviewAt: string;
+  lastScore: number | null;
+  lastReviewedAt: string | null;
+  createdAt: string;
+  lessonTitle: string | null;
+  lessonAudioUrl: string | null;
+  lessonIsPro: boolean;
+  /** Pro lesson and the user is not premium: attempts would be refused (403). */
+  locked: boolean;
+  sentence: SentenceResponse;
+}
+
+/** Mirrors `SentenceReviewStatsResponse`. */
+export interface SentenceReviewStats {
+  dueCount: number;
+  total: number;
+  /** Earliest future due time, null when nothing else is scheduled. */
+  nextDueAt: string | null;
+}
+// --- end P2-A ---
