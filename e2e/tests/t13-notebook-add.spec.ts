@@ -57,7 +57,18 @@ test('T13-1 notebook: add, duplicate error, edit a custom word', async ({ page }
   await dialog.getByRole('button', { name: 'Lưu thay đổi' }).click();
   await expect(page.getByText('Đã cập nhật')).toBeVisible();
   await expect(page.getByText('điều may mắn bất ngờ')).toBeVisible();
+  await expect(page.getByText('Thẻ mới')).toBeVisible();
   await page.screenshot({ path: `${SHOTS}/13-notebook-custom-word.png`, fullPage: true });
+
+  // P2-anki: the word is a NEW card of the review session ("Ôn tập"), with the new-card buttons.
+  await page.goto('/vocabulary/review');
+  await expect(page.getByLabel('Mới: 1')).toBeVisible();
+  await expect(page.getByText('serendipity', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Từ mới')).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('preview-again')).toHaveText('<1 phút');
+  await expect(page.getByTestId('preview-good')).toHaveText('10 phút');
+  await expect(page.getByTestId('preview-easy')).toHaveText('4 ngày');
   expect(errors).toEqual([]);
 });
 
@@ -75,12 +86,14 @@ test('T13-2 dictation: click a word in the answer → prefilled modal → saved 
   await ta.press('Enter');
   await expect(page.getByText('🎉 Chính xác!')).toBeVisible();
 
-  const wordBtn = page.getByRole('button', { name: /^Thêm '.+' vào sổ tay$/ }).nth(1);
-  const label = (await wordBtn.getAttribute('aria-label'))!;
-  const word = label.replace(/^Thêm '/, '').replace(/' vào sổ tay$/, '');
+  // P2-C: a word opens the dictionary sheet first, "Thêm vào sổ tay / bộ thẻ" opens the prefilled form.
+  const wordBtn = page.getByRole('button', { name: /^Tra từ '.+'$/ }).nth(1);
   await wordBtn.click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByLabel('Từ', { exact: true })).toHaveValue(word);
+  await dialog.getByRole('button', { name: '+ Thêm vào sổ tay / bộ thẻ' }).click();
+  // The form holds the clicked word, or its lemma when the dictionary resolved one ("running" → "run").
+  const word = await dialog.getByLabel('Từ', { exact: true }).inputValue();
+  expect(word.length).toBeGreaterThan(0);
   await expect(dialog.getByLabel('Ví dụ', { exact: true })).toHaveValue(s0.text);
   await dialog.getByLabel('Nghĩa', { exact: true }).fill('nghĩa thử nghiệm');
   await page.screenshot({ path: `${SHOTS}/13-dictation-quick-add.png`, fullPage: true });

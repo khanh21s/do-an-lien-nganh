@@ -3,6 +3,7 @@
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { subscriptionApi } from '@/lib/endpoints/subscription';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
+import { practiceApi } from '@/lib/endpoints/practice';
 import { qk } from '@/lib/queryKeys';
 import { storageKeys } from '@/lib/storageKeys';
 import { useQuery } from '@tanstack/react-query';
@@ -18,6 +19,8 @@ export function Sidebar() {
 
   // Shared cache keys: Topbar / pages reuse these without extra requests; T10 invalidates qk.vocabStats.
   const { data: vocabStats } = useQuery({ queryKey: qk.vocabStats, queryFn: vocabularyApi.getStats });
+  // P2-A: due count of the sentence review queue (refreshed after every attempt).
+  const { data: sentenceReviewStats } = useQuery({ queryKey: qk.sentenceReviewStats, queryFn: practiceApi.getReviewStats });
   const { data: userSub } = useQuery({
     queryKey: qk.userSubscription,
     queryFn: subscriptionApi.getUserSubscription,
@@ -52,7 +55,7 @@ export function Sidebar() {
               item={entry}
               active={activeHref === entry.href}
               collapsed={collapsed}
-              badge={badgeCount(entry.badge, vocabStats)}
+              badge={badgeCount(entry.badge, vocabStats, sentenceReviewStats)}
             />
           ) : (
             <div key={entry.key} role="group" aria-label={entry.label}>
@@ -75,7 +78,7 @@ export function Sidebar() {
                     item={child}
                     active={activeHref === child.href}
                     collapsed={collapsed}
-                    badge={badgeCount(child.badge, vocabStats)}
+                    badge={badgeCount(child.badge, vocabStats, sentenceReviewStats)}
                     groupLabel={entry.label}
                   />
                 ))}

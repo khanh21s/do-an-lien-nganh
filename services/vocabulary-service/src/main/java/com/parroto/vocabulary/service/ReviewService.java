@@ -1,11 +1,17 @@
 package com.parroto.vocabulary.service;
 
+import com.parroto.common.dto.PageResponse;
 import com.parroto.vocabulary.dto.*;
 import com.parroto.vocabulary.entity.UserVocab;
 import com.parroto.vocabulary.entity.VocabCard;
-import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.vocabulary.repository.UserVocabRepository;
 import com.parroto.vocabulary.repository.VocabCardRepository;
+import com.parroto.vocabulary.entity.CardState;
+import com.parroto.vocabulary.service.srs.AnkiDay;
+import com.parroto.vocabulary.service.srs.AnkiDefaults;
+import com.parroto.vocabulary.service.srs.AnkiScheduler;
+import com.parroto.vocabulary.service.srs.Rating;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -22,67 +28,49 @@ public class ReviewService {
 
     private final UserVocabRepository userVocabRepository;
     private final VocabCardRepository cardRepository;
-    private final SM2Calculator sm2Calculator;
+    private final AnkiScheduler scheduler;
     private final PremiumClient premiumClient;
 
     public ReviewService(UserVocabRepository userVocabRepository, VocabCardRepository cardRepository,
-                          SM2Calculator sm2Calculator, PremiumClient premiumClient) {
+                          AnkiScheduler scheduler, PremiumClient premiumClient) {
         this.userVocabRepository = userVocabRepository;
         this.cardRepository = cardRepository;
-        this.sm2Calculator = sm2Calculator;
+        this.scheduler = scheduler;
         this.premiumClient = premiumClient;
     }
 
+    /**
+     * Legacy {@code GET /vocabs/user/review-queue} (the review page now uses {@code GET /vocabs/user/study}):
+     * learning cards due within the learn-ahead limit and review cards due today. NEW cards are not listed.
+     */
     @Transactional(readOnly = true)
     public ReviewQueueResponse getReviewQueue(UUID userId) {
-        List<UserVocab> due = userVocabRepository.findDueForReview(userId, OffsetDateTime.now());
+        OffsetDateTime now = OffsetDateTime.now();
+        List<UserVocab> due = userVocabRepository.findDueForReview(userId, now.plus(AnkiDefaults.LEARN_AHEAD),
+                AnkiDay.nextDayStart(now));
         long totalCards = userVocabRepository.countByUserId(userId);
         List<ReviewQueueItem> items = due.stream().map(ReviewQueueItem::from).collect(Collectors.toList());
         return new ReviewQueueResponse(items, items.size(), totalCards);
     }
 
-    @Transactional
-    public SubmitReviewResponse submitReview(UUID userId, SubmitReviewRequest request) {
-        UserVocab userVocab = userVocabRepository.findById(request.userVocabId())
-                .orElseThrow(() -> ApiException.notFound("Vocabulary entry not found"));
-        if (!userVocab.getUserId().equals(userId)) {
-            throw ApiException.notFound("Vocabulary entry not found");
-        }
-
-        SM2Calculator.Sm2Result result = applyQuality(userVocab, request.quality(), OffsetDateTime.now());
-        userVocab = userVocabRepository.save(userVocab);
-
-        return SubmitReviewResponse.builder()
-                .userVocabId(userVocab.getId())
-                .nextReviewAt(userVocab.getNextReviewAt())
-                .easeFactor(userVocab.getEaseFactor().doubleValue())
-                .interval(result.interval())
-                .repetitions(userVocab.getRepetitions())
-                .message(messageFor(request.quality(), result.interval()))
-                .build();
+    /** Grades a stored card with the Anki scheduler (used by the "Dịch nhanh" game); the caller saves it. */
+    public AnkiScheduler.Outcome applyRating(UserVocab userVocab, Rating rating, OffsetDateTime now) {
+        return scheduler.grade(userVocab, rating, now);
     }
 
-    /** Applies one SM-2 review of {@code quality} at {@code now} to the entry (caller saves it). */
-    public SM2Calculator.Sm2Result applyQuality(UserVocab userVocab, int quality, OffsetDateTime now) {
-        SM2Calculator.Sm2Result result = sm2Calculator.calculate(
-                userVocab.getRepetitions(), userVocab.getIntervalDays(), userVocab.getEaseFactor(), quality);
-        userVocab.setIntervalDays(result.interval());
-        userVocab.setEaseFactor(result.easeFactor());
-        userVocab.setRepetitions(result.repetitions());
-        userVocab.setLastReviewAt(now);
-        userVocab.setNextReviewAt(now.plusDays(result.interval()));
-        userVocab.setQuality(quality);
-        return result;
-    }
-
+    /**
+     * {@code dueToday}: learning and review cards due before the next Anki day starts (04:00 Vietnam
+     * time); NEW cards are not "due". {@code bySRS}: NEW / LEARNING+RELEARNING / REVIEW.
+     */
     @Transactional(readOnly = true)
     public VocabUserStatsResponse getUserStats(UUID userId) {
+        OffsetDateTime cutoff = AnkiDay.nextDayStart(OffsetDateTime.now());
         long totalLearned = userVocabRepository.countByUserId(userId);
-        long dueToday = userVocabRepository.countByUserIdAndNextReviewAtLessThanEqual(userId, OffsetDateTime.now());
-        long dueThisWeek = userVocabRepository.countByUserIdAndNextReviewAtLessThanEqual(userId, OffsetDateTime.now().plusDays(7));
-        long newCount = userVocabRepository.countByUserIdAndRepetitions(userId, 0);
+        long dueToday = userVocabRepository.countScheduledDueBefore(userId, cutoff);
+        long dueThisWeek = userVocabRepository.countScheduledDueBefore(userId, cutoff.plusDays(6));
+        long newCount = userVocabRepository.countByUserIdAndState(userId, CardState.NEW);
         long learning = userVocabRepository.countLearning(userId);
-        long review = userVocabRepository.countReview(userId);
+        long review = userVocabRepository.countByUserIdAndState(userId, CardState.REVIEW);
         Double accuracy = userVocabRepository.averageAccuracy(userId);
 
         return VocabUserStatsResponse.builder()
@@ -116,13 +104,11 @@ public class ReviewService {
             throw ApiException.forbidden("Bộ từ Pro – nâng cấp Premium để học");
         }
 
+        // A NEW card: it shows up as "new" in the review session (P2-anki).
         UserVocab userVocab = UserVocab.builder()
                 .userId(userId)
                 .card(card)
                 .nextReviewAt(OffsetDateTime.now())
-                .intervalDays(1)
-                .easeFactor(java.math.BigDecimal.valueOf(2.5))
-                .repetitions(0)
                 .build();
         userVocab = userVocabRepository.save(userVocab);
 
@@ -134,16 +120,6 @@ public class ReviewService {
                 .nextReviewAt(userVocab.getNextReviewAt())
                 .status("new")
                 .build();
-    }
-
-    static String messageFor(int quality, int intervalDays) {
-        if (quality < 3) {
-            return "Đừng lo! Thẻ sẽ được ôn lại sau %d ngày.".formatted(intervalDays);
-        }
-        if (intervalDays <= 1) {
-            return "Tốt! Ôn lại vào ngày mai.";
-        }
-        return "Tốt lắm! Ôn lại trong %d ngày.".formatted(intervalDays);
     }
 
     private static String blankToNull(String s) {

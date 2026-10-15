@@ -2,8 +2,8 @@ package com.parroto.subscription.controller;
 
 import com.parroto.subscription.dto.AdminPlanRequest;
 import com.parroto.subscription.dto.AdminPlanResponse;
-import com.parroto.subscription.security.AdminGuard;
-import com.parroto.subscription.security.AuthenticatedUser;
+import com.parroto.common.security.AdminGuard;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.subscription.service.AdminPlanService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;

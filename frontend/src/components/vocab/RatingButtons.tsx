@@ -3,7 +3,8 @@
 import { Kbd } from '@/components/ui/Kbd';
 import { primaryLabel } from '@/lib/shortcuts';
 import { useShortcutKeys } from '@/store/shortcut-store';
-import { SRS_RATINGS, formatInterval, previewInterval, type SrsRatingName, type SrsState } from '@/lib/srs';
+import { SRS_RATINGS, previewLabel, type SrsRatingName } from '@/lib/srs';
+import type { RatingPreview } from '@/lib/types';
 import clsx from 'clsx';
 
 const COLORS: Record<SrsRatingName, string> = {
@@ -14,20 +15,20 @@ const COLORS: Record<SrsRatingName, string> = {
 };
 
 /**
- * VOC-02: the 4 SM-2 rating buttons (Again/Hard/Good/Easy → q1/q3/q4/q5, default keys 1–4, customisable).
- * `state` = the card's current SM-2 state for the interval labels; `null` = new card;
- * `undefined` = unknown (labels hidden rather than guessed).
+ * VOC-02 / P2-anki: the 4 rating buttons Học lại / Khó / Tốt / Dễ (Anki ratings 1–4, default keys
+ * 1–4, customisable). `previews` = the server's labels for this card ("<1 phút", "10 phút",
+ * "4 ngày"…); without them the labels are hidden rather than guessed.
  */
 export function RatingButtons({
-  state,
+  previews,
   onRate,
   disabled,
-  suggestedQuality,
+  suggestedRating,
 }: {
-  state: SrsState | null | undefined;
-  onRate: (quality: number) => void;
+  previews: readonly RatingPreview[] | undefined;
+  onRate: (rating: number) => void;
   disabled?: boolean;
-  suggestedQuality?: number | null;
+  suggestedRating?: number | null;
 }) {
   const keys = useShortcutKeys();
   return (
@@ -35,14 +36,15 @@ export function RatingButtons({
       <p className="pb-2 pt-4 text-center text-sm text-slate-500">Bạn nhớ từ này ở mức nào?</p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {SRS_RATINGS.map((r) => {
-          const suggested = suggestedQuality === r.quality;
+          const suggested = suggestedRating === r.rating;
+          const label = previewLabel(previews, r.rating);
           const keyLabel = primaryLabel(keys(`flashcard.${r.name}`));
           return (
             <button
               key={r.key}
               type="button"
               disabled={disabled}
-              onClick={() => onRate(r.quality)}
+              onClick={() => onRate(r.rating)}
               aria-keyshortcuts={keys(`flashcard.${r.name}`)[0]}
               className={clsx(
                 'flex min-h-[64px] flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-60',
@@ -54,8 +56,10 @@ export function RatingButtons({
                 <Kbd className="hidden border-white/40 bg-white/20 text-white shadow-none sm:inline-flex">{keyLabel}</Kbd>
                 {r.label}
               </span>
-              {state !== undefined && (
-                <span className="text-xs font-normal opacity-90">{formatInterval(previewInterval(state, r.quality))}</span>
+              {label && (
+                <span className="text-xs font-normal opacity-90" data-testid={`preview-${r.name}`}>
+                  {label}
+                </span>
               )}
               {suggested && <span className="text-[11px] font-normal opacity-90">Gợi ý</span>}
             </button>

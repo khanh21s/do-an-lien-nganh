@@ -13,7 +13,7 @@ Phase 1 **giữ nguyên stack**. Không thêm framework, không nâng major vers
 |---|---|---|
 | Frontend | Next.js **14.2.35** (App Router, `output: 'standalone'`), React 18.3.1, TypeScript 5.5.3, Tailwind 3.4.6, @tanstack/react-query 5.51.1, axios 1.7.2, zustand 4.5.4, react-hot-toast 2.4.1, clsx 2.1.1, @react-oauth/google 0.12.1 | Chỉ thêm devDependency test: `vitest@1.6.0` (T06). Không thêm thư viện chart/UI. |
 | API Gateway | Node **20** (Docker `node:20-alpine`), express 4.19.2, http-proxy-middleware 2.0.6, jsonwebtoken 9.0.2, express-rate-limit 7.4.0, helmet 7.1.0, cors, morgan, uuid | T02: **pin phiên bản chính xác**, thêm `redis@4.6.14` (node-redis) cho blacklist JWT, commit `package-lock.json`, Dockerfile dùng `npm ci`. |
-| 5 service Java | Spring Boot **3.2.1**, Java **21**, Spring Web/Data JPA/Redis/Security/Validation/Actuator, PostgreSQL driver 42.7.1, jjwt 0.12.3, Lombok 1.18.48, AWS SDK v2 2.25.3 | Dockerfile: `maven:3.9-eclipse-temurin-21` → `eclipse-temurin:21-jre-alpine` (T01). `ddl-auto: validate` giữ nguyên. Test: `spring-boot-starter-test` (JUnit 5 + AssertJ + Mockito) đã có trong pom. |
+| 5 service Java | Spring Boot **3.2.1**, Java **21**, Spring Web/Data JPA/Redis/Security/Validation/Actuator, PostgreSQL driver 42.7.1, jjwt 0.12.3, Lombok 1.18.48, AWS SDK v2 2.25.3 | Dockerfile: `maven:3.9-eclipse-temurin-21` → `eclipse-temurin:21-jre-alpine` (T01; từ Phase 2 build context là `./services` để build kèm module chung `services/common` = `com.parroto:parroto-common`). `ddl-auto: validate` giữ nguyên; từ Phase 2 schema do **Flyway 9.22.3** (Boot-managed, `db/migration`, V1 = baseline, thay đổi mới từ V2) quản lý — xem README "Operations notes" và `docs/reports/P2-foundation.md`. Test: `spring-boot-starter-test` (JUnit 5 + AssertJ + Mockito) đã có trong pom. |
 | Hạ tầng | `postgres:16-alpine` (DB-per-service: auth_db, content_db, practice_db, vocabulary_db, subscription_db), `redis:7-alpine` (cache + blacklist JWT, dùng chung) | Thêm volume `media_data` cho chế độ lưu trữ local (mục 8). |
 | Bên thứ ba | AWS S3, Azure Speech (Pronunciation Assessment REST), VNPay, Google Sign-In, SMTP | S3/Azure **tuỳ chọn**: thiếu key → tự chuyển sang mock (mục 8). |
 
@@ -160,8 +160,8 @@ Không thêm/xoá/sửa bảng hoặc cột (không có migration tool, `ddl-aut
 | `practice_attempt.score` | Luôn 0–100: `score = accuracy × weight(difficulty)`, weight Easy 0.6 / Normal 0.8 / Hard 1.0 (shadowing: `score = accuracy`). Dữ liệu cũ > 100: README hướng dẫn `UPDATE practice_attempt SET score = LEAST(score, 100);` (thủ công, không tự chạy). |
 | `practice_attempt.duration` | Giây (integer). Dùng để tính `minutes` trong activity/heatmap. |
 | `lesson.audio_url`, `sentence.audio_url` | Một trong 3 dạng: (a) `https://<bucket>.s3.<region>.amazonaws.com/<key>` hoặc key S3 trần → đọc từ S3; (b) `local:<path>` → đọc file `${MEDIA_ROOT}/<path>`; (c) `NULL` (chỉ sentence) → FE phát đoạn `start_ms–end_ms` của audio bài. |
-| `user_vocab.quality` | quality SM-2 cuối cùng (1/3/4/5 từ 4 nút; BE vẫn chấp nhận 0–5). |
-| `user_vocab.interval_days` | Số ngày (≥ 1); `next_review_at = now + interval_days` ngày. |
+| `user_vocab.quality` | quality SM-2 cuối cùng (1/3/4/5 từ 4 nút; BE vẫn chấp nhận 0–5). Từ P2-anki: nút cuối quy về 1/3/4/5 (Học lại/Khó/Tốt/Dễ). |
+| `user_vocab.interval_days` | Số ngày (≥ 1); `next_review_at = now + interval_days` ngày. Từ P2-anki (V4): 0 khi NEW/LEARNING, khoảng REVIEW (hoặc khoảng sẽ nhận lại khi RELEARNING); thêm `state`, `step`, `lapses` — xem §4.6. |
 | `vocab_deck.created_by` | userId admin tạo deck (ADM-07). |
 | `activation_code.expires_at` | NOT NULL → nếu admin không nhập thì mặc định `now + 365 ngày`. Định dạng code `PROMO-XXXXX-XXXXX` (A–Z, 2–9, bỏ ký tự dễ nhầm 0/O/1/I). |
 
@@ -176,7 +176,7 @@ Không thêm/xoá/sửa bảng hoặc cột (không có migration tool, `ddl-aut
 | Key | Ghi bởi | Đọc bởi | TTL |
 |---|---|---|---|
 | `token_blacklist:{jti}` | auth-service (logout) | GW, cả 5 service | thời gian sống còn lại của token |
-| `premium:{userId}` | vocabulary `PremiumClient` (cache) | vocabulary | 5 phút; **subscription-service DEL khi kích hoạt premium** (SUB-04) |
+| `premium:{userId}` | vocabulary + practice `PremiumClient` (cache, cùng format JSON boolean) | vocabulary, practice (P2-A1: bài Pro) | 5 phút; **subscription-service DEL khi kích hoạt premium** (SUB-04) |
 | `lessons:list:*`, `lesson:{id}` | content-service | content-service | 24h; xoá khi sửa bài/câu (LES-07) |
 | `practice:stats:{userId}*` | practice-service | practice-service | như hiện tại |
 
@@ -212,25 +212,41 @@ Path ghi theo gateway. "+" = thêm field (không xoá field cũ, trừ khi ghi r
 | `POST /auth/login-google` | `GOOGLE_CLIENT_ID` rỗng → 503 "Google login chưa cấu hình". Tương tự Apple. | T02 |
 | `PUT /auth/change-password` | `authProvider != 'local'` → 400. | T02 |
 
-### 4.6 Thuật toán SM-2 (quyết định của người dùng, sửa B11)
+### 4.6 Lịch ôn từ vựng: Anki SM-2 (P2-anki, thay cho SM-2 thuần của Phase 1)
 
-4 nút → quality: **Again = 1, Hard = 3, Good = 4, Easy = 5** (phím 1–4). Áp dụng SM-2 chuẩn (Wikipedia/SuperMemo):
+Từ Phase 2 (nhánh `feat/phase2-anki`, báo cáo `docs/reports/P2-anki.md`) mọi thẻ từ vựng — học theo bộ thẻ, trang "Ôn tập" (`/vocabulary/review`) và từ trong sổ tay — dùng **một bộ lập lịch kiểu Anki** (`vocabulary-service` `service/srs/AnkiScheduler`, hằng số trong `AnkiDefaults`). Ôn câu sai (practice-service) không đổi. 4 nút **Học lại / Khó / Tốt / Dễ = rating 1 / 2 / 3 / 4** (phím 1–4).
+
+Trạng thái `user_vocab.state`: `NEW` (chưa chấm lần nào), `LEARNING` (bước học 1m, 10m; `step` = chỉ số bước), `REVIEW` (khoảng cách theo ngày), `RELEARNING` (quên thẻ REVIEW; bước 10m).
 
 ```
-input: n = repetitions, I = interval_days, EF = ease_factor, q
-if q >= 3:
-    if n == 0: I' = 1
-    elif n == 1: I' = 6
-    else: I' = round(I × EF)          # EF trước khi cập nhật
-    n' = n + 1
-else:                                  # Again
-    n' = 0
-    I' = 1
-EF' = max(1.3, EF + (0.1 − (5−q) × (0.08 + (5−q) × 0.02)))   # làm tròn 2 chữ số (HALF_UP)
-next_review_at = now + I' ngày
+Hằng số (mặc định của Anki): bước học 1m 10m; graduating 1 ngày; easy 4 ngày; ease khởi đầu 2.50;
+easy bonus 1.30; hard 1.20; bước học lại 10m; sau khi quên: khoảng mới = 0% cũ, tối thiểu 1 ngày;
+ease ≥ 1.30; khoảng ≤ 36500 ngày; ngày mới bắt đầu 04:00 Asia/Ho_Chi_Minh; learn ahead 20 phút;
+không giới hạn số thẻ mỗi ngày; không fuzz.
+
+NEW / LEARNING (bước i)
+  Học lại → bước 0 (1m)
+  Khó     → giữ bước i; ở bước đầu = trung bình bước 1 và 2 (5,5m ≈ "6 phút")
+  Tốt     → bước i+1; sau bước cuối → REVIEW, 1 ngày
+  Dễ      → REVIEW ngay, 4 ngày            (thẻ NEW nhận ease 2.50; trả lời khi đang học không đổi ease)
+REVIEW (khoảng I, ease E, trễ d = ngày hôm nay − ngày đến hạn ≥ 0)
+  Học lại → quên: E − 0.20, lapses + 1, RELEARNING bước 0 (10m); khoảng giữ lại = max(1, I × 0)
+  Khó     → I × 1.2                 (≥ I + 1),     E − 0.15
+  Tốt     → (I + d/2) × E           (≥ Khó + 1)
+  Dễ      → (I + d) × E × 1.3       (≥ Tốt + 1),   E + 0.15
+  (trả lời trước ngày đến hạn — chỉ xảy ra qua game: công thức "early review" của Anki)
+RELEARNING
+  Học lại → bước 0;  Khó → lặp bước (1 bước: ×1.5 = 15m);  Tốt → REVIEW với khoảng giữ lại;
+  Dễ → REVIEW với khoảng giữ lại + 1 ngày
+Khoảng làm tròn half-up, kẹp [1, 36500]; thẻ REVIEW đến hạn lúc 04:00 (giờ VN) của ngày đến hạn,
+bước học dùng mốc thời gian chính xác.
 ```
 
-Ví dụ kiểm thử (thẻ n=3, I=10, EF=2.5): Again → n=0, I=1, EF=1.96; Hard → I=25, EF=2.36; Good → I=25, EF=2.50; Easy → I=25, EF=2.60. Ở SM-2 chuẩn, Hard/Good/Easy chỉ khác nhau qua EF (ảnh hưởng lần ôn sau) — đây là hệ quả chấp nhận được của quyết định. FE `lib/srs.ts` cài **cùng công thức** để hiển thị nhãn "1 ngày / 25 ngày" trên nút.
+Ví dụ kiểm thử (thẻ REVIEW I=10, E=2.50, đến hạn hôm nay): Học lại → "10 phút" (RELEARNING, E=2.30); Khó → 12 ngày (E=2.35); Tốt → 25 ngày; Dễ → 33 ngày "1,1 tháng" (E=2.65). Thẻ mới: "<1 phút / 6 phút / 10 phút / 4 ngày".
+
+**Phiên học** (`StudyService`): thẻ kế tiếp = (1) thẻ đang học đã đến bước, (2) thẻ REVIEW đến hạn hôm nay, (3) thẻ mới — trong bộ thẻ là mọi thẻ chưa từng chấm (thứ tự ngẫu nhiên theo `seed`), ở trang Ôn tập là các dòng `NEW` (từ sổ tay, "thêm vào sổ tay") theo thứ tự thêm, (4) thẻ đang học đến hạn trong 20 phút khi không còn gì khác. Bộ đếm Mới / Đang học / Ôn. **Nhãn trên nút do server tính** (`previews` của mỗi thẻ, cùng hàm với lúc chấm), FE không còn bản sao công thức (`lib/srs.ts` chỉ còn tên nút, phím, chế độ gõ). `GET /vocabs/user/stats.dueToday` = thẻ LEARNING/RELEARNING/REVIEW có `next_review_at` trước 04:00 sáng hôm sau.
+
+Endpoint: `GET /vocabs/decks/{id}/study?groupId=&seed=`, `GET /vocabs/user/study?seed=` → `{counts {new, learning, review}, card {…, previews[4]}, nextDueAt, now}`; `POST /vocabs/user/review {userVocabId | cardId, rating 1–4 (quality 0–5 cũ vẫn nhận), answeredAt?, deckId?, groupId?, seed?}` → lịch mới + `session` đã cập nhật. Chi tiết: `docs/reports/P2-anki.md`.
 
 ### 4.7 Chấm điểm Dictation (quyết định của người dùng, sửa B10)
 

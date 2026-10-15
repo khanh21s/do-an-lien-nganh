@@ -1,7 +1,8 @@
 package com.parroto.practice.service;
 
+import com.parroto.common.cache.CacheService;
 import com.parroto.practice.dto.ActivityDayResponse;
-import com.parroto.practice.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.practice.repository.PracticeAttemptRepository;
 import com.parroto.practice.util.AppTime;
 import org.junit.jupiter.api.Test;

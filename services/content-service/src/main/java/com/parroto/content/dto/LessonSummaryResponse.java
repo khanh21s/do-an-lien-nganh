@@ -15,6 +15,7 @@ public record LessonSummaryResponse(
         String topicTag,
         String description,
         Integer duration,
+        boolean isPro,
         Double durationMinutes,
         long sentenceCount,
         OffsetDateTime createdAt
@@ -28,6 +29,7 @@ public record LessonSummaryResponse(
                 .topicTag(lesson.getTopicTag())
                 .description(lesson.getDescription())
                 .duration(lesson.getDuration())
+                .isPro(Boolean.TRUE.equals(lesson.getIsPro()))
                 .durationMinutes(lesson.getDuration() != null ? Math.round(lesson.getDuration() / 6.0) / 10.0 : null)
                 .sentenceCount(sentenceCount)
                 .createdAt(lesson.getCreatedAt())

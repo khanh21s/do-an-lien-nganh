@@ -7,10 +7,13 @@ import { apiErrorMessage } from '@/lib/api';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
 import { qk } from '@/lib/queryKeys';
 import type { LearnedWord } from '@/lib/types';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { DeckGroupPicker } from './decks/DeckGroupPicker';
+import { deckOptions } from './decks/myDecks';
 import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
+  ADD_WORD_FIELDS,
   ADD_WORD_LIMITS,
   initialFormValues,
   normalizeAddWordForm,
@@ -20,14 +23,7 @@ import {
   type AddWordPrefill,
 } from './addWordForm';
 
-const FIELDS: { key: AddWordField; label: string; placeholder: string; required?: boolean }[] = [
-  { key: 'word', label: 'Từ', placeholder: 'vd. today', required: true },
-  { key: 'meaning', label: 'Nghĩa', placeholder: 'vd. hôm nay', required: true },
-  { key: 'ipa', label: 'Phiên âm (IPA)', placeholder: 'vd. təˈdeɪ' },
-  { key: 'partOfSpeech', label: 'Từ loại', placeholder: 'vd. noun, verb, adj…' },
-  { key: 'example', label: 'Ví dụ', placeholder: 'Câu ví dụ tiếng Anh' },
-  { key: 'exampleVi', label: 'Nghĩa ví dụ', placeholder: 'Bản dịch câu ví dụ' },
-];
+const FIELDS = ADD_WORD_FIELDS;
 
 /**
  * VOC-NB-ADD: add a word of the user's own to the notebook, or edit one they added
@@ -41,6 +37,7 @@ export function AddWordModal({
   prefill,
   editing,
   onSaved,
+  chooseDeck = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -49,6 +46,11 @@ export function AddWordModal({
   /** Edit mode: the custom word being edited (`userVocabId` is the PUT target). */
   editing?: LearnedWord | null;
   onSaved?: (word: LearnedWord) => void;
+  /**
+   * P2-C: let the learner pick one of their decks (notebook by default) and a group. Without it the
+   * word goes to the notebook as before.
+   */
+  chooseDeck?: boolean;
 }) {
   const queryClient = useQueryClient();
   const isEdit = !!editing;
@@ -56,6 +58,18 @@ export function AddWordModal({
   const [errors, setErrors] = useState<Partial<Record<AddWordField, string>>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const firstInputRef = useRef<HTMLInputElement | null>(null);
+  // P2-C target deck/group ('' = notebook / no group until the deck list arrives).
+  const [target, setTarget] = useState<{ deckId: string; groupId: string }>({ deckId: '', groupId: '' });
+  const showPicker = chooseDeck && !isEdit;
+  const myDecks = useQuery({
+    queryKey: qk.myDecks,
+    queryFn: () => vocabularyApi.listMyDecks(),
+    enabled: open && showPicker,
+  });
+  const options = deckOptions(myDecks.data?.decks ?? []);
+  const deckId = target.deckId || options[0]?.id || '';
+  const targetDeck = options.find((o) => o.id === deckId);
+  const toNotebook = !showPicker || !targetDeck || (targetDeck.isNotebook && !target.groupId);
 
   // Reset the form each time the modal opens (or switches word).
   useEffect(() => {
@@ -63,22 +77,31 @@ export function AddWordModal({
     setValues(initialFormValues(editing ?? prefill));
     setErrors({});
     setServerError(null);
+    setTarget({ deckId: '', groupId: '' });
     const id = window.setTimeout(() => firstInputRef.current?.focus(), 0);
     return () => window.clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill objects are recreated by callers; reset on open/target change only
   }, [open, editing?.userVocabId, prefill?.word, prefill?.example]);
 
   const mutation = useMutation({
-    mutationFn: (input: ReturnType<typeof normalizeAddWordForm>) =>
-      editing
-        ? vocabularyApi.updatePersonalWord(editing.userVocabId, input)
-        : vocabularyApi.createPersonalWord(input),
+    mutationFn: async (input: ReturnType<typeof normalizeAddWordForm>): Promise<LearnedWord | null> => {
+      if (editing) return vocabularyApi.updatePersonalWord(editing.userVocabId, input);
+      if (toNotebook) return vocabularyApi.createPersonalWord(input);
+      await vocabularyApi.addMyCard(deckId, { ...input, groupId: target.groupId || null });
+      return null;
+    },
     onSuccess: (saved) => {
-      toast.success(isEdit ? 'Đã cập nhật' : 'Đã thêm vào sổ tay');
-      for (const queryKey of [qk.learnedWordsAll, qk.vocabStats, qk.reviewQueue]) {
+      toast.success(
+        isEdit
+          ? 'Đã cập nhật'
+          : toNotebook || targetDeck?.isNotebook
+            ? 'Đã thêm vào sổ tay – từ mới có trong phiên Ôn tập' // P2-anki: a NEW card
+            : `Đã thêm vào bộ “${targetDeck?.label}”`
+      );
+      for (const queryKey of [qk.learnedWordsAll, qk.vocabStats, qk.reviewQueue, qk.myDecks, qk.deckCardsAll, qk.deckDetailAll]) {
         void queryClient.invalidateQueries({ queryKey });
       }
-      onSaved?.(saved);
+      if (saved) onSaved?.(saved);
       onClose();
     },
     onError: (err) => {
@@ -105,7 +128,11 @@ export function AddWordModal({
   }
 
   return (
-    <Modal open={open} onClose={saving ? () => undefined : onClose} title={isEdit ? 'Sửa từ' : 'Thêm từ vào sổ tay'}>
+    <Modal
+      open={open}
+      onClose={saving ? () => undefined : onClose}
+      title={isEdit ? 'Sửa từ' : showPicker ? 'Thêm vào sổ tay / bộ thẻ' : 'Thêm từ vào sổ tay'}
+    >
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-3">
         <fieldset disabled={saving} className="flex flex-col gap-3">
           {FIELDS.map((f, i) => (
@@ -126,19 +153,32 @@ export function AddWordModal({
               className="min-h-[44px]"
             />
           ))}
+          {showPicker && options.length > 0 && (
+            <DeckGroupPicker
+              decks={options}
+              deckId={deckId}
+              groupId={target.groupId}
+              onChange={(nextDeck, nextGroup) => setTarget({ deckId: nextDeck, groupId: nextGroup })}
+            />
+          )}
         </fieldset>
         {serverError && (
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
             {serverError}
           </p>
         )}
-        <p className="text-xs text-slate-400">Nhấn Enter để lưu · Từ mới sẽ vào hàng ôn tập ngay.</p>
+        <p className="text-xs text-slate-400">
+          Nhấn Enter để lưu ·{' '}
+          {toNotebook || targetDeck?.isNotebook
+            ? 'Từ mới sẽ vào hàng ôn tập ngay.'
+            : 'Thẻ được lưu vào bộ đã chọn, vào hàng ôn tập khi bạn học thẻ đó.'}
+        </p>
         <div className="mt-2 flex justify-end gap-2">
           <Button type="button" variant="secondary" className="min-h-[44px]" onClick={onClose} disabled={saving}>
             Huỷ
           </Button>
           <Button type="submit" className="min-h-[44px]" loading={saving}>
-            {isEdit ? 'Lưu thay đổi' : 'Thêm vào sổ tay'}
+            {isEdit ? 'Lưu thay đổi' : toNotebook || targetDeck?.isNotebook ? 'Thêm vào sổ tay' : 'Thêm vào bộ thẻ'}
           </Button>
         </div>
       </form>

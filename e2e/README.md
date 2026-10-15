@@ -37,3 +37,15 @@ docker exec parroto-postgres psql -U parroto -d subscription_db -c "INSERT INTO 
 docker run --rm --network host --ipc=host -u "$(id -u):$(id -g)" -e HOME=/tmp -e PREMIUM_EMAIL="$PEMAIL" -e PREMIUM_PASSWORD='Passw0rd!e2e' \
   -v "$PWD/e2e":/work -w /work mcr.microsoft.com/playwright:v1.47.2-jammy npx playwright test game-phase2
 ```
+
+`tests/anki-session.spec.ts` (P2-anki) checks the Anki-style deck session on a fresh personal deck:
+counters, the server's button labels (`<1 phút / 6 phút / 10 phút / 4 ngày`), Good → 10-minute step,
+Easy → 4 days, learn-ahead of the last learning card, "Đã xong hôm nay". Like every spec it reads
+`BASE_URL` (frontend, default `http://localhost:3000`) and `API_URL` (gateway, default
+`http://localhost:8000`), so it can run against a second stack on other ports:
+```bash
+docker run --rm --network host --ipc=host -u "$(id -u):$(id -g)" -e HOME=/tmp \
+  -e BASE_URL=http://localhost:13000 -e API_URL=http://localhost:18000 \
+  -v "$PWD/e2e":/work -w /work mcr.microsoft.com/playwright:v1.47.2-jammy \
+  npx playwright test anki-session deck-typing-retry t13-notebook-add custom-shortcuts
+```

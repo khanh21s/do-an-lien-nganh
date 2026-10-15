@@ -1,14 +1,18 @@
 package com.parroto.practice.service;
 
+import com.parroto.common.cache.CacheService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.parroto.practice.dto.ShadowingAttemptRequest;
 import com.parroto.practice.dto.ShadowingAttemptResponse;
 import com.parroto.practice.dto.ShadowingUploadUrlRequest;
 import com.parroto.practice.dto.ShadowingUploadUrlResponse;
 import com.parroto.practice.entity.PracticeAttempt;
-import com.parroto.practice.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.practice.repository.PracticeAttemptRepository;
-import com.parroto.practice.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
+import com.parroto.practice.dto.SentenceReviewOutcome;
+import com.parroto.practice.service.review.ReviewRules;
+import com.parroto.practice.service.review.SentenceReviewService;
 import com.parroto.practice.service.speech.PronunciationScorer;
 import com.parroto.practice.service.storage.RecordingStorage;
 import com.parroto.practice.util.WavUtils;
@@ -31,20 +35,26 @@ public class ShadowingService {
     private final PracticeAttemptRepository attemptRepository;
     private final ObjectMapper objectMapper;
     private final CacheService cacheService;
+    private final LessonAccessGuard lessonAccessGuard;
+    private final SentenceReviewService sentenceReviewService;
 
     public ShadowingService(ContentServiceClient contentServiceClient, RecordingStorage storage,
                             PronunciationScorer pronunciationScorer, PracticeAttemptRepository attemptRepository,
-                            ObjectMapper objectMapper, CacheService cacheService) {
+                            ObjectMapper objectMapper, CacheService cacheService,
+                            LessonAccessGuard lessonAccessGuard, SentenceReviewService sentenceReviewService) {
         this.contentServiceClient = contentServiceClient;
         this.storage = storage;
         this.pronunciationScorer = pronunciationScorer;
         this.attemptRepository = attemptRepository;
         this.objectMapper = objectMapper;
         this.cacheService = cacheService;
+        this.lessonAccessGuard = lessonAccessGuard;
+        this.sentenceReviewService = sentenceReviewService;
     }
 
     public ShadowingUploadUrlResponse requestUploadUrl(AuthenticatedUser user, ShadowingUploadUrlRequest request) {
-        contentServiceClient.assertLessonExists(request.lessonId());
+        // P2-A1: no upload slot for a Pro lesson unless premium (or admin).
+        lessonAccessGuard.requirePracticeAccess(user, contentServiceClient.fetchLesson(request.lessonId()));
         return ShadowingUploadUrlResponse.from(storage.createUpload(user.userUuid()));
     }
 
@@ -76,7 +86,7 @@ public class ShadowingService {
     // saveAndFlush runs in its own transaction.
     public ShadowingAttemptResponse submitAttempt(AuthenticatedUser user, ShadowingAttemptRequest request) {
         String recordingId = RecordingStorage.requireValidRecordingId(request.recordingId());
-        String referenceText = contentServiceClient.fetchSentenceText(request.lessonId(), request.sentenceId());
+        String referenceText = loadReferenceText(user, request);
         String key = RecordingStorage.keyFor(user.userUuid(), recordingId);
         byte[] audio = storage.read(key);
         if (audio.length == 0) {
@@ -104,6 +114,8 @@ public class ShadowingService {
                 .build();
         attempt = attemptRepository.saveAndFlush(attempt);
         cacheService.invalidateByPattern("practice:stats:" + user.userId());
+        notifyGamification(attempt); // P2-B
+        SentenceReviewOutcome review = updateReviewQueue(user, request, score);
 
         return ShadowingAttemptResponse.builder()
                 .attemptId(attempt.getId())
@@ -114,7 +126,21 @@ public class ShadowingService {
                 .wordScores(result.wordScores())
                 .createdAt(attempt.getCreatedAt())
                 .scorer(result.scorer())
+                .review(review)
                 .build();
+    }
+
+    /** P2-A1: reference text of the sentence; Pro lessons need premium (or admin) → else 403. */
+    private String loadReferenceText(AuthenticatedUser user, ShadowingAttemptRequest request) {
+        ContentServiceClient.PracticeTarget target = contentServiceClient.fetchSentence(request.lessonId(), request.sentenceId());
+        lessonAccessGuard.requirePracticeAccess(user, target.lesson());
+        return target.sentence().text();
+    }
+
+    /** P2-A2: score < 70 queues the sentence; a review-screen attempt grades it (SM-2). */
+    private SentenceReviewOutcome updateReviewQueue(AuthenticatedUser user, ShadowingAttemptRequest request, double score) {
+        return sentenceReviewService.recordAttempt(user.userUuid(), request.lessonId(), request.sentenceId(),
+                ReviewRules.SHADOWING, score, request.reviewId());
     }
 
     /** SHA-04: only the owner may fetch a recording; anyone else gets 404 (no existence leak). */
@@ -137,4 +163,21 @@ public class ShadowingService {
     private BigDecimal round(double value) {
         return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
     }
+
+    // --- P2-B gamification ---
+    private GamificationClient gamificationClient;
+
+    /** Setter injection keeps the constructor (and its tests) unchanged; null = no XP events. */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setGamificationClient(GamificationClient gamificationClient) {
+        this.gamificationClient = gamificationClient;
+    }
+
+    /** Fire-and-forget XP event for vocabulary-service; never throws, never delays the attempt. */
+    private void notifyGamification(PracticeAttempt attempt) {
+        if (gamificationClient != null) {
+            gamificationClient.attemptSaved(attempt);
+        }
+    }
+    // --- end P2-B ---
 }

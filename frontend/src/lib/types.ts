@@ -409,6 +409,8 @@ export interface ReviewQueueItem {
   repetitions: number;
   easeFactor: number;
   intervalDays: number;
+  /** P2-anki: LEARNING, REVIEW or RELEARNING. */
+  state?: CardStateName;
 }
 
 export interface ReviewQueueResponse {
@@ -417,23 +419,100 @@ export interface ReviewQueueResponse {
   totalCards: number;
 }
 
-/** Again = 1, Hard = 3, Good = 4, Easy = 5 (architecture §4.6); BE accepts 0–5. */
-export type ReviewQuality = 0 | 1 | 2 | 3 | 4 | 5;
-
+/**
+ * Body of `POST /vocabs/user/review` (P2-anki): a card the user has (`userVocabId`) or a deck card
+ * (`cardId`, its row is created on the first grade); `rating` 1 Again, 2 Hard, 3 Good, 4 Easy.
+ * `deckId`/`groupId`/`seed` pick the session whose counters and next card come back
+ * (none = the global "Ôn tập" session).
+ */
 export interface SubmitReviewInput {
-  userVocabId: string;
-  /** 0–5, see `ReviewQuality`. */
-  quality: number;
+  userVocabId?: string | null;
+  cardId?: string;
+  rating: 1 | 2 | 3 | 4;
+  deckId?: string;
+  groupId?: string;
+  seed?: string;
 }
 
 export interface SubmitReviewResult {
   userVocabId: string;
-  nextReviewAt: string;
-  easeFactor: number;
+  cardId: string;
+  rating: number;
+  state: CardStateName;
+  step: number;
+  intervalDays: number;
+  /** Same as `intervalDays` (Phase-1 name). */
   interval: number;
+  easeFactor: number;
   repetitions: number;
+  lapses: number;
+  nextReviewAt: string;
+  /** The label the button showed ("10 phút", "4 ngày"). */
+  label: string;
   message: string | null;
+  session: StudySession;
 }
+
+// --- P2-anki ---
+export type CardStateName = 'NEW' | 'LEARNING' | 'REVIEW' | 'RELEARNING';
+/** Counter a card belongs to: Mới (blue), Đang học (red), Ôn (green). */
+export type StudyQueue = 'new' | 'learning' | 'review';
+
+export interface StudyCounts {
+  new: number;
+  learning: number;
+  review: number;
+}
+
+/** What one button does, computed by vocabulary-service. */
+export interface RatingPreview {
+  rating: number;
+  label: string;
+  state: CardStateName;
+  intervalDays: number;
+  nextReviewAt: string;
+}
+
+/** `StudyDtos.StudyCard`: a card of the session with its four previews. */
+export interface StudyCardItem {
+  /** null = deck card never graded (grade it with `cardId`). */
+  userVocabId: string | null;
+  cardId: string;
+  deckId: string | null;
+  groupId: string | null;
+  word: string;
+  meaning: string;
+  example: string | null;
+  exampleVi: string | null;
+  ipa: string | null;
+  partOfSpeech: string | null;
+  audioUrl: string | null;
+  imageUrl: string | null;
+  state: CardStateName;
+  queue: StudyQueue;
+  intervalDays: number;
+  easeFactor: number;
+  lapses: number;
+  repetitions: number;
+  nextReviewAt: string | null;
+  /** Again, Hard, Good, Easy. */
+  previews: RatingPreview[];
+}
+
+/** `GET /vocabs/decks/{id}/study` and `GET /vocabs/user/study`. `card` null = done for today. */
+export interface StudySession {
+  counts: StudyCounts;
+  card: StudyCardItem | null;
+  /** When nothing is left: the time the next learning/review card falls due (null = none scheduled). */
+  nextDueAt: string | null;
+  now: string;
+}
+
+export interface StudyParams {
+  groupId?: string;
+  seed?: string;
+}
+// --- end P2-anki ---
 
 export interface AddFromLessonResult {
   userVocabId: string;
@@ -560,6 +639,11 @@ export interface LearnedWordSchedule {
   nextReviewAt?: string | null;
   intervalDays?: number | null;
   easeFactor?: number | null;
+  /** P2-anki */
+  state?: CardStateName;
+  lapses?: number;
+  /** "4 ngày", "1,2 tháng" for review cards, null while new/learning. */
+  intervalLabel?: string | null;
 }
 // --- end T10 ---
 
@@ -901,3 +985,325 @@ export interface GameLeaderboard {
   me: GameLeaderboardEntry | null;
   totalPlayers: number;
 }
+
+// --- P2-B ---
+// App-wide gamification (vocabulary-service GamificationDtos, /vocabs/gamification).
+
+export interface GamificationCheckInState {
+  checkedInToday: boolean;
+  /** Current check-in streak (0 when broken). */
+  streak: number;
+  lastCheckInDay: string | null;
+  /** Diamonds of today's check-in: received (checked in) or on offer (not yet). */
+  todayReward: number;
+  /** Check-ins left (today's included when pending) until the next 7-day bonus. */
+  daysToBonus: number;
+}
+
+export type MissionCode = 'DICTATION_5' | 'SHADOWING_3' | 'REVIEW_10' | 'GAME_1' | 'XP_50' | 'DICTATION_PERFECT_3';
+
+export interface GamificationMission {
+  code: MissionCode | string;
+  icon: string;
+  title: string;
+  target: number;
+  progress: number;
+  /** The +30 💎 reward was granted (automatically, on completion). */
+  completed: boolean;
+  reward: number;
+}
+
+export interface GamificationMe {
+  xp: number;
+  level: number;
+  levelXp: number;
+  levelXpNeeded: number;
+  todayXp: number;
+  weekXp: number;
+  diamonds: number;
+  /** Today in Vietnam time, ISO date. */
+  today: string;
+  checkIn: GamificationCheckInState;
+  missions: GamificationMission[];
+}
+
+export interface CheckInResult {
+  alreadyCheckedIn: boolean;
+  diamondsGained: number;
+  bonusDiamonds: number;
+  streak: number;
+  diamonds: number;
+}
+
+export type XpLeaderboardPeriod = 'week';
+
+export interface XpLeaderboardEntry {
+  rank: number;
+  displayName: string;
+  xp: number;
+  me: boolean;
+}
+
+export interface XpLeaderboard {
+  period: XpLeaderboardPeriod;
+  title: string;
+  from: string;
+  to: string;
+  entries: XpLeaderboardEntry[];
+  me: XpLeaderboardEntry | null;
+  totalPlayers: number;
+}
+// --- end P2-B ---
+// --- P2-A ---
+// Premium lessons (A1) + sentence review SRS (A2). Interface declaration merging adds the new
+// fields to the interfaces declared above without touching their lines.
+
+/** `LessonSummaryResponse.isPro` (content-service V2). */
+export interface LessonSummary {
+  isPro: boolean;
+}
+/** `LessonDetailResponse.isPro`: practice on a Pro lesson needs premium (preview stays free). */
+export interface LessonDetail {
+  isPro: boolean;
+}
+export interface ListLessonsParams {
+  /** Omit = all lessons. */
+  isPro?: boolean;
+}
+export interface CreateLessonInput {
+  isPro?: boolean;
+}
+/** `UpdateLessonRequest.isPro` (null/omitted = unchanged). */
+export interface UpdateLessonInput {
+  isPro?: boolean;
+}
+
+export interface DictationAttemptInput {
+  /** Sent by the review screen to grade that queue item. */
+  reviewId?: string;
+}
+export interface ShadowingAttemptInput {
+  reviewId?: string;
+}
+export interface DictationAttemptResult {
+  /** Effect on the review queue; null when the sentence is not queued. */
+  review: SentenceReviewOutcome | null;
+}
+export interface ShadowingAttemptResult {
+  review: SentenceReviewOutcome | null;
+}
+
+/** `queued` = failed attempt (added/reset, due now); `graded` = SM-2 applied; `unchanged` = schedule kept. */
+export type SentenceReviewAction = 'queued' | 'graded' | 'unchanged';
+
+/** Mirrors `SentenceReviewOutcome`. */
+export interface SentenceReviewOutcome {
+  reviewId: string;
+  action: SentenceReviewAction;
+  /** SM-2 quality when `action = 'graded'`. */
+  quality: number | null;
+  repetitions: number;
+  intervalDays: number;
+  easeFactor: number;
+  nextReviewAt: string;
+}
+
+/** Mirrors `SentenceReviewItemResponse` (`GET /practice/review/queue`). */
+export interface SentenceReviewItem {
+  id: string;
+  lessonId: string;
+  sentenceId: string;
+  mode: PracticeMode;
+  repetitions: number;
+  intervalDays: number;
+  easeFactor: number;
+  nextReviewAt: string;
+  lastScore: number | null;
+  lastReviewedAt: string | null;
+  createdAt: string;
+  lessonTitle: string | null;
+  lessonAudioUrl: string | null;
+  lessonIsPro: boolean;
+  /** Pro lesson and the user is not premium: attempts would be refused (403). */
+  locked: boolean;
+  sentence: SentenceResponse;
+}
+
+/** Mirrors `SentenceReviewStatsResponse`. */
+export interface SentenceReviewStats {
+  dueCount: number;
+  total: number;
+  /** Earliest future due time, null when nothing else is scheduled. */
+  nextDueAt: string | null;
+}
+// --- end P2-A ---
+// --- P2-C ---
+// Personal decks ("Bộ thẻ của tôi"), groups, import and dictionary (vocabulary-service P2-C).
+
+/** `CardResponse.groupId` (declaration merging keeps the base interface untouched). */
+export interface VocabCard {
+  /** Group inside the deck; null = ungrouped. */
+  groupId?: string | null;
+}
+
+/** `PersonalDeckResponse` (GET /vocabs/user/decks). The notebook comes first and is `isNotebook`. */
+export interface PersonalDeck {
+  id: string;
+  name: string;
+  description: string | null;
+  isNotebook: boolean;
+  cardCount: number;
+  groupCount: number;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+/** `DeckUsage`: free/premium limits for decks other than the notebook (which has its own cap). */
+export interface DeckUsage {
+  premium: boolean;
+  decks: number;
+  maxDecks: number;
+  cards: number;
+  maxCards: number;
+  notebookCards: number;
+  maxNotebookCards: number;
+}
+
+export interface PersonalDeckList {
+  decks: PersonalDeck[];
+  usage: DeckUsage;
+}
+
+/** Body of POST /vocabs/user/decks and PUT /vocabs/user/decks/{id}. */
+export interface PersonalDeckInput {
+  name: string;
+  description?: string | null;
+}
+
+/** Body of POST /vocabs/user/decks/{id}/cards and PUT /vocabs/user/cards/{cardId} (`PersonalCardRequest`). */
+export interface PersonalCardInput extends CreatePersonalWordInput {
+  /** null = ungrouped (on PUT the card moves accordingly). */
+  groupId?: string | null;
+}
+
+/** `GroupResponse`. */
+export interface VocabGroup {
+  id: string;
+  deckId: string;
+  name: string;
+  sortOrder: number;
+  cardCount: number;
+}
+
+/** Body of POST/PUT /vocabs/decks/{deckId}/groups[/{groupId}]. */
+export interface GroupInput {
+  name?: string;
+  sortOrder?: number;
+}
+
+/** `DeckDetailResponse` (GET /vocabs/decks/{deckId}). */
+export interface DeckDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  level: CefrLevel | null;
+  isProOnly: boolean;
+  cardCount: number;
+  personal: boolean;
+  isNotebook: boolean;
+  /** Owner of a personal deck or admin of a public one. */
+  canManage: boolean;
+  groups: VocabGroup[];
+  ungroupedCount: number;
+  createdAt: string;
+}
+
+/** `?groupId=` value for cards without a group. */
+export const UNGROUPED = 'none';
+
+/** Query of GET /vocabs/decks/{id}/cards with the P2-C group filter. */
+export interface DeckCardsQuery extends PageParams {
+  searchWord?: string;
+  seed?: string;
+  /** A group id of the deck, or `UNGROUPED`. */
+  groupId?: string;
+}
+
+export interface MoveCardsResult {
+  moved: number;
+}
+
+export type ImportFormat = 'csv' | 'txt' | 'pdf';
+
+/** `ImportRow` of the preview. */
+export interface ImportRow {
+  line: number;
+  word: string | null;
+  meaning: string | null;
+  ipa: string | null;
+  partOfSpeech: string | null;
+  example: string | null;
+  exampleVi: string | null;
+  errors: string[];
+  duplicateInFile: boolean;
+  existsInDeck: boolean;
+}
+
+/** `ImportPreviewResponse` (POST /vocabs/decks/import/preview). */
+export interface ImportPreview {
+  format: ImportFormat;
+  fileName: string | null;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  duplicateRows: number;
+  skippedLines: number;
+  rows: ImportRow[];
+  warnings: string[];
+}
+
+export interface ImportRowInput {
+  word: string | null;
+  meaning: string | null;
+  ipa?: string | null;
+  partOfSpeech?: string | null;
+  example?: string | null;
+  exampleVi?: string | null;
+}
+
+/** Body of POST /vocabs/decks/{deckId}/import. */
+export interface ImportCommitInput {
+  groupId?: string | null;
+  newGroupName?: string | null;
+  rows: ImportRowInput[];
+}
+
+export interface ImportCommitResult {
+  deckId: string;
+  groupId: string | null;
+  received: number;
+  imported: number;
+  skippedDuplicate: number;
+  skippedInvalid: number;
+  errors: { index: number; word: string | null; message: string }[];
+}
+
+export type DictionarySource = 'cards' | 'dictionary' | 'cards+dictionary' | 'none';
+export type DictionaryExternalStatus = 'ok' | 'miss' | 'error' | 'skipped' | 'disabled';
+
+/** `DictionaryResponse` (GET /vocabs/dictionary/{word}). */
+export interface DictionaryEntry {
+  query: string;
+  word: string;
+  found: boolean;
+  /** Without slashes. */
+  ipa: string | null;
+  audioUrl: string | null;
+  meaningsVi: string[];
+  partsOfSpeech: string[];
+  definitionsEn: { partOfSpeech: string | null; definition: string; example: string | null }[];
+  examples: { en: string; vi: string | null }[];
+  source: DictionarySource;
+  externalStatus: DictionaryExternalStatus;
+}
+// --- end P2-C ---

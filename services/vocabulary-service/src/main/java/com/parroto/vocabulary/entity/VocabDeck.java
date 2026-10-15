@@ -45,9 +45,21 @@ public class VocabDeck {
     @Column(name = "created_by")
     private UUID createdBy;
 
-    /** NULL = public (admin) deck; otherwise the user's hidden personal deck (T13). */
+    /** NULL = public (admin) deck; otherwise one of the user's hidden personal decks (T13, P2-C). */
     @Column(name = "owner_id")
     private UUID ownerId;
+
+    /**
+     * P2-C: true for the user's notebook ("Sổ tay cá nhân": every card also has a user_vocab row,
+     * due at once). A user can own several other personal decks (is_notebook = false).
+     */
+    @Column(name = "is_notebook", nullable = false)
+    @Builder.Default
+    private Boolean isNotebook = false;
+
+    public boolean isNotebookDeck() {
+        return Boolean.TRUE.equals(isNotebook);
+    }
 
     public boolean isPersonal() {
         return ownerId != null;

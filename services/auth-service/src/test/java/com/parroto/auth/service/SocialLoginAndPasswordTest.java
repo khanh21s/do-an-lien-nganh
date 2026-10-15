@@ -1,7 +1,7 @@
 package com.parroto.auth.service;
 
 import com.parroto.auth.entity.User;
-import com.parroto.auth.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.auth.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

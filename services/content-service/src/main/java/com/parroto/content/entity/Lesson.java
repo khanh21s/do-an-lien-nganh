@@ -45,6 +45,11 @@ public class Lesson {
 
     private Integer duration;
 
+    /** P2-A1: Pro lesson — practice (Dictation/Shadowing) requires premium; preview stays free. */
+    @Column(name = "is_pro", nullable = false)
+    @Builder.Default
+    private Boolean isPro = false;
+
     @Column(name = "is_deleted")
     @Builder.Default
     private Boolean isDeleted = false;

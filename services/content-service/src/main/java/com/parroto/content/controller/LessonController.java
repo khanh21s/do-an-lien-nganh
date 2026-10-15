@@ -1,8 +1,10 @@
 package com.parroto.content.controller;
 
+import com.parroto.common.dto.MessageResponse;
+import com.parroto.common.dto.PageResponse;
 import com.parroto.content.dto.*;
-import com.parroto.content.security.AdminGuard;
-import com.parroto.content.security.AuthenticatedUser;
+import com.parroto.common.security.AdminGuard;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.content.service.LessonService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -28,9 +30,10 @@ public class LessonController {
     public ResponseEntity<PageResponse<LessonSummaryResponse>> list(
             @RequestParam(required = false) String cefrLevel,
             @RequestParam(required = false) String topicTag,
+            @RequestParam(required = false) Boolean isPro,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit) {
-        return ResponseEntity.ok(lessonService.listLessons(cefrLevel, topicTag, page, limit));
+        return ResponseEntity.ok(lessonService.listLessons(cefrLevel, topicTag, isPro, page, limit));
     }
 
     @GetMapping("/search")

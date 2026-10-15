@@ -1,5 +1,8 @@
 package com.parroto.vocabulary.service;
 
+import com.parroto.vocabulary.entity.CardState;
+import com.parroto.vocabulary.service.srs.AnkiScheduler;
+
 import com.parroto.vocabulary.dto.GameDtos.AnswerRequest;
 import com.parroto.vocabulary.dto.GameDtos.AnswerResult;
 import com.parroto.vocabulary.dto.GameDtos.GameState;
@@ -13,14 +16,14 @@ import com.parroto.vocabulary.entity.GameSession;
 import com.parroto.vocabulary.entity.UserVocab;
 import com.parroto.vocabulary.entity.VocabCard;
 import com.parroto.vocabulary.entity.VocabDeck;
-import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.vocabulary.repository.DailyChallengeRepository;
 import com.parroto.vocabulary.repository.GameAnswerRepository;
 import com.parroto.vocabulary.repository.GameSessionRepository;
 import com.parroto.vocabulary.repository.UserVocabRepository;
 import com.parroto.vocabulary.repository.VocabCardRepository;
 import com.parroto.vocabulary.repository.VocabDeckRepository;
-import com.parroto.vocabulary.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -103,7 +106,7 @@ class GameServiceTest {
         premiumClient = mock(PremiumClient.class);
         dailyRepository = mock(DailyChallengeRepository.class);
         progressService = mock(GameProgressService.class);
-        ReviewService reviewService = new ReviewService(userVocabRepository, cardRepository, new SM2Calculator(), premiumClient);
+        ReviewService reviewService = new ReviewService(userVocabRepository, cardRepository, new AnkiScheduler(), premiumClient);
         service = new GameService(sessionRepository, answerRepository, cardRepository, deckRepository,
                 userVocabRepository, dailyRepository, reviewService, premiumClient, progressService, clock);
 
@@ -292,10 +295,11 @@ class GameServiceTest {
         VocabCard decide = deckCards.get(1);
         OffsetDateTime future = OffsetDateTime.now(clock).plusDays(3);
         UserVocab dueHuge = UserVocab.builder().id(UUID.randomUUID()).userId(userId).card(huge)
-                .nextReviewAt(OffsetDateTime.now(clock).minusDays(1)).repetitions(2).intervalDays(6)
+                .state(CardState.REVIEW).nextReviewAt(OffsetDateTime.now(clock).minusDays(1)).repetitions(2).intervalDays(6)
                 .easeFactor(BigDecimal.valueOf(2.5)).build();
         UserVocab notDueDecide = UserVocab.builder().id(UUID.randomUUID()).userId(userId).card(decide)
-                .nextReviewAt(future).repetitions(2).intervalDays(6).easeFactor(BigDecimal.valueOf(2.5)).build();
+                .state(CardState.REVIEW).nextReviewAt(future).repetitions(2).intervalDays(6)
+                .easeFactor(BigDecimal.valueOf(2.5)).build();
         when(userVocabRepository.findByUserIdAndCard_IdIn(eq(userId), any())).thenReturn(List.of(dueHuge, notDueDecide));
 
         answer(s.sessionId(), "huge");           // correct, due -> Good
@@ -315,7 +319,11 @@ class GameServiceTest {
         assertThat(sum.items().get(1).userVocabId()).isEqualTo(notDueDecide.getId());
         assertThat(dueHuge.getQuality()).isEqualTo(4);
         assertThat(notDueDecide.getQuality()).isEqualTo(1);
-        assertThat(notDueDecide.getRepetitions()).isZero();
+        // P2-anki: the miss is a lapse of the review card (relearning, one more lapse)
+        assertThat(notDueDecide.getState()).isEqualTo(CardState.RELEARNING);
+        assertThat(notDueDecide.getLapses()).isEqualTo(1);
+        assertThat(dueHuge.getState()).isEqualTo(CardState.REVIEW);
+        assertThat(dueHuge.getIntervalDays()).isGreaterThan(6);
         assertThat(sessions.get(s.sessionId()).getStatus()).isEqualTo(GameSession.STATUS_FINISHED);
 
         // idempotent: a second finish returns the same result without re-applying SM-2

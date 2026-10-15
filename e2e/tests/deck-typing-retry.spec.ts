@@ -25,10 +25,11 @@ test('typing mode: flip back after "Không biết" → can type again', async ({
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await newUser(page);
-  const cards = await (await page.request.get(`${API}/vocabs/decks/${DECK}/cards?page=1&limit=1`)).json();
-  const word: string = cards.data[0].word;
-
+  // P2-anki: the server picks the session's card (new cards in a per-visit seeded order), so read it
+  // from the page's own study request.
+  const session = page.waitForResponse((r) => r.url().startsWith(`${API}/vocabs/decks/${DECK}/study`) && r.ok());
   await page.goto(`/vocabulary/decks/${DECK}`);
+  const word: string = (await (await session).json()).card.word;
   await page.getByRole('switch', { name: /Chế độ gõ từ/ }).click();
   const input = page.getByLabel('Nhập từ tiếng Anh');
   await expect(input).toBeVisible();

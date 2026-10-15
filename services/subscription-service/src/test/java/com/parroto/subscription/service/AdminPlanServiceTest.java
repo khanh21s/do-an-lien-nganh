@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.parroto.subscription.dto.AdminPlanRequest;
 import com.parroto.subscription.dto.AdminPlanResponse;
 import com.parroto.subscription.entity.Plan;
-import com.parroto.subscription.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.subscription.repository.PlanRepository;
 import com.parroto.subscription.repository.SubscriptionRepository;
 import jakarta.validation.ConstraintViolation;

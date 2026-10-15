@@ -1,9 +1,9 @@
 package com.parroto.practice.controller;
 
-import com.parroto.practice.dto.MessageResponse;
-import com.parroto.practice.exception.ApiException;
+import com.parroto.common.dto.MessageResponse;
+import com.parroto.common.exception.ApiException;
 import com.parroto.practice.repository.GoalDayRepository;
-import com.parroto.practice.service.CacheService;
+import com.parroto.common.cache.CacheService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;

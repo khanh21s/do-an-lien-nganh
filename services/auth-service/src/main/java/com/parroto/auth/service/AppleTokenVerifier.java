@@ -1,6 +1,6 @@
 package com.parroto.auth.service;
 
-import com.parroto.auth.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;

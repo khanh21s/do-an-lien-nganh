@@ -1,8 +1,12 @@
-// Spaced-repetition helpers for the vocabulary flashcards (T10).
-// `nextSrsState` implements exactly the SM-2 variant of docs/architecture.md §4.6 so the interval
-// labels on the rating buttons match what vocabulary-service will schedule.
+// Flashcard rating helpers (T10, P2-anki).
+// Scheduling happens only in vocabulary-service (Anki SM-2, docs/architecture.md §4.6): every
+// card in a study session carries the four button labels computed by the server
+// (`StudyCardItem.previews`), so this file has no copy of the formula.
+
+import type { RatingPreview, StudyQueue } from './types';
 
 export type SrsRatingName = 'again' | 'hard' | 'good' | 'easy';
+export type SrsRatingValue = 1 | 2 | 3 | 4;
 
 export interface SrsRating {
   name: SrsRatingName;
@@ -10,84 +14,57 @@ export interface SrsRating {
   key: '1' | '2' | '3' | '4';
   label: string;
   labelEn: string;
-  /** SM-2 quality sent to `POST /vocabs/user/review`. */
-  quality: 1 | 3 | 4 | 5;
+  /** Anki button number sent as `rating` to `POST /vocabs/user/review`. */
+  rating: SrsRatingValue;
 }
 
-/** Again = 1, Hard = 3, Good = 4, Easy = 5 (architecture §4.6), keys 1–4. */
+/** Again = 1, Hard = 2, Good = 3, Easy = 4 (Anki), keys 1–4. */
 export const SRS_RATINGS: readonly SrsRating[] = [
-  { name: 'again', key: '1', label: 'Học lại', labelEn: 'Again', quality: 1 },
-  { name: 'hard', key: '2', label: 'Khó', labelEn: 'Hard', quality: 3 },
-  { name: 'good', key: '3', label: 'Tốt', labelEn: 'Good', quality: 4 },
-  { name: 'easy', key: '4', label: 'Dễ', labelEn: 'Easy', quality: 5 },
+  { name: 'again', key: '1', label: 'Học lại', labelEn: 'Again', rating: 1 },
+  { name: 'hard', key: '2', label: 'Khó', labelEn: 'Hard', rating: 2 },
+  { name: 'good', key: '3', label: 'Tốt', labelEn: 'Good', rating: 3 },
+  { name: 'easy', key: '4', label: 'Dễ', labelEn: 'Easy', rating: 4 },
 ];
 
-export const QUALITY_AGAIN = 1;
-export const QUALITY_GOOD = 4;
+export const RATING_AGAIN: SrsRatingValue = 1;
+export const RATING_GOOD: SrsRatingValue = 3;
 
-export function ratingByQuality(quality: number): SrsRating | undefined {
-  return SRS_RATINGS.find((r) => r.quality === quality);
+export function ratingByValue(value: number): SrsRating | undefined {
+  return SRS_RATINGS.find((r) => r.rating === value);
 }
 
 export function ratingByKey(key: string): SrsRating | undefined {
   return SRS_RATINGS.find((r) => r.key === key);
 }
 
-export interface SrsState {
-  repetitions: number;
-  intervalDays: number;
-  easeFactor: number;
+/** The server's label for a button ("<1 phút", "10 phút", "4 ngày"…), or undefined when not known. */
+export function previewLabel(previews: readonly RatingPreview[] | undefined, rating: number): string | undefined {
+  return previews?.find((p) => p.rating === rating)?.label;
 }
 
-/** State of a card that has just been added to the notebook (vocabulary-service defaults). */
-export const NEW_CARD_STATE: SrsState = { repetitions: 0, intervalDays: 1, easeFactor: 2.5 };
+// ---------- Session counters (Anki: new blue, learning red, review green) ----------
+export const COUNTER_ORDER: readonly { queue: StudyQueue; label: string }[] = [
+  { queue: 'new', label: 'Mới' },
+  { queue: 'learning', label: 'Đang học' },
+  { queue: 'review', label: 'Ôn' },
+];
 
-export const MIN_EASE_FACTOR = 1.3;
-
-/** Round to 2 decimals, half-up (matches the backend's BigDecimal HALF_UP). */
-function round2(x: number): number {
-  return Math.round(x * 100 + 1e-9) / 100;
-}
-
-/** SM-2 step (architecture §4.6). */
-export function nextSrsState(state: SrsState, quality: number): SrsState {
-  const n = state.repetitions;
-  const ef = state.easeFactor;
-  let interval: number;
-  let repetitions: number;
-  if (quality >= 3) {
-    if (n <= 0) interval = 1;
-    else if (n === 1) interval = 6;
-    else interval = Math.round(state.intervalDays * ef);
-    repetitions = n + 1;
-  } else {
-    repetitions = 0;
-    interval = 1;
-  }
-  const d = 5 - quality;
-  const easeFactor = Math.max(MIN_EASE_FACTOR, round2(ef + (0.1 - d * (0.08 + d * 0.02))));
-  return { repetitions, intervalDays: interval, easeFactor };
-}
-
-/** Interval (days) the card will get if rated with `quality`. `null` state = card not in the notebook yet. */
-export function previewInterval(state: SrsState | null, quality: number): number {
-  return nextSrsState(state ?? NEW_CARD_STATE, quality).intervalDays;
-}
-
-/** "1 ngày", "25 ngày" – exact day count so it can be compared with the backend `interval`. */
-export function formatInterval(days: number): string {
-  return `${days} ngày`;
-}
-
-// ---------- Daily limit (VOC-10) ----------
-export const DAILY_LIMIT_MIN = 1;
-export const DAILY_LIMIT_MAX = 1000;
-export const DEFAULT_DAILY_LIMIT = 100;
-
-export function clampDailyLimit(value: unknown): number {
-  const n = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(n)) return DEFAULT_DAILY_LIMIT;
-  return Math.min(DAILY_LIMIT_MAX, Math.max(DAILY_LIMIT_MIN, Math.round(n)));
+/**
+ * "Đã xong hôm nay" text for the next due card: "lúc 14:05" today, "ngày mai lúc 04:00",
+ * otherwise "lúc 04:00 20/10". `now` is injectable for tests.
+ */
+export function formatNextDue(iso: string | null | undefined, now: Date = new Date()): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  // Built by hand: ICU data differs between browsers/Node ("20/10" vs "20-10").
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((day(d) - day(now)) / 86_400_000);
+  if (diffDays <= 0) return `hôm nay lúc ${time}`;
+  if (diffDays === 1) return `ngày mai lúc ${time}`;
+  return `lúc ${time} ngày ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
 }
 
 // ---------- Typing mode (VOC-09) ----------
@@ -123,33 +100,18 @@ export function maskWord(sentence: string, word: string): string {
 }
 
 /** Suggested rating after a typing check: correct → Good, wrong → Again. */
-export function suggestedQuality(correct: boolean): number {
-  return correct ? QUALITY_GOOD : QUALITY_AGAIN;
+export function suggestedRating(correct: boolean): SrsRatingValue {
+  return correct ? RATING_GOOD : RATING_AGAIN;
 }
 
 // ---------- Session summary (VOC-06) ----------
 export type RatingDistribution = Record<SrsRatingName, number>;
 
-export function ratingDistribution(qualities: number[]): RatingDistribution {
+export function ratingDistribution(ratings: number[]): RatingDistribution {
   const dist: RatingDistribution = { again: 0, hard: 0, good: 0, easy: 0 };
-  for (const q of qualities) {
-    const r = ratingByQuality(q);
+  for (const v of ratings) {
+    const r = ratingByValue(v);
     if (r) dist[r.name] += 1;
   }
   return dist;
-}
-
-/** Earliest ISO timestamp in the list (or null). */
-export function earliestDate(dates: (string | null | undefined)[]): string | null {
-  let best: string | null = null;
-  let bestTime = Infinity;
-  for (const d of dates) {
-    if (!d) continue;
-    const t = Date.parse(d);
-    if (!Number.isNaN(t) && t < bestTime) {
-      bestTime = t;
-      best = d;
-    }
-  }
-  return best;
 }

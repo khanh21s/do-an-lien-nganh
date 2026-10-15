@@ -15,7 +15,6 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { apiErrorMessage } from '@/lib/api';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
 import { qk } from '@/lib/queryKeys';
-import { formatInterval } from '@/lib/srs';
 import type { LearnedWord, LearnedWordSchedule } from '@/lib/types';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -175,7 +174,9 @@ export default function VocabNotebookPage() {
 }
 
 function WordCard({ word, onDelete, onEdit }: { word: NotebookWord; onDelete: () => void; onEdit: () => void }) {
-  const due = word.nextReviewAt ? Date.parse(word.nextReviewAt) <= Date.now() : false;
+  const isNew = word.state === 'NEW';
+  const learning = word.state === 'LEARNING' || word.state === 'RELEARNING';
+  const due = !isNew && word.nextReviewAt ? Date.parse(word.nextReviewAt) <= Date.now() : false;
   return (
     <Card className="flex items-start justify-between gap-2 transition-shadow hover:shadow-md">
       <div className="min-w-0">
@@ -206,11 +207,20 @@ function WordCard({ word, onDelete, onEdit }: { word: NotebookWord; onDelete: ()
         )}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {word.custom && <Badge tone="purple">Tự thêm</Badge>}
-          <Badge tone="brand">Đã ôn {word.repetitions} lần</Badge>
+          {!isNew && <Badge tone="brand">Đã ôn {word.repetitions} lần</Badge>}
           {word.accuracy > 0 && <Badge tone="green">{Math.round(word.accuracy)}% chính xác</Badge>}
-          {word.intervalDays != null && <Badge tone="slate">Chu kỳ {formatInterval(word.intervalDays)}</Badge>}
+          {/* P2-anki: state of the card in the Anki scheduler */}
+          {isNew ? (
+            <Badge tone="brand">Thẻ mới</Badge>
+          ) : learning ? (
+            <Badge tone="red">Đang học</Badge>
+          ) : (
+            word.intervalLabel && <Badge tone="slate">Chu kỳ {word.intervalLabel}</Badge>
+          )}
         </div>
-        {word.nextReviewAt && (
+        {isNew ? (
+          <p className="mt-2 text-xs text-slate-500">Chưa học – có trong phiên Ôn tập</p>
+        ) : word.nextReviewAt && (
           <p className={`mt-2 text-xs ${due ? 'font-medium text-amber-700' : 'text-slate-500'}`}>
             {due ? 'Đến hạn ôn' : 'Ôn tiếp'}: {formatDateTime(word.nextReviewAt)}
           </p>

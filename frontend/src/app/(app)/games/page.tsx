@@ -12,6 +12,7 @@ import type { GameState, GameSummary as Summary, StartGameInput } from '@/lib/ty
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { refreshGamification } from '@/components/gamification/useGamification'; // P2-B
 
 type Phase = { kind: 'lobby' } | { kind: 'play'; state: GameState } | { kind: 'summary'; summary: Summary };
 
@@ -49,6 +50,7 @@ export default function GamesPage() {
         onFinished={(summary) => {
           queryClient.invalidateQueries({ queryKey: qk.gameStats });
           queryClient.invalidateQueries({ queryKey: qk.gameLeaderboardAll });
+          refreshGamification(queryClient); // P2-B: the round's score is shared XP
           if (summary.goalJustMet) {
             queryClient.invalidateQueries({ queryKey: qk.streak });
             queryClient.invalidateQueries({ queryKey: qk.practiceStats });

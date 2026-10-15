@@ -10,6 +10,8 @@ public record ShadowingAttemptRequest(
         @NotNull UUID lessonId,
         @NotNull UUID sentenceId,
         @NotBlank String recordingId,
-        BigDecimal duration
+        BigDecimal duration,
+        /** P2-A2: set by the review screen ("Ôn câu sai") to grade that queue item. */
+        UUID reviewId
 ) {
 }

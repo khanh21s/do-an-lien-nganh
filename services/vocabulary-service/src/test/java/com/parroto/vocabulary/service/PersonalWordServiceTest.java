@@ -1,11 +1,12 @@
 package com.parroto.vocabulary.service;
 
+import com.parroto.common.cache.CacheService;
 import com.parroto.vocabulary.dto.CreatePersonalWordRequest;
 import com.parroto.vocabulary.dto.LearnedWordResponse;
 import com.parroto.vocabulary.entity.UserVocab;
 import com.parroto.vocabulary.entity.VocabCard;
 import com.parroto.vocabulary.entity.VocabDeck;
-import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.vocabulary.repository.UserVocabRepository;
 import com.parroto.vocabulary.repository.VocabCardRepository;
 import com.parroto.vocabulary.repository.VocabDeckRepository;
@@ -92,7 +93,9 @@ class PersonalWordServiceTest {
         assertThat(r.example()).isEqualTo("What a serendipity!");
         assertThat(r.exampleVi()).isNull();
         assertThat(r.repetitions()).isZero();
-        assertThat(r.nextReviewAt()).isBeforeOrEqualTo(OffsetDateTime.now()); // due now
+        assertThat(r.nextReviewAt()).isBeforeOrEqualTo(OffsetDateTime.now());
+        assertThat(r.state()).isEqualTo("NEW"); // P2-anki: a new card in the review session
+        assertThat(r.intervalDays()).isZero();
         assertThat(deck.getCardCount()).isEqualTo(1);
         verify(userVocabRepository).existsWord(userId, "serendipity");
         verify(cacheService).invalidateByPattern("vocab:user:" + userId + ":*");

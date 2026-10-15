@@ -1,63 +1,53 @@
 import { describe, expect, it } from 'vitest';
 import {
-  NEW_CARD_STATE,
   SRS_RATINGS,
-  clampDailyLimit,
-  earliestDate,
-  formatInterval,
+  formatNextDue,
   isTypedAnswerCorrect,
   maskWord,
-  nextSrsState,
-  previewInterval,
+  previewLabel,
   ratingByKey,
+  ratingByValue,
   ratingDistribution,
-  suggestedQuality,
+  suggestedRating,
 } from './srs';
-
-const mature = { repetitions: 3, intervalDays: 10, easeFactor: 2.5 };
+import type { RatingPreview } from './types';
 
 describe('SRS_RATINGS', () => {
-  it('maps keys 1–4 to Again/Hard/Good/Easy = q1/q3/q4/q5', () => {
-    expect(SRS_RATINGS.map((r) => [r.key, r.labelEn, r.quality])).toEqual([
-      ['1', 'Again', 1],
-      ['2', 'Hard', 3],
-      ['3', 'Good', 4],
-      ['4', 'Easy', 5],
+  it('maps keys 1–4 to Again/Hard/Good/Easy = Anki ratings 1–4', () => {
+    expect(SRS_RATINGS.map((r) => [r.key, r.label, r.labelEn, r.rating])).toEqual([
+      ['1', 'Học lại', 'Again', 1],
+      ['2', 'Khó', 'Hard', 2],
+      ['3', 'Tốt', 'Good', 3],
+      ['4', 'Dễ', 'Easy', 4],
     ]);
-    expect(ratingByKey('3')?.quality).toBe(4);
+    expect(ratingByKey('3')?.rating).toBe(3);
+    expect(ratingByValue(2)?.name).toBe('hard');
+    expect(ratingByValue(5)).toBeUndefined();
   });
 });
 
-describe('nextSrsState (architecture §4.6 examples)', () => {
-  it('n=3, I=10, EF=2.5', () => {
-    expect(nextSrsState(mature, 1)).toEqual({ repetitions: 0, intervalDays: 1, easeFactor: 1.96 });
-    expect(nextSrsState(mature, 3)).toEqual({ repetitions: 4, intervalDays: 25, easeFactor: 2.36 });
-    expect(nextSrsState(mature, 4)).toEqual({ repetitions: 4, intervalDays: 25, easeFactor: 2.5 });
-    expect(nextSrsState(mature, 5)).toEqual({ repetitions: 4, intervalDays: 25, easeFactor: 2.6 });
-  });
+describe('server previews', () => {
+  const previews: RatingPreview[] = [
+    { rating: 1, label: '<1 phút', state: 'LEARNING', intervalDays: 0, nextReviewAt: '2026-10-15T03:01:00Z' },
+    { rating: 2, label: '6 phút', state: 'LEARNING', intervalDays: 0, nextReviewAt: '2026-10-15T03:05:30Z' },
+    { rating: 3, label: '10 phút', state: 'LEARNING', intervalDays: 0, nextReviewAt: '2026-10-15T03:10:00Z' },
+    { rating: 4, label: '4 ngày', state: 'REVIEW', intervalDays: 4, nextReviewAt: '2026-10-18T21:00:00Z' },
+  ];
 
-  it('n=1 Good → 6 days; n=0 → 1 day', () => {
-    expect(nextSrsState({ repetitions: 1, intervalDays: 1, easeFactor: 2.5 }, 4).intervalDays).toBe(6);
-    expect(nextSrsState(NEW_CARD_STATE, 5).intervalDays).toBe(1);
-  });
-
-  it('EF never drops below 1.3', () => {
-    expect(nextSrsState({ repetitions: 2, intervalDays: 6, easeFactor: 1.35 }, 1).easeFactor).toBe(1.3);
-  });
-
-  it('previewInterval and labels', () => {
-    expect(SRS_RATINGS.map((r) => previewInterval(mature, r.quality))).toEqual([1, 25, 25, 25]);
-    expect(previewInterval(null, 4)).toBe(1);
-    expect(formatInterval(25)).toBe('25 ngày');
+  it('reads the label of each button from the server payload', () => {
+    expect(SRS_RATINGS.map((r) => previewLabel(previews, r.rating))).toEqual(['<1 phút', '6 phút', '10 phút', '4 ngày']);
+    expect(previewLabel(undefined, 1)).toBeUndefined();
   });
 });
 
-describe('daily limit', () => {
-  it('clamps to 1–1000 with default 100', () => {
-    expect(clampDailyLimit(0)).toBe(1);
-    expect(clampDailyLimit(5000)).toBe(1000);
-    expect(clampDailyLimit('abc')).toBe(100);
-    expect(clampDailyLimit('42')).toBe(42);
+describe('formatNextDue', () => {
+  const now = new Date(2026, 9, 15, 10, 0);
+  it('today, tomorrow, later', () => {
+    expect(formatNextDue(new Date(2026, 9, 15, 10, 9).toISOString(), now)).toBe('hôm nay lúc 10:09');
+    expect(formatNextDue(new Date(2026, 9, 16, 4, 0).toISOString(), now)).toBe('ngày mai lúc 04:00');
+    expect(formatNextDue(new Date(2026, 9, 20, 4, 0).toISOString(), now)).toBe('lúc 04:00 ngày 20/10');
+    expect(formatNextDue(null, now)).toBeNull();
+    expect(formatNextDue('nope', now)).toBeNull();
   });
 });
 
@@ -75,15 +65,13 @@ describe('typing mode', () => {
   });
 
   it('suggests Good when correct, Again when wrong', () => {
-    expect(suggestedQuality(true)).toBe(4);
-    expect(suggestedQuality(false)).toBe(1);
+    expect(suggestedRating(true)).toBe(3);
+    expect(suggestedRating(false)).toBe(1);
   });
 });
 
 describe('summary helpers', () => {
-  it('counts ratings and finds the earliest date', () => {
-    expect(ratingDistribution([1, 4, 4, 5, 3])).toEqual({ again: 1, hard: 1, good: 2, easy: 1 });
-    expect(earliestDate(['2026-10-20T00:00:00Z', null, '2026-10-14T00:00:00Z'])).toBe('2026-10-14T00:00:00Z');
-    expect(earliestDate([])).toBeNull();
+  it('counts ratings', () => {
+    expect(ratingDistribution([1, 3, 3, 4, 2])).toEqual({ again: 1, hard: 1, good: 2, easy: 1 });
   });
 });

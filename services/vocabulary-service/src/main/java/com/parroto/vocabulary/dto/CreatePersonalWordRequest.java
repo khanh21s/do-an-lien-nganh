@@ -1,6 +1,6 @@
 package com.parroto.vocabulary.dto;
 
-import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 
 /**
  * Body of POST /vocabs/user/words and PUT /vocabs/user/words/{id} (T13).

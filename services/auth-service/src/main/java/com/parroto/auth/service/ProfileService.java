@@ -3,7 +3,7 @@ package com.parroto.auth.service;
 import com.parroto.auth.dto.ProfileResponse;
 import com.parroto.auth.dto.UpdateProfileRequest;
 import com.parroto.auth.entity.User;
-import com.parroto.auth.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.auth.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;

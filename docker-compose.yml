@@ -75,10 +75,13 @@ services:
   # Auth Service - Port 8001
   auth-service:
     build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+      # Context = services/ so the Dockerfile can build the shared module services/common first.
+      context: ./services
+      dockerfile: auth-service/Dockerfile
     container_name: parroto-auth-service
     environment:
+      # Allowed CORS origin of this service (the gateway forwards the browser Origin header)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       # Server
       SERVER_PORT: 8001
       
@@ -144,10 +147,13 @@ services:
   # Content Service - Port 8002
   content-service:
     build:
-      context: ./services/content-service
-      dockerfile: Dockerfile
+      # Context = services/ so the Dockerfile can build the shared module services/common first.
+      context: ./services
+      dockerfile: content-service/Dockerfile
     container_name: parroto-content-service
     environment:
+      # Allowed CORS origin of this service (the gateway forwards the browser Origin header)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       SERVER_PORT: 8002
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/content_db
       SPRING_DATASOURCE_USERNAME: content_user
@@ -199,10 +205,13 @@ services:
   # Practice Service - Port 8003
   practice-service:
     build:
-      context: ./services/practice-service
-      dockerfile: Dockerfile
+      # Context = services/ so the Dockerfile can build the shared module services/common first.
+      context: ./services
+      dockerfile: practice-service/Dockerfile
     container_name: parroto-practice-service
     environment:
+      # Allowed CORS origin of this service (the gateway forwards the browser Origin header)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       SERVER_PORT: 8003
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/practice_db
       SPRING_DATASOURCE_USERNAME: practice_user
@@ -214,8 +223,16 @@ services:
       
       # Microservices communication
       CONTENT_SERVICE_URL: http://content-service:8002
-      # Service-to-service auth: vocabulary-service reports met game goals (T16)
+      # P2-B: XP events of saved attempts -> vocabulary-service /internal/gamification/events
+      # (fire-and-forget; no depends_on, vocabulary-service already depends on practice-service URL)
+      VOCABULARY_SERVICE_URL: http://vocabulary-service:8004
+      # P2-A1: premium check for Pro lessons (GET /internal/subscriptions/{userId}/active)
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:8005
+      # Service-to-service auth: vocabulary-service reports met game goals (T16); practice-service
+      # sends XP events to vocabulary-service (P2-B) and calls subscription-service (P2-A1)
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
+      # P2-A1: admins bypass the Pro-lesson practice gate
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@parroto.com}
       
       # Azure Speech API (for Shadowing pronunciation scoring)
       AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
@@ -262,10 +279,13 @@ services:
   # Vocabulary Service - Port 8004
   vocabulary-service:
     build:
-      context: ./services/vocabulary-service
-      dockerfile: Dockerfile
+      # Context = services/ so the Dockerfile can build the shared module services/common first.
+      context: ./services
+      dockerfile: vocabulary-service/Dockerfile
     container_name: parroto-vocabulary-service
     environment:
+      # Allowed CORS origin of this service (the gateway forwards the browser Origin header)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       SERVER_PORT: 8004
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/vocabulary_db
       SPRING_DATASOURCE_USERNAME: vocabulary_user
@@ -286,7 +306,8 @@ services:
       # T16: game daily goal met -> practice streak day
       PRACTICE_SERVICE_URL: http://practice-service:8003
 
-      # Service-to-service auth (architecture §5.3)
+      # Service-to-service auth (architecture §5.3); since P2-B also checked on inbound
+      # /internal/gamification/events from practice-service
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
 
       # Logging
@@ -310,10 +331,13 @@ services:
   # Subscription Service - Port 8005
   subscription-service:
     build:
-      context: ./services/subscription-service
-      dockerfile: Dockerfile
+      # Context = services/ so the Dockerfile can build the shared module services/common first.
+      context: ./services
+      dockerfile: subscription-service/Dockerfile
     container_name: parroto-subscription-service
     environment:
+      # Allowed CORS origin of this service (the gateway forwards the browser Origin header)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       SERVER_PORT: 8005
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/subscription_db
       SPRING_DATASOURCE_USERNAME: subscription_user
@@ -326,7 +350,8 @@ services:
       # Microservices communication
       AUTH_SERVICE_URL: http://auth-service:8001
 
-      # Service-to-service auth (architecture §5.3)
+      # Service-to-service auth (architecture §5.3); since P2-B also checked on inbound
+      # /internal/gamification/events from practice-service
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
 
       # Comma-separated emails allowed to call admin-only endpoints (activation codes)

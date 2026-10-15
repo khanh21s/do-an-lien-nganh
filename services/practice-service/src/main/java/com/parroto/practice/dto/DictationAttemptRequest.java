@@ -11,6 +11,8 @@ public record DictationAttemptRequest(
         @NotNull UUID sentenceId,
         @NotBlank String userInput,
         @Pattern(regexp = "Easy|Normal|Hard", message = "difficulty must be Easy, Normal or Hard")
-        String difficulty
+        String difficulty,
+        /** P2-A2: set by the review screen ("Ôn câu sai") to grade that queue item. */
+        UUID reviewId
 ) {
 }

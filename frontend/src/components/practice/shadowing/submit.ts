@@ -28,6 +28,8 @@ export interface SubmitRecordingInput {
   /** Recording already uploaded by a previous try → skip straight to scoring ("Gửi lại"). */
   uploadedRecordingId?: string | null;
   onStage?: (stage: SubmitStage) => void;
+  /** P2-A2: grade this review-queue item. */
+  reviewId?: string;
 }
 
 /**
@@ -36,7 +38,7 @@ export interface SubmitRecordingInput {
  */
 export async function submitRecording(
   api: ShadowingSubmitApi,
-  { lessonId, sentenceId, blob, durationSec, uploadedRecordingId, onStage }: SubmitRecordingInput
+  { lessonId, sentenceId, blob, durationSec, uploadedRecordingId, onStage, reviewId }: SubmitRecordingInput
 ): Promise<{ result: ShadowingAttemptResult; recordingId: string }> {
   let recordingId = uploadedRecordingId ?? null;
 
@@ -58,6 +60,7 @@ export async function submitRecording(
       sentenceId,
       recordingId,
       duration: Math.round(durationSec * 10) / 10,
+      ...(reviewId ? { reviewId } : {}),
     });
     return { result, recordingId };
   } catch (err) {

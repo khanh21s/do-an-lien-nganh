@@ -4,9 +4,9 @@
  * Kept free of React/API imports so the helpers can be unit tested in a node environment.
  */
 
-import type { VocabUserStats } from '@/lib/types';
+import type { SentenceReviewStats, VocabUserStats } from '@/lib/types';
 
-export type NavBadge = 'reviewDue';
+export type NavBadge = 'reviewDue' | NavBadgeP2A;
 
 export interface NavLeaf {
   kind: 'leaf';
@@ -41,11 +41,24 @@ export const NAV_GAME = leaf('/games', 'Dịch nhanh', '⚡', { shortLabel: 'Tr�
 export const NAV_HISTORY = leaf('/practice/history', 'Lịch sử luyện tập', '📈', { shortLabel: 'Lịch sử' });
 export const NAV_PREMIUM = leaf('/subscription', 'Gói Premium', '💎');
 export const NAV_PROFILE = leaf('/profile', 'Hồ sơ', '👤');
+// --- P2-C ---
+export const NAV_MY_DECKS = leaf('/vocabulary/my-decks', 'Bộ thẻ của tôi', '🗃️', { shortLabel: 'Bộ thẻ' });
+// --- end P2-C ---
+
+// --- P2-A ---
+/** Due count of the sentence review queue (`GET /practice/review/stats`.dueCount). */
+export type NavBadgeP2A = 'sentenceReviewDue';
+export const NAV_SENTENCE_REVIEW = leaf('/practice/review', 'Ôn câu sai', '🔁', {
+  shortLabel: 'Ôn câu',
+  badge: 'sentenceReviewDue',
+});
+// --- end P2-A ---
 
 export const MAIN_NAV: NavEntry[] = [
   NAV_DASHBOARD,
   NAV_LESSONS,
-  { kind: 'group', key: 'vocabulary', label: 'Từ vựng', icon: '🔤', children: [NAV_DECKS, NAV_REVIEW, NAV_NOTEBOOK] },
+  NAV_SENTENCE_REVIEW, // P2-A
+  { kind: 'group', key: 'vocabulary', label: 'Từ vựng', icon: '🔤', children: [NAV_DECKS, NAV_REVIEW, NAV_NOTEBOOK, NAV_MY_DECKS /* P2-C */] },
   NAV_GAME,
   NAV_HISTORY,
   NAV_PREMIUM,
@@ -74,8 +87,13 @@ export function moreDrawerEntries(): NavEntry[] {
 }
 
 /** Resolves a badge to its current count (undefined/0 → no badge). */
-export function badgeCount(badge: NavBadge | undefined, vocabStats: VocabUserStats | undefined): number | undefined {
+export function badgeCount(
+  badge: NavBadge | undefined,
+  vocabStats: VocabUserStats | undefined,
+  sentenceReviewStats?: SentenceReviewStats
+): number | undefined {
   if (badge === 'reviewDue') return vocabStats?.dueToday;
+  if (badge === 'sentenceReviewDue') return sentenceReviewStats?.dueCount; // P2-A
   return undefined;
 }
 

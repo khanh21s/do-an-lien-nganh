@@ -1,7 +1,7 @@
 package com.parroto.vocabulary.controller;
 
 import com.parroto.vocabulary.dto.GameDtos;
-import com.parroto.vocabulary.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.vocabulary.service.GameProgressService;
 import com.parroto.vocabulary.service.GameService;
 import org.springframework.http.HttpStatus;

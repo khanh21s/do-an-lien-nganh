@@ -39,6 +39,13 @@ export default function VocabularyDecksPage() {
           >
             Sổ tay
           </Link>
+          {/* P2-C */}
+          <Link
+            href="/vocabulary/my-decks"
+            className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Bộ thẻ của tôi
+          </Link>
         </div>
       </div>
 

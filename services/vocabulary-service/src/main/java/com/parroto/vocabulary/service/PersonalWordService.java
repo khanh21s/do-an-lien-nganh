@@ -1,11 +1,12 @@
 package com.parroto.vocabulary.service;
 
+import com.parroto.common.cache.CacheService;
 import com.parroto.vocabulary.dto.CreatePersonalWordRequest;
 import com.parroto.vocabulary.dto.LearnedWordResponse;
 import com.parroto.vocabulary.entity.UserVocab;
 import com.parroto.vocabulary.entity.VocabCard;
 import com.parroto.vocabulary.entity.VocabDeck;
-import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.vocabulary.repository.UserVocabRepository;
 import com.parroto.vocabulary.repository.VocabCardRepository;
 import com.parroto.vocabulary.repository.VocabDeckRepository;
@@ -17,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.UUID;
@@ -25,7 +25,7 @@ import java.util.UUID;
 /**
  * T13: words a user adds to the notebook. Each one is a {@link VocabCard} in the user's hidden
  * personal deck ({@code vocab_deck.owner_id = userId}, created lazily) plus a {@link UserVocab}
- * due immediately, so it is reviewed with SM-2 like any other card. Also owns notebook removal.
+ * in state NEW, so it shows up as a new card in the review session (P2-anki scheduler). Also owns notebook removal.
  */
 @Service
 public class PersonalWordService {
@@ -71,13 +71,11 @@ public class PersonalWordService {
         apply(card, in);
         card = cardRepository.save(card);
 
+        // A NEW card (P2-anki): it appears as "new" in the review session at once.
         UserVocab userVocab = UserVocab.builder()
                 .userId(userId)
                 .card(card)
-                .nextReviewAt(OffsetDateTime.now()) // due now -> appears in the review queue at once
-                .intervalDays(1)
-                .easeFactor(BigDecimal.valueOf(2.5))
-                .repetitions(0)
+                .nextReviewAt(OffsetDateTime.now())
                 .build();
         userVocab = userVocabRepository.save(userVocab);
 
@@ -96,7 +94,8 @@ public class PersonalWordService {
         if (!card.getDeck().isOwnedBy(userId)) {
             throw ApiException.forbidden(MSG_NOT_CUSTOM);
         }
-        deckRepository.findByOwnerIdForUpdate(userId); // serialize with concurrent adds/edits
+        // Serialize with concurrent adds/edits of that deck (P2-C: a user may own several personal decks).
+        deckRepository.findByIdForUpdate(card.getDeck().getId());
 
         if (userVocabRepository.existsWordExcluding(userId, normalize(in.word()), userVocab.getId())) {
             throw ApiException.conflict(MSG_DUPLICATE);
@@ -110,7 +109,8 @@ public class PersonalWordService {
 
     /**
      * DELETE /vocabs/user/{userVocabId}: removes the word from the notebook. A word the user added
-     * also loses its card, and the personal deck's card_count is recomputed in the same transaction.
+     * to the notebook also loses its card, and the notebook's card_count is recomputed in the same
+     * transaction. Cards of the user's other personal decks (P2-C) keep their card.
      */
     @Transactional
     public void remove(UUID userId, UUID userVocabId) {
@@ -124,6 +124,12 @@ public class PersonalWordService {
             return;
         }
         VocabDeck locked = deckRepository.findByOwnerIdForUpdate(userId).orElse(deck);
+        if (!locked.getId().equals(deck.getId()) && !deck.isNotebookDeck()) {
+            // P2-C: a card of one of the user's other decks only leaves the notebook (SRS); the card stays.
+            userVocabRepository.delete(userVocab);
+            invalidateAfterCommit(userId, null);
+            return;
+        }
         userVocabRepository.delete(userVocab);
         cardRepository.delete(card);
         cardRepository.flush();

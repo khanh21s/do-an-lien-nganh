@@ -3,6 +3,7 @@
 import { LessonAudioUpload } from '@/components/admin/LessonAudioUpload';
 import { LessonInfoForm } from '@/components/admin/LessonInfoForm';
 import { SentenceManager } from '@/components/admin/SentenceManager';
+import { ProBadge } from '@/components/lessons/ProLessonLock';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { FullPageSpinner } from '@/components/ui/Spinner';
 import { contentApi } from '@/lib/endpoints/content';
@@ -33,7 +34,9 @@ export default function AdminLessonDetailPage() {
           ← Quay lại danh sách bài học
         </Link>
         <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2">
-          <h1 className="break-words text-2xl font-bold text-slate-900">{lesson.title}</h1>
+          <h1 className="break-words text-2xl font-bold text-slate-900">
+            {lesson.title} {lesson.isPro && <ProBadge className="align-middle" />}
+          </h1>
           <Link href={`/lessons/${lesson.id}`} className="text-sm text-brand-600 hover:underline">
             Xem trang học →
           </Link>

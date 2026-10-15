@@ -1,0 +1,7 @@
+# Build context of the 5 service images is ./services (see docker-compose.yml).
+**/target
+**/.idea
+**/*.iml
+**/.classpath
+**/.project
+**/.settings

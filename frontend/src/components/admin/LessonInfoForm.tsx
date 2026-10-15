@@ -13,7 +13,7 @@ import { FormEvent, useState } from 'react';
 import toast from 'react-hot-toast';
 import { invalidateLessonCaches } from './invalidate';
 
-/** ADM-02: edits exactly `UpdateLessonRequest` (title, description, topicTag, cefrLevel). */
+/** ADM-02: edits exactly `UpdateLessonRequest` (title, description, topicTag, cefrLevel; P2-A1: isPro). */
 export function LessonInfoForm({ lesson }: { lesson: LessonDetail }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
@@ -21,6 +21,7 @@ export function LessonInfoForm({ lesson }: { lesson: LessonDetail }) {
     description: lesson.description ?? '',
     topicTag: lesson.topicTag ?? '',
     cefrLevel: lesson.cefrLevel,
+    isPro: !!lesson.isPro,
   });
   const [titleError, setTitleError] = useState<string | null>(null);
 
@@ -28,7 +29,8 @@ export function LessonInfoForm({ lesson }: { lesson: LessonDetail }) {
     form.title !== lesson.title ||
     form.description !== (lesson.description ?? '') ||
     form.topicTag !== (lesson.topicTag ?? '') ||
-    form.cefrLevel !== lesson.cefrLevel;
+    form.cefrLevel !== lesson.cefrLevel ||
+    form.isPro !== !!lesson.isPro;
 
   const mutation = useMutation({
     mutationFn: (input: UpdateLessonInput) => contentApi.updateLesson(lesson.id, input),
@@ -53,6 +55,7 @@ export function LessonInfoForm({ lesson }: { lesson: LessonDetail }) {
       description: form.description.trim(),
       topicTag: form.topicTag,
       cefrLevel: form.cefrLevel,
+      isPro: form.isPro,
     });
   }
 
@@ -97,6 +100,16 @@ export function LessonInfoForm({ lesson }: { lesson: LessonDetail }) {
           value={form.description}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
         />
+        <label className="flex min-h-[44px] items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={form.isPro}
+            onChange={(e) => setForm({ ...form, isPro: e.target.checked })}
+          />
+          Chỉ dành cho Premium
+          <span className="text-xs text-slate-400">(người dùng free vẫn xem được bài và transcript)</span>
+        </label>
         <Button type="submit" loading={mutation.isPending} disabled={!dirty} className="min-h-[44px] sm:w-fit">
           Lưu thay đổi
         </Button>

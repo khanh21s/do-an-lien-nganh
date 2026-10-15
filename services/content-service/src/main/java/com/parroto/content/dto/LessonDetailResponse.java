@@ -17,6 +17,7 @@ public record LessonDetailResponse(
         String description,
         String audioUrl,
         Integer duration,
+        boolean isPro,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
         List<SentenceResponse> sentences
@@ -31,6 +32,7 @@ public record LessonDetailResponse(
                 .description(lesson.getDescription())
                 .audioUrl(lesson.getAudioUrl())
                 .duration(lesson.getDuration())
+                .isPro(Boolean.TRUE.equals(lesson.getIsPro()))
                 .createdAt(lesson.getCreatedAt())
                 .updatedAt(lesson.getUpdatedAt())
                 .sentences(sentences)

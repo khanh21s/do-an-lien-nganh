@@ -1,14 +1,16 @@
 package com.parroto.practice.service;
 
+import com.parroto.common.cache.CacheService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.parroto.practice.dto.ShadowingAttemptRequest;
 import com.parroto.practice.dto.ShadowingAttemptResponse;
 import com.parroto.practice.dto.ShadowingUploadUrlRequest;
 import com.parroto.practice.dto.ShadowingUploadUrlResponse;
 import com.parroto.practice.entity.PracticeAttempt;
-import com.parroto.practice.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.practice.repository.PracticeAttemptRepository;
-import com.parroto.practice.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
+import com.parroto.practice.service.review.SentenceReviewService;
 import com.parroto.practice.service.speech.MockPronunciationScorer;
 import com.parroto.practice.service.storage.LocalRecordingStorage;
 import com.parroto.practice.service.storage.RecordingStorage;
@@ -23,6 +25,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -48,7 +51,11 @@ class ShadowingServiceTest {
     @BeforeEach
     void setUp() {
         ContentServiceClient content = mock(ContentServiceClient.class);
-        when(content.fetchSentenceText(lessonId, sentenceId)).thenReturn("Nice to meet you.");
+        ContentServiceClient.SentenceRef sentence = new ContentServiceClient.SentenceRef(sentenceId, "Nice to meet you.",
+                null, null, 1, 0, 1000, null, null);
+        ContentServiceClient.LessonRef lesson = new ContentServiceClient.LessonRef(lessonId, "L", null, false, List.of(sentence));
+        when(content.fetchSentence(lessonId, sentenceId)).thenReturn(new ContentServiceClient.PracticeTarget(lesson, sentence));
+        when(content.fetchLesson(lessonId)).thenReturn(lesson);
         repo = mock(PracticeAttemptRepository.class);
         when(repo.saveAndFlush(any())).thenAnswer(inv -> {
             PracticeAttempt a = inv.getArgument(0);
@@ -57,7 +64,8 @@ class ShadowingServiceTest {
             return a;
         });
         service = new ShadowingService(content, new LocalRecordingStorage(mediaRoot), new MockPronunciationScorer(),
-                repo, new ObjectMapper(), mock(CacheService.class));
+                repo, new ObjectMapper(), mock(CacheService.class), mock(LessonAccessGuard.class),
+                mock(SentenceReviewService.class));
     }
 
     @Test
@@ -75,7 +83,7 @@ class ShadowingServiceTest {
         assertThat(Files.readAllBytes(stored)).isEqualTo(wav);
 
         ShadowingAttemptResponse result = service.submitAttempt(alice,
-                new ShadowingAttemptRequest(lessonId, sentenceId, upload.recordingId(), null));
+                new ShadowingAttemptRequest(lessonId, sentenceId, upload.recordingId(), null, null));
         assertThat(result.scorer()).isEqualTo("mock");
         assertThat(result.wordScores()).hasSize(4);
         assertThat(result.score()).isBetween(0.0, 100.0);
@@ -109,7 +117,7 @@ class ShadowingServiceTest {
         String recordingId = UUID.randomUUID().toString();
         service.uploadLocalRecording(alice, recordingId, WavFixtures.toneWav(1));
         // Bob guesses Alice's recordingId: keys are per-user, so it is simply not found for him.
-        assertThatThrownBy(() -> service.submitAttempt(bob, new ShadowingAttemptRequest(lessonId, sentenceId, recordingId, null)))
+        assertThatThrownBy(() -> service.submitAttempt(bob, new ShadowingAttemptRequest(lessonId, sentenceId, recordingId, null, null)))
                 .extracting(e -> ((ApiException) e).getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
@@ -142,7 +150,8 @@ class ShadowingServiceTest {
         RecordingStorage s3 = mock(RecordingStorage.class);
         when(s3.provider()).thenReturn("s3");
         ShadowingService s3Service = new ShadowingService(mock(ContentServiceClient.class), s3,
-                new MockPronunciationScorer(), repo, new ObjectMapper(), mock(CacheService.class));
+                new MockPronunciationScorer(), repo, new ObjectMapper(), mock(CacheService.class),
+                mock(LessonAccessGuard.class), mock(SentenceReviewService.class));
         assertThatThrownBy(() -> s3Service.uploadLocalRecording(alice, UUID.randomUUID().toString(), WavFixtures.toneWav(1)))
                 .extracting(e -> ((ApiException) e).getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
     }

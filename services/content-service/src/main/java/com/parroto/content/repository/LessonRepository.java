@@ -16,9 +16,11 @@ public interface LessonRepository extends JpaRepository<Lesson, UUID> {
             WHERE l.isDeleted = false
               AND (:cefrLevel IS NULL OR l.cefrLevel = :cefrLevel)
               AND (:topicTag IS NULL OR l.topicTag = :topicTag)
+              AND (:isPro IS NULL OR l.isPro = :isPro)
             ORDER BY l.createdAt DESC
             """)
-    Page<Lesson> search(@Param("cefrLevel") String cefrLevel, @Param("topicTag") String topicTag, Pageable pageable);
+    Page<Lesson> search(@Param("cefrLevel") String cefrLevel, @Param("topicTag") String topicTag,
+                        @Param("isPro") Boolean isPro, Pageable pageable);
 
     @Query("""
             SELECT DISTINCT l FROM Lesson l LEFT JOIN Sentence s ON s.lesson = l

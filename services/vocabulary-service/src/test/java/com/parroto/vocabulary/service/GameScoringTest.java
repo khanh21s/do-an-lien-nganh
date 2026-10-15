@@ -1,5 +1,7 @@
 package com.parroto.vocabulary.service;
 
+import com.parroto.vocabulary.service.srs.Rating;
+
 import com.parroto.vocabulary.entity.GameResult;
 import org.junit.jupiter.api.Test;
 
@@ -52,10 +54,10 @@ class GameScoringTest {
 
     @Test
     void srsQualityMapping() {
-        assertThat(GameScoring.srsQuality(GameResult.WRONG, 0)).isEqualTo(1);
-        assertThat(GameScoring.srsQuality(GameResult.SKIPPED, 0)).isEqualTo(1);
-        assertThat(GameScoring.srsQuality(GameResult.NEAR, 0)).isEqualTo(3);
-        assertThat(GameScoring.srsQuality(GameResult.CORRECT, 2)).isEqualTo(3);
-        assertThat(GameScoring.srsQuality(GameResult.CORRECT, 0)).isEqualTo(4);
+        assertThat(GameScoring.srsRating(GameResult.WRONG, 0)).isEqualTo(Rating.AGAIN);
+        assertThat(GameScoring.srsRating(GameResult.SKIPPED, 0)).isEqualTo(Rating.AGAIN);
+        assertThat(GameScoring.srsRating(GameResult.NEAR, 0)).isEqualTo(Rating.HARD);
+        assertThat(GameScoring.srsRating(GameResult.CORRECT, 2)).isEqualTo(Rating.HARD);
+        assertThat(GameScoring.srsRating(GameResult.CORRECT, 0)).isEqualTo(Rating.GOOD);
     }
 }

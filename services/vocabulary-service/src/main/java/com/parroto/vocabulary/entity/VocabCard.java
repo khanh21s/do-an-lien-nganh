@@ -52,6 +52,10 @@ public class VocabCard {
     @Column(name = "part_of_speech")
     private String partOfSpeech;
 
+    /** P2-C: optional group inside the deck ({@code vocab_group.id}); NULL = ungrouped. */
+    @Column(name = "group_id", columnDefinition = "uuid")
+    private UUID groupId;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt;

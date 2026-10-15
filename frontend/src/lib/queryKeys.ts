@@ -8,6 +8,7 @@ import type {
   ListLearnedParams,
   ListLessonsParams,
   PageParams,
+  XpLeaderboardPeriod,
 } from './types';
 
 /**
@@ -76,7 +77,7 @@ export const qk = {
 
   // --- T10 additions ---
   /** `useInfiniteQuery` pages of a deck (limit 50); prefix stays `deck-cards`. */
-  deckCardsInfinite: (deckId: string) => ['deck-cards', deckId, 'infinite'] as const,
+  deckCardsInfinite: (deckId: string, seed?: string) => ['deck-cards', deckId, 'infinite', seed] as const,
   // --- end T10 ---
 
   // --- T11 additions ---
@@ -112,4 +113,33 @@ export const qk = {
   gameLeaderboardAll: ['game-leaderboard'] as const,
   gameLeaderboard: (board: GameBoard) => ['game-leaderboard', board] as const,
   // --- end T16 ---
+
+  // --- P2-B ---
+  /** App-wide XP / level / diamonds / check-in / missions (topbar, dashboard card). */
+  gamification: ['gamification'] as const,
+  xpLeaderboard: (period: XpLeaderboardPeriod) => ['xp-leaderboard', period] as const,
+  // --- end P2-B ---
+  // --- P2-A ---
+  sentenceReviewQueue: ['sentence-review-queue'] as const,
+  sentenceReviewStats: ['sentence-review-stats'] as const,
+  // --- end P2-A ---
+  // --- P2-C ---
+  myDecks: ['my-decks'] as const,
+  deckDetailAll: ['deck-detail'] as const,
+  deckDetail: (deckId: string) => ['deck-detail', deckId] as const,
+  /** Study pages with the group filter; prefix stays `deck-cards` so deck invalidation refreshes them. */
+  deckCardsGroupInfinite: (deckId: string, seed: string, groupId: string | null) =>
+    ['deck-cards', deckId, 'infinite', seed, groupId ?? 'all'] as const,
+  /** Card manager of a personal/public deck (paged, searchable, group filter). */
+  deckCardsManage: (deckId: string, params: import('./types').DeckCardsQuery = {}) =>
+    ['deck-cards', deckId, 'manage', params] as const,
+  dictionary: (word: string) => ['dictionary', word] as const,
+  // --- end P2-C ---
+  // --- P2-anki ---
+  /** Global "Ôn tập" session; nested under `review-queue` so existing invalidations refresh it. */
+  studySession: (seed: string) => ['review-queue', 'study', seed] as const,
+  /** Deck session; nested under `deck-cards` so deck/card invalidations refresh it. */
+  deckStudy: (deckId: string, groupId: string | null, seed: string) =>
+    ['deck-cards', deckId, 'study', groupId ?? 'all', seed] as const,
+  // --- end P2-anki ---
 };

@@ -1,9 +1,11 @@
 package com.parroto.content.service;
 
+import com.parroto.common.cache.CacheService;
+import com.parroto.common.dto.PageResponse;
 import com.parroto.content.dto.*;
 import com.parroto.content.entity.Lesson;
 import com.parroto.content.entity.Sentence;
-import com.parroto.content.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.content.repository.LessonRepository;
 import com.parroto.content.repository.SentenceRepository;
 import com.parroto.content.service.storage.AudioFormats;
@@ -44,15 +46,19 @@ public class LessonService {
         this.audioStorage = audioStorage;
     }
 
+    /** P2-A1: {@code isPro} null = all lessons, true/false = only Pro / only free lessons. */
     @Transactional(readOnly = true)
-    public PageResponse<LessonSummaryResponse> listLessons(String cefrLevel, String topicTag, int page, int limit) {
-        String cacheKey = "lessons:list:%s:%s:%d:%d".formatted(cefrLevel, topicTag, page, limit);
+    public PageResponse<LessonSummaryResponse> listLessons(String cefrLevel, String topicTag, Boolean isPro,
+                                                           int page, int limit) {
+        // Unfiltered keys keep their historical format; the filter adds a suffix (still under lessons:list:*).
+        String cacheKey = "lessons:list:%s:%s:%d:%d".formatted(cefrLevel, topicTag, page, limit)
+                + (isPro == null ? "" : ":pro=" + isPro);
         PageResponse<LessonSummaryResponse> cached = cacheService.get(cacheKey, PageResponse.class);
         if (cached != null) {
             return cached;
         }
         Pageable pageable = PageRequest.of(Math.max(page - 1, 0), limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Lesson> lessons = lessonRepository.search(blankToNull(cefrLevel), blankToNull(topicTag), pageable);
+        Page<Lesson> lessons = lessonRepository.search(blankToNull(cefrLevel), blankToNull(topicTag), isPro, pageable);
         Page<LessonSummaryResponse> mapped = lessons.map(l ->
                 LessonSummaryResponse.from(l, sentenceRepository.countByLesson_Id(l.getId())));
         PageResponse<LessonSummaryResponse> response = PageResponse.of(mapped, page, limit);
@@ -95,6 +101,7 @@ public class LessonService {
                 .description(request.description())
                 .audioUrl(request.audioUrl())
                 .duration(request.duration())
+                .isPro(Boolean.TRUE.equals(request.isPro()))
                 .build();
         // saveAndFlush (not save): the response DTO below reads @CreationTimestamp/@UpdateTimestamp
         // fields, which Hibernate only populates in-memory once the INSERT actually executes.
@@ -149,6 +156,9 @@ public class LessonService {
         }
         if (request.cefrLevel() != null && !request.cefrLevel().isBlank()) {
             lesson.setCefrLevel(request.cefrLevel());
+        }
+        if (request.isPro() != null) {
+            lesson.setIsPro(request.isPro());
         }
         lesson = lessonRepository.saveAndFlush(lesson);
         evictLessonCaches(id);

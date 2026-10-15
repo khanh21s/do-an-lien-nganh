@@ -24,9 +24,17 @@
     <postgresql.version>42.7.1</postgresql.version>
     <jjwt.version>0.12.3</jjwt.version>
     <lombok.version>1.18.48</lombok.version>
+    <pdfbox.version>3.0.3</pdfbox.version>
   </properties>
 
   <dependencies>
+    <!-- services/common: JWT validation, AdminGuard, InternalTokenFilter, DTOs, CacheService -->
+    <dependency>
+      <groupId>com.parroto</groupId>
+      <artifactId>parroto-common</artifactId>
+      <version>1.0.0</version>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>
@@ -52,6 +60,18 @@
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
+    <!-- Schema migrations: src/main/resources/db/migration (V1 = baseline, new changes from V2).
+         Version managed by Spring Boot 3.2.1 (Flyway 9.22.3). -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <!-- P2-C: text extraction for vocabulary import from PDF (best-effort). -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>${pdfbox.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>

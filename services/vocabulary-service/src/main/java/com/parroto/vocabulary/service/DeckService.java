@@ -1,13 +1,15 @@
 package com.parroto.vocabulary.service;
 
+import com.parroto.common.cache.CacheService;
+import com.parroto.common.dto.PageResponse;
 import com.parroto.vocabulary.dto.*;
 import com.parroto.vocabulary.entity.VocabCard;
 import com.parroto.vocabulary.entity.VocabDeck;
-import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.vocabulary.repository.UserVocabRepository;
 import com.parroto.vocabulary.repository.VocabCardRepository;
 import com.parroto.vocabulary.repository.VocabDeckRepository;
-import com.parroto.vocabulary.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -46,6 +48,14 @@ public class DeckService {
         this.cacheService = cacheService;
     }
 
+    /** P2-C: optional so the existing constructor (and its tests) stay unchanged. */
+    private com.parroto.vocabulary.repository.VocabGroupRepository groupLookup;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setGroupLookup(com.parroto.vocabulary.repository.VocabGroupRepository groupLookup) {
+        this.groupLookup = groupLookup;
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<DeckResponse> listDecks(String level, Boolean isProOnly, int page, int limit) {
         String cacheKey = "vocab:decks:list:%s:%s:%d:%d".formatted(level, isProOnly, page, limit);
@@ -63,6 +73,23 @@ public class DeckService {
 
     @Transactional(readOnly = true)
     public PageResponse<CardResponse> getDeckCards(AuthenticatedUser principal, UUID deckId, String searchWord, int page, int limit) {
+        return getDeckCards(principal, deckId, searchWord, null, page, limit);
+    }
+
+    /** With a {@code seed} (and no search) the cards come shuffled, in the same order for every page of that seed. */
+    @Transactional(readOnly = true)
+    public PageResponse<CardResponse> getDeckCards(AuthenticatedUser principal, UUID deckId, String searchWord, String seed,
+                                                   int page, int limit) {
+        return getDeckCards(principal, deckId, searchWord, seed, null, page, limit);
+    }
+
+    /** P2-C {@code ?groupId=}: a group id of this deck, or {@value #UNGROUPED} for cards without a group. */
+    public static final String UNGROUPED = "none";
+
+    @Transactional(readOnly = true)
+    public PageResponse<CardResponse> getDeckCards(AuthenticatedUser principal, UUID deckId, String searchWord, String seed,
+                                                   String groupId, int page, int limit) {
+        GroupFilter group = GroupFilter.parse(groupId);
         VocabDeck deck = deckRepository.findById(deckId)
                 .orElseThrow(() -> ApiException.notFound("Deck not found"));
         // Personal decks (T13) are visible to their owner only; guests/others get 404 (no existence leak).
@@ -77,7 +104,8 @@ public class DeckService {
 
         // The shared cache holds the user-independent page; authenticated requests are enriched
         // with per-user userVocabId, so they always read cards from the DB (VOC-04).
-        boolean cacheable = principal == null && (searchWord == null || searchWord.isBlank());
+        boolean shuffled = seed != null && !seed.isBlank() && (searchWord == null || searchWord.isBlank());
+        boolean cacheable = principal == null && !shuffled && group == null && (searchWord == null || searchWord.isBlank());
         String cacheKey = "vocab:deck:%s:cards:%d:%d".formatted(deckId, page, limit);
         if (cacheable) {
             PageResponse<CardResponse> cached = cacheService.get(cacheKey, PageResponse.class);
@@ -87,7 +115,20 @@ public class DeckService {
         }
 
         Pageable pageable = PageRequest.of(Math.max(page - 1, 0), limit);
-        Page<VocabCard> cards = cardRepository.findByDeck(deckId, blankToNull(searchWord), pageable);
+        Page<VocabCard> cards;
+        if (group == null) {
+            cards = shuffled
+                    ? cardRepository.findByDeckShuffled(deckId, seed, pageable)
+                    : cardRepository.findByDeck(deckId, blankToNull(searchWord), pageable);
+        } else if (group.ungrouped()) {
+            cards = shuffled
+                    ? cardRepository.findByDeckUngroupedShuffled(deckId, seed, pageable)
+                    : cardRepository.findByDeckUngrouped(deckId, blankToNull(searchWord), pageable);
+        } else {
+            cards = shuffled
+                    ? cardRepository.findByDeckAndGroupShuffled(deckId, group.id(), seed, pageable)
+                    : cardRepository.findByDeckAndGroup(deckId, group.id(), blankToNull(searchWord), pageable);
+        }
         Page<CardResponse> mapped = cards.map(CardResponse::from);
         if (principal != null && !mapped.isEmpty()) {
             Map<UUID, UUID> learned = learnedCardIds(principal.userUuid(),
@@ -99,6 +140,19 @@ public class DeckService {
             cacheService.set(cacheKey, response, DECK_CARDS_TTL);
         }
         return response;
+    }
+
+    /** Parsed {@code ?groupId=}: null = all cards. Malformed ids are a 400. */
+    record GroupFilter(UUID id, boolean ungrouped) {
+        static GroupFilter parse(String raw) {
+            if (raw == null || raw.isBlank()) return null;
+            if (UNGROUPED.equalsIgnoreCase(raw.trim())) return new GroupFilter(null, true);
+            try {
+                return new GroupFilter(UUID.fromString(raw.trim()), false);
+            } catch (IllegalArgumentException e) {
+                throw ApiException.badRequest("Tham số không hợp lệ");
+            }
+        }
     }
 
     /** cardId -> userVocabId for the cards (among {@code cardIds}) the user already learned; one query. */
@@ -169,7 +223,16 @@ public class DeckService {
 
     @Transactional
     public List<CardResponse> addCards(UUID deckId, CreateCardsRequest request) {
+        return addCards(deckId, request, null);
+    }
+
+    /** P2-C: {@code groupId} (optional) must be a group of this deck. */
+    @Transactional
+    public List<CardResponse> addCards(UUID deckId, CreateCardsRequest request, UUID groupId) {
         VocabDeck deck = findPublicDeck(deckId);
+        if (groupId != null && groupLookup != null && groupLookup.findByIdAndDeckId(groupId, deckId).isEmpty()) {
+            throw ApiException.badRequest("Nhóm không thuộc bộ thẻ này");
+        }
 
         for (CardInput input : request.cards()) {
             if (cardRepository.existsByDeck_IdAndWordIgnoreCase(deckId, input.word())) {
@@ -188,6 +251,7 @@ public class DeckService {
                         .audioUrl(input.audioUrl())
                         .imageUrl(input.imageUrl())
                         .partOfSpeech(input.partOfSpeech())
+                        .groupId(groupId)
                         .build())
                 .collect(Collectors.toList());
         List<VocabCard> saved = cardRepository.saveAll(toSave);

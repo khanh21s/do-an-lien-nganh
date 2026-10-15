@@ -2,12 +2,12 @@ package com.parroto.subscription.service;
 
 import com.parroto.subscription.dto.AdminStatsResponse;
 import com.parroto.subscription.dto.AdminTransactionResponse;
-import com.parroto.subscription.dto.PageResponse;
+import com.parroto.common.dto.PageResponse;
 import com.parroto.subscription.dto.UserPremiumStatusResponse;
 import com.parroto.subscription.entity.PaymentTransaction;
 import com.parroto.subscription.entity.Plan;
 import com.parroto.subscription.entity.Subscription;
-import com.parroto.subscription.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.subscription.repository.PaymentTransactionRepository;
 import com.parroto.subscription.repository.PlanRepository;
 import com.parroto.subscription.repository.SubscriptionRepository;

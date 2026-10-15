@@ -1,10 +1,10 @@
 package com.parroto.vocabulary.controller;
 
 import com.parroto.vocabulary.dto.CardResponse;
-import com.parroto.vocabulary.dto.MessageResponse;
+import com.parroto.common.dto.MessageResponse;
 import com.parroto.vocabulary.dto.UpdateCardRequest;
-import com.parroto.vocabulary.security.AdminGuard;
-import com.parroto.vocabulary.security.AuthenticatedUser;
+import com.parroto.common.security.AdminGuard;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.vocabulary.service.DeckService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
