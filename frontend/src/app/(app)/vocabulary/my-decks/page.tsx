@@ -125,7 +125,7 @@ export default function MyDecksPage() {
             </p>
             <div className="mt-auto flex flex-wrap gap-2">
               <Link
-                href={`/vocabulary/decks/${deck.id}`}
+                href={`/vocabulary/my-decks/${deck.id}/study`}
                 className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-3 text-sm font-medium text-white hover:bg-brand-700"
               >
                 Học

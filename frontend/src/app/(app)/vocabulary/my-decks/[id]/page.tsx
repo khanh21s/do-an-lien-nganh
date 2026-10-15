@@ -96,7 +96,7 @@ export default function MyDeckManagePage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href={`/vocabulary/decks/${deck.id}`}
+            href={`/vocabulary/my-decks/${deck.id}/study`}
             className="inline-flex min-h-[44px] items-center rounded-lg bg-brand-600 px-4 text-sm font-medium text-white hover:bg-brand-700"
           >
             Học bộ này
