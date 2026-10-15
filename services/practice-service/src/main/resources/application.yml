@@ -48,6 +48,8 @@ cors:
 
 services:
   content-service-url: ${CONTENT_SERVICE_URL:http://localhost:8002}
+  # P2-B: XP events of saved attempts (POST /internal/gamification/events); empty = disabled
+  vocabulary-service-url: ${VOCABULARY_SERVICE_URL:http://localhost:8004}
 
 aws:
   s3:
