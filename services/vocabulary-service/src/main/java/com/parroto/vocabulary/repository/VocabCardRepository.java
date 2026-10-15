@@ -81,4 +81,82 @@ public interface VocabCardRepository extends JpaRepository<VocabCard, UUID> {
             ORDER BY random() LIMIT :limit
             """, nativeQuery = true)
     List<UUID> randomPublicIds(@Param("includePro") boolean includePro, @Param("limit") int limit);
+
+    // --- P2-C: groups, limits, duplicate checks, dictionary ---
+
+    @Query("""
+            SELECT c FROM VocabCard c
+            WHERE c.deck.id = :deckId AND c.groupId = :groupId
+              AND (:searchWord IS NULL OR LOWER(c.word) LIKE LOWER(CONCAT('%', CAST(:searchWord AS string), '%')))
+            ORDER BY c.word ASC
+            """)
+    Page<VocabCard> findByDeckAndGroup(@Param("deckId") UUID deckId, @Param("groupId") UUID groupId,
+                                       @Param("searchWord") String searchWord, Pageable pageable);
+
+    @Query("""
+            SELECT c FROM VocabCard c
+            WHERE c.deck.id = :deckId AND c.groupId IS NULL
+              AND (:searchWord IS NULL OR LOWER(c.word) LIKE LOWER(CONCAT('%', CAST(:searchWord AS string), '%')))
+            ORDER BY c.word ASC
+            """)
+    Page<VocabCard> findByDeckUngrouped(@Param("deckId") UUID deckId, @Param("searchWord") String searchWord,
+                                        Pageable pageable);
+
+    @Query(value = """
+            SELECT c.* FROM vocab_card c WHERE c.deck_id = :deckId AND c.group_id = :groupId
+            ORDER BY md5(c.id::text || :seed)
+            """,
+            countQuery = "SELECT count(*) FROM vocab_card c WHERE c.deck_id = :deckId AND c.group_id = :groupId",
+            nativeQuery = true)
+    Page<VocabCard> findByDeckAndGroupShuffled(@Param("deckId") UUID deckId, @Param("groupId") UUID groupId,
+                                               @Param("seed") String seed, Pageable pageable);
+
+    @Query(value = """
+            SELECT c.* FROM vocab_card c WHERE c.deck_id = :deckId AND c.group_id IS NULL
+            ORDER BY md5(c.id::text || :seed)
+            """,
+            countQuery = "SELECT count(*) FROM vocab_card c WHERE c.deck_id = :deckId AND c.group_id IS NULL",
+            nativeQuery = true)
+    Page<VocabCard> findByDeckUngroupedShuffled(@Param("deckId") UUID deckId, @Param("seed") String seed,
+                                                Pageable pageable);
+
+    /** groupId (NULL = ungrouped) -> card count of one deck. */
+    @Query("SELECT c.groupId, COUNT(c) FROM VocabCard c WHERE c.deck.id = :deckId GROUP BY c.groupId")
+    List<Object[]> countByGroup(@Param("deckId") UUID deckId);
+
+    /** Cards in the user's personal decks other than the notebook (the P2-C card limit). */
+    @Query("SELECT COUNT(c) FROM VocabCard c WHERE c.deck.ownerId = :ownerId AND c.deck.isNotebook = false")
+    long countCustomCards(@Param("ownerId") UUID ownerId);
+
+    /** {@code lower(trim(word))} of every card of a deck (duplicate detection for import/add). */
+    @Query("SELECT LOWER(TRIM(c.word)) FROM VocabCard c WHERE c.deck.id = :deckId")
+    List<String> normalizedWordsInDeck(@Param("deckId") UUID deckId);
+
+    /** {@code lower(trim(word))} of every word in the user's notebook (= any card with a user_vocab row). */
+    @Query("SELECT LOWER(TRIM(c.word)) FROM UserVocab uv JOIN uv.card c WHERE uv.userId = :userId")
+    List<String> normalizedNotebookWords(@Param("userId") UUID userId);
+
+    @Query("""
+            SELECT COUNT(c) > 0 FROM VocabCard c
+            WHERE c.deck.id = :deckId AND LOWER(TRIM(c.word)) = :normalizedWord AND c.id <> :excludeId
+            """)
+    boolean existsWordInDeckExcluding(@Param("deckId") UUID deckId, @Param("normalizedWord") String normalizedWord,
+                                      @Param("excludeId") UUID excludeId);
+
+    @Query("SELECT c FROM VocabCard c WHERE c.deck.id = :deckId AND c.id IN :ids")
+    List<VocabCard> findInDeck(@Param("deckId") UUID deckId, @Param("ids") Collection<UUID> ids);
+
+    /**
+     * Dictionary: cards spelled like one of {@code words} (lower-cased) in free public decks or in
+     * the caller's own decks (guests pass a UUID that owns nothing). Own cards come first.
+     */
+    @Query("""
+            SELECT c FROM VocabCard c JOIN FETCH c.deck d
+            WHERE LOWER(TRIM(c.word)) IN :words
+              AND ((d.ownerId IS NULL AND COALESCE(d.isProOnly, false) = false)
+                   OR d.ownerId = :userId)
+            ORDER BY CASE WHEN d.ownerId IS NULL THEN 1 ELSE 0 END, c.createdAt ASC
+            """)
+    List<VocabCard> findForDictionary(@Param("words") Collection<String> words, @Param("userId") UUID userId,
+                                      Pageable pageable);
 }
