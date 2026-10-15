@@ -1,7 +1,9 @@
 'use client';
 
+import { AddableSentence } from '@/components/practice/dictation/AddableSentence';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
+import { WordLookup } from '@/components/vocab/dictionary/WordLookup';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSentenceAudio } from '@/hooks/useSentenceAudio';
 import { sortSentences } from '@/lib/practice-nav';
@@ -57,6 +59,8 @@ export function LessonTranscript({
     autoPlay: true,
   });
   const canPlay = (s: SentenceResponse) => !!s.audioUrl || !!lesson.audioUrl;
+  // P2-C: a clicked word opens the dictionary sheet (with the sentence as example when saving).
+  const [lookup, setLookup] = useState<{ word: string; sentence: SentenceResponse } | null>(null);
 
   function listen(s: SentenceResponse) {
     if (selected?.id === s.id) audio.toggle();
@@ -100,7 +104,11 @@ export function LessonTranscript({
                     {i + 1}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="break-words font-medium text-slate-900">{s.text}</p>
+                    <AddableSentence
+                      text={s.text}
+                      onPick={(word) => setLookup({ word, sentence: s })}
+                      className="break-words"
+                    />
                     {showIpa && s.ipa && <p className="mt-1 break-words text-sm text-slate-400">/{s.ipa.replace(/^\/|\/$/g, '')}/</p>}
                     {showTranslation && s.translationVi && (
                       <p className="mt-1 break-words text-sm text-slate-500">{s.translationVi}</p>
@@ -159,6 +167,15 @@ export function LessonTranscript({
           })}
         </ol>
       )}
+      {sentences.length > 0 && (
+        <p className="mt-3 text-xs text-slate-400">💡 Bấm vào một từ trong câu để tra nghĩa, nghe phát âm và lưu vào sổ tay.</p>
+      )}
+      <WordLookup
+        word={lookup?.word ?? null}
+        example={lookup?.sentence.text}
+        exampleVi={lookup?.sentence.translationVi ?? null}
+        onClose={() => setLookup(null)}
+      />
     </section>
   );
 }

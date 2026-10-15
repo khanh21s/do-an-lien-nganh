@@ -28,6 +28,16 @@ export const ADD_WORD_LIMITS: Record<AddWordField, number> = {
   exampleVi: 500,
 };
 
+/** Form fields in display order (shared by AddWordModal and the P2-C card editor). */
+export const ADD_WORD_FIELDS: { key: AddWordField; label: string; placeholder: string; required?: boolean }[] = [
+  { key: 'word', label: 'Từ', placeholder: 'vd. today', required: true },
+  { key: 'meaning', label: 'Nghĩa', placeholder: 'vd. hôm nay', required: true },
+  { key: 'ipa', label: 'Phiên âm (IPA)', placeholder: 'vd. təˈdeɪ' },
+  { key: 'partOfSpeech', label: 'Từ loại', placeholder: 'vd. noun, verb, adj…' },
+  { key: 'example', label: 'Ví dụ', placeholder: 'Câu ví dụ tiếng Anh' },
+  { key: 'exampleVi', label: 'Nghĩa ví dụ', placeholder: 'Bản dịch câu ví dụ' },
+];
+
 export const EMPTY_ADD_WORD_FORM: AddWordFormValues = {
   word: '',
   meaning: '',

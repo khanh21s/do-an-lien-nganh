@@ -8,7 +8,7 @@ import { useShortcutKeys } from '@/store/shortcut-store';
 import { WordDiffView } from '@/components/practice/WordDiffView';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { AddWordModal } from '@/components/vocab/AddWordModal';
+import { WordLookup } from '@/components/vocab/dictionary/WordLookup';
 import { useHotkeys, type HotkeyBinding } from '@/hooks/useHotkeys';
 import { usePracticeNav } from '@/hooks/usePracticeNav';
 import { useSentenceAudio } from '@/hooks/useSentenceAudio';
@@ -86,7 +86,7 @@ export function DictationPractice({
   const [result, setResult] = useState<DictationAttemptResult | null>(null);
   const [correctness, setCorrectness] = useState<(boolean | null)[] | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
-  // T13: word picked from the answer / feedback → AddWordModal (page shortcuts pause while it is open).
+  // T13/P2-C: word picked from the answer / feedback → dictionary sheet → AddWordModal (shortcuts pause).
   const [wordToAdd, setWordToAdd] = useState<string | null>(null);
   const closeAddWord = useCallback(() => setWordToAdd(null), []);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -383,18 +383,16 @@ export function DictationPractice({
             {sentence.ipa && <p className="mt-1 text-slate-500">/{sentence.ipa.replace(/^\/|\/$/g, '')}/</p>}
             {sentence.translationVi && <p className="mt-1 text-slate-600">🇻🇳 {sentence.translationVi}</p>}
           </div>
-          <p className="-mt-2 text-xs text-slate-400">💡 Bấm vào một từ để thêm vào sổ tay.</p>
+          <p className="-mt-2 text-xs text-slate-400">💡 Bấm vào một từ để tra nghĩa và lưu vào sổ tay.</p>
         </Card>
       )}
 
-      <AddWordModal
-        open={wordToAdd !== null}
+      {/* P2-C: dictionary sheet first, then AddWordModal (deck/group choice) from there. */}
+      <WordLookup
+        word={wordToAdd}
+        example={sentence.text}
+        exampleVi={sentence.translationVi ?? null}
         onClose={closeAddWord}
-        prefill={
-          wordToAdd !== null
-            ? { word: wordToAdd, example: sentence.text, exampleVi: sentence.translationVi ?? null }
-            : null
-        }
       />
     </div>
   );
