@@ -176,7 +176,7 @@ Không thêm/xoá/sửa bảng hoặc cột (không có migration tool, `ddl-aut
 | Key | Ghi bởi | Đọc bởi | TTL |
 |---|---|---|---|
 | `token_blacklist:{jti}` | auth-service (logout) | GW, cả 5 service | thời gian sống còn lại của token |
-| `premium:{userId}` | vocabulary `PremiumClient` (cache) | vocabulary | 5 phút; **subscription-service DEL khi kích hoạt premium** (SUB-04) |
+| `premium:{userId}` | vocabulary + practice `PremiumClient` (cache, cùng format JSON boolean) | vocabulary, practice (P2-A1: bài Pro) | 5 phút; **subscription-service DEL khi kích hoạt premium** (SUB-04) |
 | `lessons:list:*`, `lesson:{id}` | content-service | content-service | 24h; xoá khi sửa bài/câu (LES-07) |
 | `practice:stats:{userId}*` | practice-service | practice-service | như hiện tại |
 
