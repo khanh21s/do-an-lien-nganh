@@ -21,10 +21,13 @@ public interface VocabCardRepository extends JpaRepository<VocabCard, UUID> {
             """)
     Page<VocabCard> findByDeck(@Param("deckId") UUID deckId, @Param("searchWord") String searchWord, Pageable pageable);
 
-    /** Deck cards in a pseudo-random order fixed by {@code seed}, so pages of one visit don't overlap. */
+    /**
+     * Deck cards in a pseudo-random order fixed by {@code seed}, so pages of one visit don't overlap.
+     * CAST, not {@code ::text}: Hibernate 6 rewrites {@code ::} in native SQL to a single colon.
+     */
     @Query(value = """
             SELECT c.* FROM vocab_card c WHERE c.deck_id = :deckId
-            ORDER BY md5(c.id::text || :seed)
+            ORDER BY md5(CAST(c.id AS text) || :seed)
             """,
             countQuery = "SELECT count(*) FROM vocab_card c WHERE c.deck_id = :deckId",
             nativeQuery = true)
@@ -104,7 +107,7 @@ public interface VocabCardRepository extends JpaRepository<VocabCard, UUID> {
 
     @Query(value = """
             SELECT c.* FROM vocab_card c WHERE c.deck_id = :deckId AND c.group_id = :groupId
-            ORDER BY md5(c.id::text || :seed)
+            ORDER BY md5(CAST(c.id AS text) || :seed)
             """,
             countQuery = "SELECT count(*) FROM vocab_card c WHERE c.deck_id = :deckId AND c.group_id = :groupId",
             nativeQuery = true)
@@ -113,7 +116,7 @@ public interface VocabCardRepository extends JpaRepository<VocabCard, UUID> {
 
     @Query(value = """
             SELECT c.* FROM vocab_card c WHERE c.deck_id = :deckId AND c.group_id IS NULL
-            ORDER BY md5(c.id::text || :seed)
+            ORDER BY md5(CAST(c.id AS text) || :seed)
             """,
             countQuery = "SELECT count(*) FROM vocab_card c WHERE c.deck_id = :deckId AND c.group_id IS NULL",
             nativeQuery = true)
