@@ -12,6 +12,9 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Input } from '@/components/ui/Input';
 import { Pagination } from '@/components/ui/Pagination';
 import { FullPageSpinner, Spinner } from '@/components/ui/Spinner';
+import { CardGroupSelect } from '@/components/vocab/decks/CardGroupSelect';
+import { GroupFilterChips } from '@/components/vocab/decks/GroupFilterChips';
+import { GroupManager } from '@/components/vocab/decks/GroupManager';
 import { useDebounce } from '@/hooks/useDebounce';
 import { apiErrorMessage } from '@/lib/api';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
@@ -39,7 +42,16 @@ export default function AdminDeckCardsPage() {
   const [deckFormOpen, setDeckFormOpen] = useState(false);
   const [deckFormKey, setDeckFormKey] = useState(0);
 
-  const params: DeckCardsParams = { page, limit: PAGE_SIZE, ...(searchWord ? { searchWord } : {}) };
+  // P2-C: group filter + groups panel (GET /vocabs/decks/{id} detail).
+  const [group, setGroup] = useState<string | null>(null);
+  const detailQuery = useQuery({ queryKey: qk.deckDetail(deckId), queryFn: () => vocabularyApi.getDeckDetail(deckId) });
+  const groups = detailQuery.data?.groups ?? [];
+  const params: DeckCardsParams & { groupId?: string } = {
+    page,
+    limit: PAGE_SIZE,
+    ...(searchWord ? { searchWord } : {}),
+    ...(group ? { groupId: group } : {}),
+  };
 
   // No GET /vocabs/decks/{id}: find the deck in the (admin) deck list for its header.
   const deckQuery = useQuery({
@@ -50,11 +62,14 @@ export default function AdminDeckCardsPage() {
 
   const cardsQuery = useQuery({
     queryKey: qk.adminCards(deckId, params),
-    queryFn: () => vocabularyApi.searchDeckCards(deckId, params),
+    queryFn: () => vocabularyApi.listDeckCards(deckId, params),
     placeholderData: keepPreviousData,
   });
 
-  const refresh = () => invalidateVocabCaches(queryClient, deckId);
+  const refresh = () => {
+    invalidateVocabCaches(queryClient, deckId);
+    void queryClient.invalidateQueries({ queryKey: qk.deckDetail(deckId) });
+  };
 
   const createMutation = useMutation({
     mutationFn: (input: CardInput) => vocabularyApi.addCards(deckId, [input]),
@@ -145,12 +160,34 @@ export default function AdminDeckCardsPage() {
               Sửa deck
             </Button>
           )}
+          <Link
+            href={`/admin/vocabulary/import?deckId=${deckId}`}
+            className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            ⬆ Nhập từ file
+          </Link>
           <Button onClick={() => openForm(null)} className="min-h-[44px]">
             + Thêm thẻ
           </Button>
         </div>
       </div>
 
+      <div className="mt-4">
+        <GroupManager deckId={deckId} groups={groups} />
+      </div>
+      {detailQuery.data && (
+        <GroupFilterChips
+          className="mt-4"
+          groups={groups}
+          total={detailQuery.data.cardCount}
+          ungroupedCount={detailQuery.data.ungroupedCount}
+          value={group}
+          onChange={(g) => {
+            setGroup(g);
+            setPage(1);
+          }}
+        />
+      )}
       <div className="mt-4 flex items-center gap-2">
         <div className="flex-1">
           <Input
@@ -188,7 +225,8 @@ export default function AdminDeckCardsPage() {
                 {card.example && <p className="mt-1 break-words text-xs italic text-slate-500">{card.example}</p>}
                 {card.exampleVi && <p className="break-words text-xs text-slate-400">{card.exampleVi}</p>}
               </div>
-              <div className="flex shrink-0 gap-2">
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <CardGroupSelect deckId={deckId} cardId={card.id} groupId={card.groupId} groups={groups} onMoved={refresh} />
                 <Button size="sm" variant="secondary" className="min-h-[44px]" onClick={() => openForm(card)}>
                   Sửa
                 </Button>

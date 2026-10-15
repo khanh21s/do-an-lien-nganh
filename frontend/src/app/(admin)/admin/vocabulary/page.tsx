@@ -90,9 +90,18 @@ export default function AdminVocabularyPage() {
     <div className="mx-auto w-full max-w-5xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-900">Quản lý từ vựng</h1>
-        <Button onClick={() => openDeckForm(null)} className="min-h-[44px]">
-          + Tạo bộ từ vựng
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {/* P2-C */}
+          <Link
+            href="/admin/vocabulary/import"
+            className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            ⬆ Nhập từ file
+          </Link>
+          <Button onClick={() => openDeckForm(null)} className="min-h-[44px]">
+            + Tạo bộ từ vựng
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
