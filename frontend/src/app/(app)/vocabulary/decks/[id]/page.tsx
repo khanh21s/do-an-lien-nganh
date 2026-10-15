@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import { refreshGamification } from '@/components/gamification/useGamification'; // P2-B
 
 const PAGE_SIZE = 50;
 const DECK_LIST_PARAMS = { limit: 100 };
@@ -106,6 +107,7 @@ function DeckStudy({ deckId, deck }: { deckId: string; deck?: VocabDeck }) {
     onSuccess: (res, { card }) => {
       setLastResult({ word: card.word, interval: res.interval });
       setIndex((i) => i + 1);
+      refreshGamification(queryClient); // P2-B: +2 XP per card per day
       queryClient.invalidateQueries({ queryKey: qk.vocabStats });
       queryClient.invalidateQueries({ queryKey: qk.reviewQueue });
       queryClient.invalidateQueries({ queryKey: qk.learnedWordsAll });

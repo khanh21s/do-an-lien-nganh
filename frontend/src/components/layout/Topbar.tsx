@@ -1,5 +1,6 @@
 'use client';
 
+import { TopbarGamification } from '@/components/gamification/TopbarGamification';
 import { authApi } from '@/lib/endpoints/auth';
 import { practiceApi } from '@/lib/endpoints/practice';
 import { subscriptionApi } from '@/lib/endpoints/subscription';
@@ -71,6 +72,8 @@ export function Topbar() {
         >
           <span aria-hidden>🔥</span> {streakDays}
         </span>
+        {/* --- P2-B --- level + diamonds (also toasts XP gains) */}
+        <TopbarGamification />
         <Link
           href="/vocabulary/review"
           className={clsx(

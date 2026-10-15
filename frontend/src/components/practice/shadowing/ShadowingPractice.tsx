@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ShadowingResult } from './ShadowingResult';
 import { ShadowingSubmitError, submitRecording, type SubmitStage } from './submit';
+import { refreshGamification } from '@/components/gamification/useGamification'; // P2-B
 
 interface Take {
   blob: Blob;
@@ -103,6 +104,7 @@ export function ShadowingPractice({ lesson, sentence }: { lesson: LessonDetail; 
         void queryClient.invalidateQueries({ queryKey: qk.attemptsAll });
         void queryClient.invalidateQueries({ queryKey: qk.activityAll });
         void queryClient.invalidateQueries({ queryKey: qk.trendingErrors });
+        refreshGamification(queryClient, { delayed: true }); // P2-B: XP arrives asynchronously
       } catch (err) {
         const se = err instanceof ShadowingSubmitError ? err : null;
         const original = se ? se.original : err;
