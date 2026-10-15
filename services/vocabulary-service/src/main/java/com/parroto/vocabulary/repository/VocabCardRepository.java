@@ -21,6 +21,15 @@ public interface VocabCardRepository extends JpaRepository<VocabCard, UUID> {
             """)
     Page<VocabCard> findByDeck(@Param("deckId") UUID deckId, @Param("searchWord") String searchWord, Pageable pageable);
 
+    /** Deck cards in a pseudo-random order fixed by {@code seed}, so pages of one visit don't overlap. */
+    @Query(value = """
+            SELECT c.* FROM vocab_card c WHERE c.deck_id = :deckId
+            ORDER BY md5(c.id::text || :seed)
+            """,
+            countQuery = "SELECT count(*) FROM vocab_card c WHERE c.deck_id = :deckId",
+            nativeQuery = true)
+    Page<VocabCard> findByDeckShuffled(@Param("deckId") UUID deckId, @Param("seed") String seed, Pageable pageable);
+
     long countByDeck_Id(UUID deckId);
 
     boolean existsByDeck_IdAndWordIgnoreCase(UUID deckId, String word);

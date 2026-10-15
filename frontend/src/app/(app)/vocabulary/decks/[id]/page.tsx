@@ -12,6 +12,7 @@ import { UpgradeCard } from '@/components/vocab/UpgradeCard';
 import { apiErrorMessage, apiErrorStatus } from '@/lib/api';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
 import { qk } from '@/lib/queryKeys';
+import { newShuffleSeed } from '@/lib/shuffle';
 import { formatInterval } from '@/lib/srs';
 import type { VocabCard, VocabDeck } from '@/lib/types';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -47,6 +48,8 @@ export default function DeckDetailPage() {
 function DeckStudy({ deckId, deck }: { deckId: string; deck?: VocabDeck }) {
   const queryClient = useQueryClient();
   const [index, setIndex] = useState(0);
+  // Cards come in a random order, reshuffled on every visit and on "Học lại từ đầu".
+  const [seed, setSeed] = useState(newShuffleSeed);
   const [typingMode, setTypingMode] = useState(false);
   const [proBlocked, setProBlocked] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<{ word: string; interval: number } | null>(null);
@@ -54,8 +57,8 @@ function DeckStudy({ deckId, deck }: { deckId: string; deck?: VocabDeck }) {
   const [added, setAdded] = useState<Record<string, string>>({});
 
   const cardsQuery = useInfiniteQuery({
-    queryKey: qk.deckCardsInfinite(deckId),
-    queryFn: ({ pageParam }) => vocabularyApi.getDeckCards(deckId, { page: pageParam, limit: PAGE_SIZE }),
+    queryKey: qk.deckCardsInfinite(deckId, seed),
+    queryFn: ({ pageParam }) => vocabularyApi.getDeckCards(deckId, { page: pageParam, limit: PAGE_SIZE, seed }),
     initialPageParam: 1,
     getNextPageParam: (last) =>
       last.pagination.page < last.pagination.totalPages ? last.pagination.page + 1 : undefined,
@@ -227,7 +230,11 @@ function DeckStudy({ deckId, deck }: { deckId: string; deck?: VocabDeck }) {
                 >
                   Ôn tập từ đã lưu
                 </Link>
-                <Button variant="secondary" className="min-h-[44px]" onClick={() => setIndex(0)}>
+                <Button variant="secondary" className="min-h-[44px]" onClick={() => {
+                    setSeed(newShuffleSeed());
+                    setIndex(0);
+                  }}
+                >
                   Học lại từ đầu
                 </Button>
               </div>

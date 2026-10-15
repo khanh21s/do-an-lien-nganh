@@ -12,6 +12,7 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { apiErrorMessage } from '@/lib/api';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
 import { qk } from '@/lib/queryKeys';
+import { shuffle } from '@/lib/shuffle';
 import { DEFAULT_DAILY_LIMIT, clampDailyLimit, earliestDate, formatInterval } from '@/lib/srs';
 import { storageKeys } from '@/lib/storageKeys';
 import type { ReviewQueueItem } from '@/lib/types';
@@ -53,7 +54,7 @@ export default function VocabReviewPage() {
 
   useEffect(() => {
     if (session || !data || !limitHydrated) return;
-    setSession({ cards: data.queue.slice(0, dailyLimit), totalDue: data.queue.length });
+    setSession({ cards: shuffle(data.queue.slice(0, dailyLimit)), totalDue: data.queue.length });
     setIndex(0);
     setResults([]);
   }, [session, data, limitHydrated, dailyLimit]);
@@ -75,7 +76,7 @@ export default function VocabReviewPage() {
     setStoredLimit(next);
     // Nothing rated yet → apply the new limit to the current session right away.
     if (results.length === 0 && data) {
-      setSession({ cards: data.queue.slice(0, next), totalDue: data.queue.length });
+      setSession({ cards: shuffle(data.queue.slice(0, next)), totalDue: data.queue.length });
       setIndex(0);
     }
   }

@@ -63,6 +63,13 @@ public class DeckService {
 
     @Transactional(readOnly = true)
     public PageResponse<CardResponse> getDeckCards(AuthenticatedUser principal, UUID deckId, String searchWord, int page, int limit) {
+        return getDeckCards(principal, deckId, searchWord, null, page, limit);
+    }
+
+    /** With a {@code seed} (and no search) the cards come shuffled, in the same order for every page of that seed. */
+    @Transactional(readOnly = true)
+    public PageResponse<CardResponse> getDeckCards(AuthenticatedUser principal, UUID deckId, String searchWord, String seed,
+                                                   int page, int limit) {
         VocabDeck deck = deckRepository.findById(deckId)
                 .orElseThrow(() -> ApiException.notFound("Deck not found"));
         // Personal decks (T13) are visible to their owner only; guests/others get 404 (no existence leak).
@@ -77,7 +84,8 @@ public class DeckService {
 
         // The shared cache holds the user-independent page; authenticated requests are enriched
         // with per-user userVocabId, so they always read cards from the DB (VOC-04).
-        boolean cacheable = principal == null && (searchWord == null || searchWord.isBlank());
+        boolean shuffled = seed != null && !seed.isBlank() && (searchWord == null || searchWord.isBlank());
+        boolean cacheable = principal == null && !shuffled && (searchWord == null || searchWord.isBlank());
         String cacheKey = "vocab:deck:%s:cards:%d:%d".formatted(deckId, page, limit);
         if (cacheable) {
             PageResponse<CardResponse> cached = cacheService.get(cacheKey, PageResponse.class);
@@ -87,7 +95,9 @@ public class DeckService {
         }
 
         Pageable pageable = PageRequest.of(Math.max(page - 1, 0), limit);
-        Page<VocabCard> cards = cardRepository.findByDeck(deckId, blankToNull(searchWord), pageable);
+        Page<VocabCard> cards = shuffled
+                ? cardRepository.findByDeckShuffled(deckId, seed, pageable)
+                : cardRepository.findByDeck(deckId, blankToNull(searchWord), pageable);
         Page<CardResponse> mapped = cards.map(CardResponse::from);
         if (principal != null && !mapped.isEmpty()) {
             Map<UUID, UUID> learned = learnedCardIds(principal.userUuid(),

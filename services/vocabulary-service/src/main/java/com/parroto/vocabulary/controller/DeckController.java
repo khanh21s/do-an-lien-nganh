@@ -39,9 +39,10 @@ public class DeckController {
             @AuthenticationPrincipal AuthenticatedUser principal,
             @PathVariable UUID id,
             @RequestParam(required = false) String searchWord,
+            @RequestParam(required = false) String seed,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int limit) {
-        return ResponseEntity.ok(deckService.getDeckCards(principal, id, searchWord, page, limit));
+        return ResponseEntity.ok(deckService.getDeckCards(principal, id, searchWord, seed, page, limit));
     }
 
     @PostMapping

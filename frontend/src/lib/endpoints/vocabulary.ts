@@ -25,7 +25,8 @@ export const vocabularyApi = {
   listDecks: (params: ListDecksParams = {}) =>
     api.get<PageResponse<VocabDeck>>('/vocabs/decks', { params }).then((r) => r.data),
 
-  getDeckCards: (deckId: string, params: PageParams = {}) =>
+  /** With `seed` the cards come shuffled, in one fixed order for all pages of that seed. */
+  getDeckCards: (deckId: string, params: PageParams & { seed?: string } = {}) =>
     api.get<PageResponse<VocabCard>>(`/vocabs/decks/${deckId}/cards`, { params }).then((r) => r.data),
 
   createDeck: (data: CreateDeckInput) => api.post<VocabDeck>('/vocabs/decks', data).then((r) => r.data),
