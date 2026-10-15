@@ -87,7 +87,8 @@ export function StudyCard({
         className="flex w-full max-w-md flex-col items-center gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          if (input.trim()) check(input);
+          // Enter on an empty input shows the answer, like "Không biết".
+          check(input.trim() ? input : '');
         }}
       >
         {badge}
@@ -106,12 +107,13 @@ export function StudyCard({
           autoCapitalize="off"
           spellCheck={false}
           aria-label="Nhập từ tiếng Anh"
-          placeholder="Nhập từ rồi nhấn Enter…"
+          placeholder="Nhập từ rồi nhấn Enter (để trống: xem đáp án)…"
           className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-center text-lg outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
         />
         <div className="flex flex-wrap justify-center gap-2">
-          <Button type="submit" disabled={!input.trim()} className="min-h-[44px]">
-            Kiểm tra
+          {/* Never disabled: a disabled default button would block submitting with Enter. */}
+          <Button type="submit" className="min-h-[44px]">
+            {input.trim() ? 'Kiểm tra' : 'Xem đáp án'}
           </Button>
           <Button type="button" variant="secondary" className="min-h-[44px]" onClick={() => check('')}>
             Không biết
