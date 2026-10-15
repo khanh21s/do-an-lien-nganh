@@ -120,8 +120,9 @@ startup (before Hibernate's `ddl-auto: validate`) from its own
   | practice-service | `V2` | sentence review SRS |
   | vocabulary-service | `V2` | gamification |
   | vocabulary-service | `V3` | vocabulary groups / import / dictionary |
+  | vocabulary-service | `V4` | Anki scheduling (P2-anki) |
 
-  The next free numbers are content `V3`, practice `V3`, vocabulary `V4`, auth `V2`,
+  The next free numbers are content `V3`, practice `V3`, vocabulary `V5`, auth `V2`,
   subscription `V2`. Two branches must not ship the same version in one service — rebase and
   renumber before merging.
 - `init-db.sql` and `scripts/migrations/` are **frozen history**: they still build a fresh
@@ -239,7 +240,7 @@ Shared infrastructure lives once in `services/common` (package `com.parroto.comm
 - **Google / Apple Sign-In**: real token verification (Google tokeninfo endpoint; Apple JWKS + RS256 signature check) — needs `GOOGLE_CLIENT_ID` / `APPLE_CLIENT_ID` in `.env` to be strict about audience, works without them too.
 - **Dictation**: word-by-word diff with Levenshtein-based typo tolerance, difficulty-weighted scoring.
 - **Shadowing**: S3 presigned upload, Azure Pronunciation Assessment via plain REST call (not the native SDK — see Known limitations), red/yellow/green phoneme scoring.
-- **Vocabulary SRS**: standard SM-2 (interval 1 → 6 → interval×easeFactor, ease-factor formula, floor 1.3; see docs/architecture.md §4.6).
+- **Vocabulary SRS**: Anki-style scheduler (learning steps 1m/10m, graduating 1 day, easy 4 days, ease 2.50 floor 1.30, relearning 10m, days start at 04:00 Vietnam time, no daily limits) with Anki sessions (Mới / Đang học / Ôn counters, server-computed button labels) on deck pages and "Ôn tập"; see docs/architecture.md §4.6 and docs/reports/P2-anki.md.
 - **Subscriptions**: VNPay payment URL construction + HMAC-SHA512 callback signature verification, activation codes, Premium gating for Pro-only vocab decks (calls subscription-service internally).
 - **Admin authorization**: `ADMIN_EMAILS` allow-list (env var) gates lesson/deck write endpoints — a deliberate MVP stand-in for a full roles table.
 - Redis caching (lessons, decks, stats) with cache-aside invalidation; standardized error JSON (`error`, `status`, `timestamp`, `requestId`) across every service and the gateway.
