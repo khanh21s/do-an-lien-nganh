@@ -3,6 +3,7 @@
 import { ActivityHeatmap } from '@/components/dashboard/ActivityHeatmap';
 import { ContinueLearning } from '@/components/dashboard/ContinueLearning';
 import { GameWidget } from '@/components/dashboard/GameWidget';
+import { SentenceReviewCard } from '@/components/dashboard/SentenceReviewCard';
 import { formatHours, formatPercent } from '@/components/dashboard/dashboard-data';
 import { StatCard, WidgetError } from '@/components/dashboard/StatCard';
 import { TrendingErrors } from '@/components/dashboard/TrendingErrors';
@@ -92,6 +93,8 @@ export default function DashboardPage() {
           href="/vocabulary/review"
         />
       </div>
+
+      <SentenceReviewCard />
 
       <GameWidget />
 

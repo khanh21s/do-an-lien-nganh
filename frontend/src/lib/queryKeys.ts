@@ -112,4 +112,9 @@ export const qk = {
   gameLeaderboardAll: ['game-leaderboard'] as const,
   gameLeaderboard: (board: GameBoard) => ['game-leaderboard', board] as const,
   // --- end T16 ---
+
+  // --- P2-A ---
+  sentenceReviewQueue: ['sentence-review-queue'] as const,
+  sentenceReviewStats: ['sentence-review-stats'] as const,
+  // --- end P2-A ---
 };

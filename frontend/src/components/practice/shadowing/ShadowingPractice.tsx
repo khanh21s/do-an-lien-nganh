@@ -14,7 +14,9 @@ import { Spinner } from '@/components/ui/Spinner';
 import { comboToLabels, useHotkeys } from '@/hooks/useHotkeys';
 import { usePracticeNav } from '@/hooks/usePracticeNav';
 import { useSentenceAudio } from '@/hooks/useSentenceAudio';
+import { ProLessonLock } from '@/components/lessons/ProLessonLock';
 import { apiErrorMessage, apiErrorStatus } from '@/lib/api';
+import type { PracticeReviewMode } from '../review-mode';
 import { practiceApi } from '@/lib/endpoints/practice';
 import { addTimeSpent, ensureSession, incrementCounter } from '@/lib/practice-session';
 import { qk } from '@/lib/queryKeys';
@@ -58,10 +60,27 @@ function SentenceStats({ lessonId, sentenceId }: { lessonId: string; sentenceId:
   );
 }
 
-export function ShadowingPractice({ lesson, sentence }: { lesson: LessonDetail; sentence: SentenceResponse }) {
+export function ShadowingPractice({
+  lesson,
+  sentence,
+  review,
+}: {
+  lesson: LessonDetail;
+  sentence: SentenceResponse;
+  /** P2-A2: practising a queued sentence from "Ôn câu sai". */
+  review?: PracticeReviewMode;
+}) {
   const lessonId = lesson.id;
   const queryClient = useQueryClient();
-  const nav = usePracticeNav(lessonId, 'shadowing', lesson.sentences, sentence.id);
+  const lessonNav = usePracticeNav(lessonId, 'shadowing', lesson.sentences, sentence.id);
+  // P2-A2: the review page drives navigation in review mode.
+  const nav = review
+    ? { ...lessonNav, isLast: review.isLast, goNextOrFinish: review.onNext, goNext: review.onNext, goPrev: () => {} }
+    : lessonNav;
+  // P2-A1: practice-service refused the upload/attempt (Pro lesson, user not premium).
+  const [proBlocked, setProBlocked] = useState<string | null>(null);
+  const reviewId = review?.reviewId;
+  const onReviewResult = review?.onResult;
   const audio = useSentenceAudio({ lessonId, sentence, lessonAudioUrl: lesson.audioUrl, mode: 'shadowing' });
 
   const recorderRef = useRef<RecorderHandle>(null);
@@ -93,8 +112,12 @@ export function ShadowingPractice({ lesson, sentence }: { lesson: LessonDetail; 
           durationSec: t.durationSec,
           uploadedRecordingId: t.uploadedRecordingId,
           onStage: setStage,
+          reviewId,
         });
         setResult(res);
+        onReviewResult?.(res.review ?? null);
+        void queryClient.invalidateQueries({ queryKey: qk.sentenceReviewStats });
+        void queryClient.invalidateQueries({ queryKey: qk.sentenceReviewQueue });
         setTake((prev) => (prev && prev.blob === t.blob ? { ...prev, uploadedRecordingId: null } : prev));
         void queryClient.invalidateQueries({ queryKey: qk.practiceStats });
         void queryClient.invalidateQueries({ queryKey: qk.streak });
@@ -106,6 +129,10 @@ export function ShadowingPractice({ lesson, sentence }: { lesson: LessonDetail; 
       } catch (err) {
         const se = err instanceof ShadowingSubmitError ? err : null;
         const original = se ? se.original : err;
+        if (apiErrorStatus(original) === 403) {
+          setProBlocked(apiErrorMessage(original));
+          return;
+        }
         // A scoring 404 means the uploaded file is gone → the next try must upload again.
         const keepId = se?.stage === 'scoring' && apiErrorStatus(original) !== 404 ? se.recordingId : null;
         setTake((prev) => (prev && prev.blob === t.blob ? { ...prev, uploadedRecordingId: keepId } : prev));
@@ -119,7 +146,7 @@ export function ShadowingPractice({ lesson, sentence }: { lesson: LessonDetail; 
         setStage(null);
       }
     },
-    [lessonId, sentence.id, queryClient]
+    [lessonId, sentence.id, queryClient, reviewId, onReviewResult]
   );
 
   const handleRecorded = useCallback(
@@ -151,16 +178,24 @@ export function ShadowingPractice({ lesson, sentence }: { lesson: LessonDetail; 
     ...bindAction(keys('shadowing.next'), { handler: nav.goNext, allowInInput: true }),
   ]);
 
+  if (proBlocked) return <ProLessonLock lessonId={lessonId} lessonTitle={lesson.title} message={proBlocked} />;
+
+  const headerRight = <ShortcutHelp scope="shadowing" title="Phím tắt Shadowing" />;
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
-      <PracticeHeader
-        lessonId={lessonId}
-        lessonTitle={lesson.title}
-        mode="shadowing"
-        sentences={lesson.sentences}
-        currentId={sentence.id}
-        right={<ShortcutHelp scope="shadowing" title="Phím tắt Shadowing" />}
-      />
+      {review ? (
+        review.renderHeader(headerRight)
+      ) : (
+        <PracticeHeader
+          lessonId={lessonId}
+          lessonTitle={lesson.title}
+          mode="shadowing"
+          sentences={lesson.sentences}
+          currentId={sentence.id}
+          right={headerRight}
+        />
+      )}
 
       <Card>
         <p className="break-words text-xl font-medium leading-relaxed text-slate-900">{sentence.text}</p>

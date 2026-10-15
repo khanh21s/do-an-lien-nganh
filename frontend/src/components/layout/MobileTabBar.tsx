@@ -1,6 +1,7 @@
 'use client';
 
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
+import { practiceApi } from '@/lib/endpoints/practice';
 import { qk } from '@/lib/queryKeys';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
@@ -21,6 +22,8 @@ export function MobileTabBar() {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { data: vocabStats } = useQuery({ queryKey: qk.vocabStats, queryFn: vocabularyApi.getStats });
+  // P2-A: due count of the sentence review queue (refreshed after every attempt).
+  const { data: sentenceReviewStats } = useQuery({ queryKey: qk.sentenceReviewStats, queryFn: practiceApi.getReviewStats });
 
   const activeHref = findActiveHref(pathname, allNavHrefs());
   const tabActive = MOBILE_TABS.some((t) => t.href === activeHref);
@@ -37,7 +40,7 @@ export function MobileTabBar() {
         <ul className="grid h-16 grid-cols-5">
           {MOBILE_TABS.map((tab) => {
             const active = activeHref === tab.href;
-            const badge = badgeCount(tab.badge, vocabStats);
+            const badge = badgeCount(tab.badge, vocabStats, sentenceReviewStats);
             return (
               <li key={tab.href} className="min-w-0">
                 <Link
@@ -85,6 +88,7 @@ export function MobileTabBar() {
         onClose={closeDrawer}
         activeHref={activeHref}
         vocabStats={vocabStats}
+        sentenceReviewStats={sentenceReviewStats}
       />
     </>
   );

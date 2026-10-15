@@ -1,7 +1,7 @@
 'use client';
 
 import { useLogout } from '@/components/layout/Topbar';
-import type { VocabUserStats } from '@/lib/types';
+import type { SentenceReviewStats, VocabUserStats } from '@/lib/types';
 import clsx from 'clsx';
 import Link from 'next/link';
 import { useEffect, useId, useRef } from 'react';
@@ -16,11 +16,14 @@ export function MoreDrawer({
   onClose,
   activeHref,
   vocabStats,
+  sentenceReviewStats,
 }: {
   open: boolean;
   onClose: () => void;
   activeHref: string | null;
   vocabStats?: VocabUserStats;
+  /** P2-A: "Ôn câu sai" badge. */
+  sentenceReviewStats?: SentenceReviewStats;
 }) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -79,7 +82,7 @@ export function MoreDrawer({
                 key={entry.href}
                 item={entry}
                 active={activeHref === entry.href}
-                badge={badgeCount(entry.badge, vocabStats)}
+                badge={badgeCount(entry.badge, vocabStats, sentenceReviewStats)}
                 onNavigate={onClose}
               />
             ) : (
@@ -90,7 +93,7 @@ export function MoreDrawer({
                     key={child.href}
                     item={child}
                     active={activeHref === child.href}
-                    badge={badgeCount(child.badge, vocabStats)}
+                    badge={badgeCount(child.badge, vocabStats, sentenceReviewStats)}
                     onNavigate={onClose}
                   />
                 ))}

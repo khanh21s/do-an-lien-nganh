@@ -88,3 +88,19 @@ describe('shouldShowReviewReminder (NAV-07)', () => {
     expect(localDateKey(new Date(2026, 0, 5, 23, 30))).toBe('2026-01-05');
   });
 });
+
+// --- P2-A ---
+describe('sentence review nav entry (P2-A)', () => {
+  it('is reachable, highlighted on its route and shows the due count', async () => {
+    const { NAV_SENTENCE_REVIEW, badgeCount } = await import('./navItems');
+    const hrefs = allNavHrefs();
+    expect(hrefs).toContain('/practice/review');
+    expect(findActiveHref('/practice/review', hrefs)).toBe('/practice/review');
+    expect(findActiveHref('/practice/history', hrefs)).toBe('/practice/history');
+    expect(flattenNav(moreDrawerEntries()).map((l) => l.href)).toContain('/practice/review');
+    expect(badgeCount(NAV_SENTENCE_REVIEW.badge, undefined, { dueCount: 4, total: 9, nextDueAt: null })).toBe(4);
+    expect(badgeCount(NAV_SENTENCE_REVIEW.badge, undefined, undefined)).toBeUndefined();
+    expect(badgeCount('reviewDue', { dueToday: 2 } as never, { dueCount: 4, total: 9, nextDueAt: null })).toBe(2);
+  });
+});
+// --- end P2-A ---

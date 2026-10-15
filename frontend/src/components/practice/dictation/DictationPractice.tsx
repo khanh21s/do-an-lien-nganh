@@ -12,7 +12,9 @@ import { AddWordModal } from '@/components/vocab/AddWordModal';
 import { useHotkeys, type HotkeyBinding } from '@/hooks/useHotkeys';
 import { usePracticeNav } from '@/hooks/usePracticeNav';
 import { useSentenceAudio } from '@/hooks/useSentenceAudio';
-import { apiErrorMessage } from '@/lib/api';
+import { ProLessonLock } from '@/components/lessons/ProLessonLock';
+import { apiErrorMessage, apiErrorStatus } from '@/lib/api';
+import type { PracticeReviewMode } from '../review-mode';
 import {
   DIFFICULTY_WEIGHTS,
   blankMask,
@@ -56,15 +58,24 @@ export function DictationPractice({
   sentence,
   difficulty,
   onDifficultyChange,
+  review,
 }: {
   lesson: LessonDetail;
   sentence: SentenceResponse;
   difficulty: Difficulty;
   onDifficultyChange: (d: Difficulty) => void;
+  /** P2-A2: practising a queued sentence from "Ôn câu sai". */
+  review?: PracticeReviewMode;
 }) {
   const lessonId = lesson.id;
   const queryClient = useQueryClient();
-  const nav = usePracticeNav(lessonId, MODE, lesson.sentences, sentence.id);
+  const lessonNav = usePracticeNav(lessonId, MODE, lesson.sentences, sentence.id);
+  // P2-A2: the review page drives navigation in review mode.
+  const nav = review
+    ? { ...lessonNav, isLast: review.isLast, goNextOrFinish: review.onNext, goNext: review.onNext, goPrev: () => {} }
+    : lessonNav;
+  // P2-A1: practice-service refused the attempt (Pro lesson, user not premium).
+  const [proBlocked, setProBlocked] = useState<string | null>(null);
   const keys = useShortcutKeys();
   const audio = useSentenceAudio({
     lessonId,
@@ -131,8 +142,9 @@ export function DictationPractice({
 
   const mutation = useMutation({
     mutationFn: (userInput: string) =>
-      practiceApi.submitDictation({ lessonId, sentenceId: sentence.id, userInput, difficulty }),
+      practiceApi.submitDictation({ lessonId, sentenceId: sentence.id, userInput, difficulty, reviewId: review?.reviewId }),
     onSuccess: (res) => {
+      review?.onResult?.(res.review ?? null);
       setResult(res);
       setCorrectness(isHard ? null : wordCorrectness(tokens, res.wordScores));
       if (res.accuracy === 100) playCorrectFeedback();
@@ -145,11 +157,19 @@ export function DictationPractice({
         qk.activityAll,
         qk.trendingErrors,
         qk.attemptsAll,
+        qk.sentenceReviewStats,
+        qk.sentenceReviewQueue,
       ]) {
         void queryClient.invalidateQueries({ queryKey });
       }
     },
-    onError: (err) => toast.error(apiErrorMessage(err, 'Không thể chấm điểm, vui lòng thử lại.')),
+    onError: (err) => {
+      if (apiErrorStatus(err) === 403) {
+        setProBlocked(apiErrorMessage(err));
+        return;
+      }
+      toast.error(apiErrorMessage(err, 'Không thể chấm điểm, vui lòng thử lại.'));
+    },
   });
 
   const hasAnswer = isHard
@@ -260,21 +280,29 @@ export function DictationPractice({
   const hardHint = isHard && revealed.size > 0;
   const maxScore = Math.round(DIFFICULTY_WEIGHTS[difficulty] * 100);
 
+  if (proBlocked) return <ProLessonLock lessonId={lessonId} lessonTitle={lesson.title} message={proBlocked} />;
+
+  const headerRight = (
+    <div className="flex items-center gap-2">
+      <DifficultyPopover value={difficulty} onChange={onDifficultyChange} />
+      <ShortcutHelp scope="dictation" title="Phím tắt Dictation" />
+    </div>
+  );
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-      <PracticeHeader
-        lessonId={lessonId}
-        lessonTitle={lesson.title}
-        mode={MODE}
-        sentences={lesson.sentences}
-        currentId={sentence.id}
-        right={
-          <div className="flex items-center gap-2">
-            <DifficultyPopover value={difficulty} onChange={onDifficultyChange} />
-            <ShortcutHelp scope="dictation" title="Phím tắt Dictation" />
-          </div>
-        }
-      />
+      {review ? (
+        review.renderHeader(headerRight)
+      ) : (
+        <PracticeHeader
+          lessonId={lessonId}
+          lessonTitle={lesson.title}
+          mode={MODE}
+          sentences={lesson.sentences}
+          currentId={sentence.id}
+          right={headerRight}
+        />
+      )}
 
       <Card className="flex flex-col gap-5 p-4 sm:p-5">
         <SentencePlayer audio={audio} />
