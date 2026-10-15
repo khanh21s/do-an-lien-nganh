@@ -217,8 +217,12 @@ services:
       
       # Microservices communication
       CONTENT_SERVICE_URL: http://content-service:8002
-      # Service-to-service auth: vocabulary-service reports met game goals (T16)
+      # P2-A1: premium check for Pro lessons (GET /internal/subscriptions/{userId}/active)
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:8005
+      # Service-to-service auth: vocabulary-service reports met game goals (T16); calls to subscription-service (P2-A1)
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:?INTERNAL_TOKEN is required - set a random value of at least 32 characters in .env}
+      # P2-A1: admins bypass the Pro-lesson practice gate
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@parroto.com}
       
       # Azure Speech API (for Shadowing pronunciation scoring)
       AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
