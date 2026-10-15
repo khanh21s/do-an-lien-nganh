@@ -1,11 +1,12 @@
 package com.parroto.practice.service;
 
+import com.parroto.common.cache.CacheService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.parroto.practice.dto.DictationAttemptRequest;
 import com.parroto.practice.dto.DictationAttemptResponse;
 import com.parroto.practice.entity.PracticeAttempt;
 import com.parroto.practice.repository.PracticeAttemptRepository;
-import com.parroto.practice.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

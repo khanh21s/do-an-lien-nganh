@@ -1,5 +1,6 @@
 package com.parroto.auth.controller;
 
+import com.parroto.common.dto.MessageResponse;
 import com.parroto.auth.dto.*;
 import com.parroto.auth.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;

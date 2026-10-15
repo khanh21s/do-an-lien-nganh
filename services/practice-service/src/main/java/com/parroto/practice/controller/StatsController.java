@@ -5,7 +5,7 @@ import com.parroto.practice.dto.LessonStatsResponse;
 import com.parroto.practice.dto.StatsResponse;
 import com.parroto.practice.dto.StreakResponse;
 import com.parroto.practice.dto.TrendingErrorResponse;
-import com.parroto.practice.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.practice.service.StatsService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

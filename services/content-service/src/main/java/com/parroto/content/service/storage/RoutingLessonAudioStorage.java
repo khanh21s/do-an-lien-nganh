@@ -1,6 +1,6 @@
 package com.parroto.content.service.storage;
 
-import com.parroto.content.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.multipart.MultipartFile;
 

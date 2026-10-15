@@ -1,7 +1,8 @@
 package com.parroto.practice.controller;
 
+import com.parroto.common.dto.PageResponse;
 import com.parroto.practice.dto.*;
-import com.parroto.practice.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.practice.service.AttemptQueryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;

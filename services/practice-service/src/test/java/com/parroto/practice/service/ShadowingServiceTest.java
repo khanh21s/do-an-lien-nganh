@@ -1,14 +1,15 @@
 package com.parroto.practice.service;
 
+import com.parroto.common.cache.CacheService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.parroto.practice.dto.ShadowingAttemptRequest;
 import com.parroto.practice.dto.ShadowingAttemptResponse;
 import com.parroto.practice.dto.ShadowingUploadUrlRequest;
 import com.parroto.practice.dto.ShadowingUploadUrlResponse;
 import com.parroto.practice.entity.PracticeAttempt;
-import com.parroto.practice.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.practice.repository.PracticeAttemptRepository;
-import com.parroto.practice.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.practice.service.speech.MockPronunciationScorer;
 import com.parroto.practice.service.storage.LocalRecordingStorage;
 import com.parroto.practice.service.storage.RecordingStorage;

@@ -2,11 +2,11 @@ package com.parroto.auth.service;
 
 import com.parroto.auth.dto.AdminUserResponse;
 import com.parroto.auth.dto.AdminUserStatsResponse;
-import com.parroto.auth.dto.PageResponse;
+import com.parroto.common.dto.PageResponse;
 import com.parroto.auth.entity.User;
-import com.parroto.auth.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.auth.repository.UserRepository;
-import com.parroto.auth.security.AdminGuard;
+import com.parroto.common.security.AdminGuard;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;

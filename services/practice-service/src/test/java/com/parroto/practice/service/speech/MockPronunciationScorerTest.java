@@ -1,7 +1,7 @@
 package com.parroto.practice.service.speech;
 
 import com.parroto.practice.dto.ShadowingWordScoreDto;
-import com.parroto.practice.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.practice.util.WavFixtures;
 import org.junit.jupiter.api.Test;
 

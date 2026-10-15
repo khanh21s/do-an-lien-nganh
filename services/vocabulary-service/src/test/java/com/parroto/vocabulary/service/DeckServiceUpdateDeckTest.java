@@ -1,14 +1,15 @@
 package com.parroto.vocabulary.service;
 
+import com.parroto.common.cache.CacheService;
 import com.parroto.vocabulary.dto.DeckResponse;
 import com.parroto.vocabulary.dto.UpdateDeckRequest;
 import com.parroto.vocabulary.entity.VocabDeck;
-import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.vocabulary.repository.UserVocabRepository;
 import com.parroto.vocabulary.repository.VocabCardRepository;
 import com.parroto.vocabulary.repository.VocabDeckRepository;
-import com.parroto.vocabulary.security.AdminGuard;
-import com.parroto.vocabulary.security.AuthenticatedUser;
+import com.parroto.common.security.AdminGuard;
+import com.parroto.common.security.AuthenticatedUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;

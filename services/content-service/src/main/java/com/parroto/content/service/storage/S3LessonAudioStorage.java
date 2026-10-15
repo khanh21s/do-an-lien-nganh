@@ -1,6 +1,6 @@
 package com.parroto.content.service.storage;
 
-import com.parroto.content.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

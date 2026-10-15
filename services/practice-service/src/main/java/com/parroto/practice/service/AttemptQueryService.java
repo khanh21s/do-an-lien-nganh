@@ -1,8 +1,9 @@
 package com.parroto.practice.service;
 
+import com.parroto.common.dto.PageResponse;
 import com.parroto.practice.dto.*;
 import com.parroto.practice.entity.PracticeAttempt;
-import com.parroto.practice.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.practice.repository.PracticeAttemptRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;

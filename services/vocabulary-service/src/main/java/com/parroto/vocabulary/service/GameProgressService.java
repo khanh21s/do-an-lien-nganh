@@ -8,7 +8,7 @@ import com.parroto.vocabulary.entity.GameBadge;
 import com.parroto.vocabulary.entity.GameMode;
 import com.parroto.vocabulary.entity.GameProfile;
 import com.parroto.vocabulary.entity.GameSession;
-import com.parroto.vocabulary.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.vocabulary.repository.GameAnswerRepository;
 import com.parroto.vocabulary.repository.GameBadgeRepository;
 import com.parroto.vocabulary.repository.GameProfileRepository;

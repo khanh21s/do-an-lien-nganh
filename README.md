@@ -99,10 +99,41 @@ variables are passed to each service, so changing a password means:
 
 ## Operations notes
 
-**Apply DB migrations to an existing volume** — `init-db.sql` only runs on the first start
-of an empty Postgres volume. Later schema changes ship as idempotent scripts in
-`scripts/migrations/` (safe to re-run); apply them in order, e.g. T13 (personal words in the
-notebook, `vocab_deck.owner_id`), then restart the service (`ddl-auto: validate` needs the column):
+**Schema changes = Flyway migrations (since Phase 2).** Every Java service runs Flyway on
+startup (before Hibernate's `ddl-auto: validate`) from its own
+`services/<svc>/src/main/resources/db/migration/`:
+- `V1__baseline.sql` is the frozen reference of the schema as it was after `init-db.sql` +
+  `initdb/` seeds + `scripts/migrations/001`–`007` (pg_dump `--schema-only`). Because of
+  `spring.flyway.baseline-on-migrate: true` / `baseline-version: 1`, it is **never executed** on
+  an existing volume nor on a fresh one (where `init-db.sql` already created the tables): the
+  first start only writes a `<< Flyway Baseline >>` row to `flyway_schema_history`. It would
+  only run on a completely empty database. Never edit V1 (or any applied migration).
+- **Every new schema change** is a new file `V<n>__<snake_case_description>.sql` in the owning
+  service, starting at `V2`, applied automatically by `docker-compose up -d --build <svc>`. No
+  manual `psql`, no edits to `init-db.sql`. Write plain forward-only SQL (Flyway runs each file
+  once, in a transaction); keep seed data out of schema migrations unless the feature needs it.
+- **Reserved version numbers** (upcoming feature work — do not reuse):
+
+  | Service | Version | Feature |
+  |---|---|---|
+  | content-service | `V2` | premium lessons |
+  | practice-service | `V2` | sentence review SRS |
+  | vocabulary-service | `V2` | gamification |
+  | vocabulary-service | `V3` | vocabulary groups / import / dictionary |
+
+  The next free numbers are content `V3`, practice `V3`, vocabulary `V4`, auth `V2`,
+  subscription `V2`. Two branches must not ship the same version in one service — rebase and
+  renumber before merging.
+- `init-db.sql` and `scripts/migrations/` are **frozen history**: they still build a fresh
+  volume (schema + seed data) and document how pre-Phase-2 volumes were upgraded, but they no
+  longer receive changes. A fresh volume = `init-db.sql` (baseline) + Flyway `V2…` on the
+  first service start.
+
+**Legacy: pre-Flyway migrations on an old volume** — `init-db.sql` only runs on the first start
+of an empty Postgres volume. A volume created before 001–007 existed needs those idempotent
+scripts from `scripts/migrations/` (safe to re-run) applied in order BEFORE the first Flyway
+start, e.g. T13 (personal words in the notebook, `vocab_deck.owner_id`), then restart the
+service (`ddl-auto: validate` needs the column):
 ```bash
 docker exec -i parroto-postgres psql -U parroto -d vocabulary_db -v ON_ERROR_STOP=1 < scripts/migrations/001_personal_vocab.sql
 docker-compose restart vocabulary-service
@@ -162,11 +193,12 @@ No local Node/Maven needed — everything runs in Docker:
 ```bash
 scripts/verify-fe.sh                       # frontend: npm ci, tsc --noEmit, next lint, vitest
 scripts/verify-gw.sh                       # gateway: npm ci, node --check, load auth middleware
-scripts/verify-java.sh content-service     # one service: mvn test (JDK 21); no argument = all 5
+scripts/verify-java.sh content-service     # one service (+ services/common): mvn test (JDK 21); no argument = common + all 5
 docker-compose config -q                   # compose + .env valid
 ```
 GitHub Actions (`.github/workflows/ci.yml`) runs the same checks: `frontend`, `gateway`,
-`java` (matrix over the 5 services, Temurin 21) and `compose`.
+`java` (matrix over the 5 services, Temurin 21, each built with `services/common` via
+`mvn -pl <svc> -am test` from `services/`) and `compose`.
 
 ## Project Layout
 
@@ -183,6 +215,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the same checks: `frontend`, `g
 │   ├── server.js
 │   └── middleware/{auth,errorHandler,logger,rateLimiter}.js
 ├── services/
+│   ├── pom.xml               # Maven aggregator (common + 5 services); image build context
+│   ├── common/               # parroto-common: shared JWT/admin/internal-token/error/cache classes
 │   ├── auth-service/         # register/login/OAuth/JWT issuing, profile
 │   ├── content-service/      # lessons, sentences, audio streaming (S3)
 │   ├── practice-service/     # dictation scoring, shadowing (Azure), stats/streaks
@@ -196,7 +230,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the same checks: `frontend`, `g
 └── files/                    # original planning docs (24-prompt spec, reference configs) - archived, not used at runtime
 ```
 
-Each Java service follows the same internal layout: `config/`, `security/`, `entity/`, `repository/`, `dto/`, `service/`, `controller/`, `exception/`.
+Each Java service follows the same internal layout: `config/`, `security/`, `entity/`, `repository/`, `dto/`, `service/`, `controller/`, `exception/`, plus `src/main/resources/db/migration/` (Flyway).
+Shared infrastructure lives once in `services/common` (package `com.parroto.common.*`: `security.JwtValidator/JwtAuthFilter/AuthenticatedUser/AdminGuard/InternalTokenFilter`, `web.RequestIdFilter/RestAuthEntryPoint`, `exception.ApiException`, `dto.ErrorResponse/PageResponse/MessageResponse`, `cache.CacheService`); each service imports what it needs in `config/CommonConfig.java`. Details: `docs/reports/P2-foundation.md`.
 
 ## What's implemented
 

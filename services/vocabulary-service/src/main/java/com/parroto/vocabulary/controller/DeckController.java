@@ -1,8 +1,10 @@
 package com.parroto.vocabulary.controller;
 
+import com.parroto.common.dto.MessageResponse;
+import com.parroto.common.dto.PageResponse;
 import com.parroto.vocabulary.dto.*;
-import com.parroto.vocabulary.security.AdminGuard;
-import com.parroto.vocabulary.security.AuthenticatedUser;
+import com.parroto.common.security.AdminGuard;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.vocabulary.service.DeckService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;

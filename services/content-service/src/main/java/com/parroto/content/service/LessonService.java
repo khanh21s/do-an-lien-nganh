@@ -1,9 +1,11 @@
 package com.parroto.content.service;
 
+import com.parroto.common.cache.CacheService;
+import com.parroto.common.dto.PageResponse;
 import com.parroto.content.dto.*;
 import com.parroto.content.entity.Lesson;
 import com.parroto.content.entity.Sentence;
-import com.parroto.content.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import com.parroto.content.repository.LessonRepository;
 import com.parroto.content.repository.SentenceRepository;
 import com.parroto.content.service.storage.AudioFormats;

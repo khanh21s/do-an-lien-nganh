@@ -2,7 +2,7 @@ package com.parroto.practice.controller;
 
 import com.parroto.practice.dto.DictationAttemptRequest;
 import com.parroto.practice.dto.DictationAttemptResponse;
-import com.parroto.practice.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.practice.service.DictationService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;

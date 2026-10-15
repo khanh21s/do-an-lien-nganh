@@ -1,7 +1,9 @@
 package com.parroto.vocabulary.controller;
 
+import com.parroto.common.dto.MessageResponse;
+import com.parroto.common.dto.PageResponse;
 import com.parroto.vocabulary.dto.*;
-import com.parroto.vocabulary.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.vocabulary.service.PersonalWordService;
 import com.parroto.vocabulary.service.ReviewService;
 import jakarta.validation.Valid;

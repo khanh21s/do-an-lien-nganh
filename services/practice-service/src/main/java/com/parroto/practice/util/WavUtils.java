@@ -1,6 +1,6 @@
 package com.parroto.practice.util;
 
-import com.parroto.practice.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;

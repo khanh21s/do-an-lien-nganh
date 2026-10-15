@@ -1,6 +1,6 @@
 package com.parroto.practice.util;
 
-import com.parroto.practice.exception.ApiException;
+import com.parroto.common.exception.ApiException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 

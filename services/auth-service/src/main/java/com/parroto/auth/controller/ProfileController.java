@@ -1,10 +1,10 @@
 package com.parroto.auth.controller;
 
 import com.parroto.auth.dto.ChangePasswordRequest;
-import com.parroto.auth.dto.MessageResponse;
+import com.parroto.common.dto.MessageResponse;
 import com.parroto.auth.dto.ProfileResponse;
 import com.parroto.auth.dto.UpdateProfileRequest;
-import com.parroto.auth.security.AuthenticatedUser;
+import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.auth.service.ProfileService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
