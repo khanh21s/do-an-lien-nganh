@@ -162,4 +162,15 @@ public interface VocabCardRepository extends JpaRepository<VocabCard, UUID> {
             """)
     List<VocabCard> findForDictionary(@Param("words") Collection<String> words, @Param("userId") UUID userId,
                                       Pageable pageable);
+
+    /** Prefix matches for live dictionary suggestions, limited to free public cards and the caller's cards. */
+    @Query("""
+            SELECT c FROM VocabCard c JOIN FETCH c.deck d
+            WHERE LOWER(TRIM(c.word)) LIKE CONCAT(:prefix, '%')
+              AND ((d.ownerId IS NULL AND COALESCE(d.isProOnly, false) = false)
+                   OR d.ownerId = :userId)
+            ORDER BY LOWER(TRIM(c.word)), CASE WHEN d.ownerId IS NULL THEN 1 ELSE 0 END, c.createdAt ASC
+            """)
+    List<VocabCard> findDictionarySuggestions(@Param("prefix") String prefix, @Param("userId") UUID userId,
+                                               Pageable pageable);
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuthStore } from '@/store/auth-store';
+import { DictionarySearch } from './DictionarySearch';
 import clsx from 'clsx';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -35,6 +36,7 @@ export function PublicHeader() {
           <span className="hidden min-[400px]:inline">Parroto</span>
           <span className="sr-only min-[400px]:hidden">Parroto</span>
         </Link>
+        <DictionarySearch className="mx-1 min-w-0 flex-1 sm:mx-3 sm:max-w-xs" />
         <nav className="ml-auto flex min-w-0 items-center gap-1 sm:gap-2" aria-label="Điều hướng công khai">
           {PUBLIC_LINKS.map((link) => {
             const active = !!pathname && matchesRoute(pathname, link.href);

@@ -1,6 +1,7 @@
 'use client';
 
 import { TopbarGamification } from '@/components/gamification/TopbarGamification';
+import { DictionarySearch } from '@/components/layout/DictionarySearch';
 import { authApi } from '@/lib/endpoints/auth';
 import { practiceApi } from '@/lib/endpoints/practice';
 import { subscriptionApi } from '@/lib/endpoints/subscription';
@@ -64,7 +65,9 @@ export function Topbar() {
         <span className="hidden text-lg font-bold text-brand-600 min-[400px]:inline">Parroto</span>
       </Link>
 
-      <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
+      <DictionarySearch className="mx-1 min-w-0 flex-1 sm:mx-3 sm:max-w-sm" />
+
+      <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
         <span
           className="flex h-9 items-center gap-1 rounded-full bg-amber-50 px-2.5 text-sm font-semibold text-amber-700"
           title="Chuỗi ngày học liên tiếp"

@@ -1,6 +1,7 @@
 'use client';
 
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { PublicHeader } from '@/components/layout/PublicHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -65,43 +66,46 @@ function LoginForm() {
   const registerHref = rawNext ? `/register?next=${encodeURIComponent(rawNext)}` : '/register';
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-brand-50 px-4">
-      <Card className="w-full max-w-sm">
-        <h1 className="text-center text-2xl font-bold text-slate-900">Đăng nhập Parroto</h1>
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-          <Input
-            type="email"
-            label="Email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="ban@example.com"
-          />
-          <Input
-            type="password"
-            label="Mật khẩu"
-            required
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-          />
-          <Button type="submit" loading={loading} className="mt-2 w-full">
-            Đăng nhập
-          </Button>
-        </form>
+    <>
+      <PublicHeader />
+      <main className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center bg-brand-50 px-4">
+        <Card className="w-full max-w-sm">
+          <h1 className="text-center text-2xl font-bold text-slate-900">Đăng nhập Parroto</h1>
+          <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
+            <Input
+              type="email"
+              label="Email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="ban@example.com"
+            />
+            <Input
+              type="password"
+              label="Mật khẩu"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+            />
+            <Button type="submit" loading={loading} className="mt-2 w-full">
+              Đăng nhập
+            </Button>
+          </form>
 
-        {/* AUTH-04: the button renders nothing when NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured. */}
-        <GoogleSignInButton onToken={handleGoogleToken} withDivider />
+          {/* AUTH-04: the button renders nothing when NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured. */}
+          <GoogleSignInButton onToken={handleGoogleToken} withDivider />
 
-        <p className="mt-6 text-center text-sm text-slate-600">
-          Chưa có tài khoản?{' '}
-          <Link href={registerHref} className="font-medium text-brand-600 hover:underline">
-            Đăng ký
-          </Link>
-        </p>
-      </Card>
-    </main>
+          <p className="mt-6 text-center text-sm text-slate-600">
+            Chưa có tài khoản?{' '}
+            <Link href={registerHref} className="font-medium text-brand-600 hover:underline">
+              Đăng ký
+            </Link>
+          </p>
+        </Card>
+      </main>
+    </>
   );
 }

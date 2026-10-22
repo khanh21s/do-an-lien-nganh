@@ -1,6 +1,7 @@
 'use client';
 
 import { findActiveHref, type NavEntry, type NavLeaf } from '@/components/layout/navItems';
+import { DictionarySearch } from '@/components/layout/DictionarySearch';
 import { useLogout } from '@/components/layout/Topbar';
 import clsx from 'clsx';
 import Link from 'next/link';
@@ -77,7 +78,9 @@ function AdminTopbar({ email, onOpenMenu, menuOpen }: { email: string; onOpenMen
         <span className="rounded-md bg-ink-800 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-white">Admin</span>
       </Link>
 
-      <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
+      <DictionarySearch className="mx-1 min-w-0 flex-1 sm:mx-3 sm:max-w-sm" />
+
+      <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
         <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700 sm:flex" aria-hidden>
           {email[0]?.toUpperCase() ?? '?'}
         </span>

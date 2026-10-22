@@ -1291,6 +1291,13 @@ export interface ImportCommitResult {
 export type DictionarySource = 'cards' | 'dictionary' | 'cards+dictionary' | 'none';
 export type DictionaryExternalStatus = 'ok' | 'miss' | 'error' | 'skipped' | 'disabled';
 
+/** Local dictionary autocomplete result from public and current-user vocabulary cards. */
+export interface DictionarySuggestion {
+  word: string;
+  meaningsVi: string[];
+  partsOfSpeech: string[];
+}
+
 /** `DictionaryResponse` (GET /vocabs/dictionary/{word}). */
 export interface DictionaryEntry {
   query: string;

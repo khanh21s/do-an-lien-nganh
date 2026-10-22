@@ -1,6 +1,6 @@
 # Parroto
 
-English-learning platform — Dictation, Shadowing, Vocabulary SRS (SM-2), and Premium subscriptions. Microservices backend (5 independent Spring Boot services, database-per-service) behind a Node/Express API Gateway, with a Next.js web frontend.
+Nền tảng học tiếng Anh với các tính năng nghe chép chính tả, luyện nói đuổi (shadowing), ôn từ vựng theo lịch SRS (SM-2) và gói Premium. Backend dùng kiến trúc microservice gồm 5 dịch vụ Spring Boot độc lập, mỗi dịch vụ có cơ sở dữ liệu riêng, đứng sau API Gateway Node/Express; frontend được xây dựng bằng Next.js.
 
 ```
 Frontend (Next.js, 3000)
@@ -13,61 +13,55 @@ Frontend (Next.js, 3000)
 PostgreSQL 16 + Redis 7 (shared instances, one database/keyspace per service)
 ```
 
-The frontend calls the gateway directly from the browser (no server-side rendering of
-authenticated data) — see `frontend/README` notes below for why.
+Frontend gọi trực tiếp gateway từ trình duyệt (không kết xuất phía máy chủ cho dữ liệu đã xác thực). Xem ghi chú trong `frontend/README` để biết lý do.
 
-## Quick Start (demo mode, no external keys)
+## Bắt đầu nhanh (chế độ demo, không cần khóa dịch vụ bên ngoài)
 
 ```bash
 cp .env.example .env
-# REQUIRED: replace the two dev-only samples with your own random values
+# BẮT BUỘC: thay hai giá trị mẫu chỉ dành cho phát triển bằng chuỗi ngẫu nhiên của bạn
 #   JWT_SECRET=$(openssl rand -base64 48)      (>= 32 chars, shared by gateway + 5 services)
 #   INTERNAL_TOKEN=$(openssl rand -hex 32)     (>= 32 chars, service-to-service /internal/**)
-# Everything else works as-is: AWS / Azure / Google / VNPay / mail keys are optional.
+# Các mục còn lại dùng được ngay; khóa AWS / Azure / Google / VNPay / email đều không bắt buộc.
 
 docker-compose up -d --build
 docker-compose ps                 # wait until everything reports "healthy"
 curl http://localhost:8000/health
 ```
 
-`docker-compose` refuses to start with a clear message when `JWT_SECRET` or
-`INTERNAL_TOKEN` is missing (`required variable JWT_SECRET is missing a value`).
+Nếu thiếu `JWT_SECRET` hoặc `INTERNAL_TOKEN`, `docker-compose` sẽ từ chối khởi động và hiển thị thông báo rõ ràng (ví dụ: `required variable JWT_SECRET is missing a value`).
 
-Open the app at **http://localhost:3000** and register a new account, or call the API
-directly through the gateway:
+Mở ứng dụng tại **http://localhost:3000** để đăng ký tài khoản mới, hoặc gọi API trực tiếp qua gateway:
 ```bash
 curl -X POST http://localhost:8000/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"password123","cefrLevel":"B1"}'
 ```
 
-Only ports **3000** (frontend) and **8000** (gateway) are published to the host. For
-direct access to Postgres/Redis/the services while developing:
+Chỉ cổng **3000** (frontend) và **8000** (gateway) được mở ra máy chủ. Để truy cập trực tiếp Postgres/Redis/các dịch vụ khi phát triển:
 ```bash
 cp docker-compose.override.yml.example docker-compose.override.yml   # git-ignored
 docker-compose up -d    # now also 127.0.0.1:5432, 6379, 8001-8005
 ```
 
-### Mock mode: S3 and Azure are optional
+### Chế độ mô phỏng: S3 và Azure không bắt buộc
 
 | Env (`.env`) | Default | Behaviour |
 |---|---|---|
-| `STORAGE_PROVIDER` | `auto` | `auto` → S3 when `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are set (and don't start with `your_`), otherwise **local files** under `MEDIA_ROOT` (docker volume `media_data`). Force with `s3` / `local`. |
-| `SPEECH_PROVIDER` | `auto` | `auto` → Azure when `AZURE_SPEECH_KEY` is set, otherwise a **deterministic mock scorer** (no network; the UI shows "Chế độ demo – điểm mô phỏng"). Force with `azure` / `mock`. |
-| `MEDIA_ROOT` | `/data/media` | Local storage root inside content-service / practice-service. |
+| `STORAGE_PROVIDER` | `auto` | `auto` sẽ dùng S3 nếu đã đặt `AWS_ACCESS_KEY_ID` và `AWS_SECRET_ACCESS_KEY` (và giá trị không bắt đầu bằng `your_`); nếu không sẽ dùng **tệp cục bộ** trong `MEDIA_ROOT` (Docker volume `media_data`). Có thể chọn rõ `s3` / `local`. |
+| `SPEECH_PROVIDER` | `auto` | `auto` sẽ dùng Azure nếu đã đặt `AZURE_SPEECH_KEY`; nếu không sẽ dùng **bộ chấm điểm mô phỏng xác định** (không kết nối mạng; giao diện hiển thị "Chế độ demo – điểm mô phỏng"). Có thể chọn rõ `azure` / `mock`. |
+| `MEDIA_ROOT` | `/data/media` | Thư mục gốc lưu trữ cục bộ bên trong content-service / practice-service. |
 
-Forcing `s3`/`azure` without keys makes the service fail at startup with an explicit log.
-Seed lessons always play from local files (`local:seed/...`), even when S3 is enabled.
+Chọn `s3`/`azure` mà không cung cấp khóa sẽ khiến dịch vụ dừng khi khởi động và ghi thông báo cụ thể vào log. Bài học mẫu luôn phát từ tệp cục bộ (`local:seed/...`), kể cả khi đã bật S3.
 
-### Demo data
+### Dữ liệu demo
 
-- **5 lessons × 5 sentences** with real audio (TTS) in `media/seed/lesson-<n>/` — `full.mp3`
-  for the lesson, `s<order>.mp3` per sentence. Regenerate after editing the seeded
-  sentences in `init-db.sql`: `scripts/gen-seed-audio.sh` (Docker: espeak-ng + ffmpeg).
-- **3 vocabulary decks** (the third is Pro-only).
-- **Plans**: 1 tháng 79.000đ, 3 tháng 169.000đ, 1 năm 499.000đ (lifetime plan: Phase 2).
-- **Activation codes** (single use each, valid until 2027-12-31) — enter them on the
-  subscription page or `POST /subscriptions/activate-code {"code": "..."}`:
+- **5 bài học × 5 câu** có âm thanh TTS trong `media/seed/lesson-<n>/` — `full.mp3`
+  cho toàn bài và `s<order>.mp3` cho từng câu. Tạo lại âm thanh sau khi sửa các câu mẫu trong
+  `init-db.sql` bằng `scripts/gen-seed-audio.sh` (Docker dùng espeak-ng + ffmpeg).
+- **3 bộ từ vựng** (bộ thứ ba chỉ dành cho Pro).
+- **Gói dịch vụ**: 1 tháng 79.000đ, 3 tháng 169.000đ, 1 năm 499.000đ (gói trọn đời thuộc Phase 2).
+- **Mã kích hoạt** (mỗi mã dùng một lần, có hiệu lực đến 2027-12-31) — nhập tại trang đăng ký hoặc gọi `POST /subscriptions/activate-code {"code": "..."}`:
 
   | Code | Plan |
   |---|---|
@@ -75,29 +69,22 @@ Seed lessons always play from local files (`local:seed/...`), even when S3 is en
   | `PROMO-DEMO3-MONTH` | 3 tháng |
   | `PROMO-DEMOY-EARLY` | 1 năm |
 
-  A used code stays used; to reset all demo data run `docker-compose down -v && docker-compose up -d`.
+  Mã đã dùng sẽ không thể dùng lại. Để tạo lại toàn bộ dữ liệu demo, chạy `docker-compose down -v && docker-compose up -d`.
 
-### Admin account (demo)
+### Tài khoản quản trị (demo)
 
-Admin rights come from the `ADMIN_EMAILS` env var (comma-separated, read by every
-service; default `admin@parroto.com`). There is no seeded user — just **register**
-`admin@parroto.com` (any password) at http://localhost:3000/register; the Admin menu
-(lessons, vocabulary, activation codes) appears after login. To make other people admins:
+Quyền quản trị được cấp qua biến môi trường `ADMIN_EMAILS` (các email phân cách bằng dấu phẩy; mọi dịch vụ đều đọc biến này; mặc định là `admin@parroto.com`). Không có sẵn tài khoản người dùng — hãy **đăng ký** `admin@parroto.com` (mật khẩu tùy chọn) tại http://localhost:3000/register. Sau khi đăng nhập, menu Quản trị (bài học, từ vựng, mã kích hoạt) sẽ xuất hiện. Để cấp quyền cho người khác:
 ```bash
 # .env
 ADMIN_EMAILS=admin@parroto.com,teacher@example.com
 docker-compose up -d     # recreates the services with the new value
 ```
 
-### Database passwords
+### Mật khẩu cơ sở dữ liệu
 
-The per-service roles (`auth_user`, `content_user`, ...) are created by
-`initdb/00-roles.sh` from the `*_DB_PASSWORD` variables in `.env` on the **first** start
-of an empty Postgres volume (`init-db.sql` then creates schema + seed). The same
-variables are passed to each service, so changing a password means:
-`docker-compose down -v` (wipes data) and `up` again — or `ALTER ROLE ... PASSWORD` by hand.
+Các role riêng cho từng dịch vụ (`auth_user`, `content_user`, ...) được `initdb/00-roles.sh` tạo từ biến `*_DB_PASSWORD` trong `.env` khi Postgres khởi động **lần đầu** với volume trống (sau đó `init-db.sql` tạo schema và dữ liệu mẫu). Các biến này cũng được truyền cho từng dịch vụ. Vì vậy, muốn đổi mật khẩu, hãy chạy `docker-compose down -v` (xóa dữ liệu) rồi khởi động lại, hoặc tự chạy `ALTER ROLE ... PASSWORD`.
 
-## Operations notes
+## Ghi chú vận hành
 
 **Schema changes = Flyway migrations (since Phase 2).** Every Java service runs Flyway on
 startup (before Hibernate's `ddl-auto: validate`) from its own
@@ -234,7 +221,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs the same checks: `frontend`, `g
 Each Java service follows the same internal layout: `config/`, `security/`, `entity/`, `repository/`, `dto/`, `service/`, `controller/`, `exception/`, plus `src/main/resources/db/migration/` (Flyway).
 Shared infrastructure lives once in `services/common` (package `com.parroto.common.*`: `security.JwtValidator/JwtAuthFilter/AuthenticatedUser/AdminGuard/InternalTokenFilter`, `web.RequestIdFilter/RestAuthEntryPoint`, `exception.ApiException`, `dto.ErrorResponse/PageResponse/MessageResponse`, `cache.CacheService`); each service imports what it needs in `config/CommonConfig.java`. Details: `docs/reports/P2-foundation.md`.
 
-## What's implemented
+## Các tính năng đã triển khai
 
 - **JWT auth**, shared HMAC secret, validated independently by every service (no per-request call back to auth-service). Refresh token rotation, Redis logout blacklist (fail-open — see Known limitations).
 - **Google / Apple Sign-In**: real token verification (Google tokeninfo endpoint; Apple JWKS + RS256 signature check) — needs `GOOGLE_CLIENT_ID` / `APPLE_CLIENT_ID` in `.env` to be strict about audience, works without them too.
@@ -246,7 +233,7 @@ Shared infrastructure lives once in `services/common` (package `com.parroto.comm
 - Redis caching (lessons, decks, stats) with cache-aside invalidation; standardized error JSON (`error`, `status`, `timestamp`, `requestId`) across every service and the gateway.
 - **Frontend (Next.js)**: full user-facing app — auth (email/password + optional Google Sign-In), lesson browsing, dictation practice with word-diff scoring display, shadowing practice with in-browser recording (`MediaRecorder`) and phoneme-level red/yellow/green feedback, vocabulary deck browsing, SRS flashcard review session, notebook, practice history, subscription management (VNPay redirect + activation codes + transaction history), profile settings — plus an Admin section (lesson/sentence/audio CRUD, deck/card CRUD) gated the same way the backend gates it (see limitation below).
 
-## Known limitations / deliberate simplifications
+## Giới hạn và đơn giản hóa có chủ đích
 
 1. **JWT blacklist is fail-open.** Logged-out tokens are rejected while Redis is up; if Redis is down the blacklist check is skipped (see Operations notes).
 2. **No roles table.** Admin endpoints are gated by an `ADMIN_EMAILS` env var comparison, not a real permissions system.
@@ -257,7 +244,7 @@ Shared infrastructure lives once in `services/common` (package `com.parroto.comm
 7. **Frontend admin-nav visibility is advisory, not a security boundary.** `GET /auth/profile` now returns an `isAdmin` flag (auth-service compares the caller's email against its own `ADMIN_EMAILS`, mirroring the allow-list every other service already enforces independently) and the sidebar only renders the Admin section when it's true — but the actual write endpoints are still, and only, gated by each service's own server-side check. Hitting an admin URL directly while not on the allow-list still gets the backend's real 403, surfaced as an inline error.
 8. `VNPAY_RETURN_URL` **must** point at the gateway (`http://localhost:8000/subscriptions/payment-callback`), not directly at a frontend page — the original planning docs had this pointing at `localhost:3000/subscription/callback`, which would have skipped VNPay signature verification entirely and never activated any subscription. Fixed in `.env.example`/`docker-compose.yml`/`application.yml`; `subscription-service` then 302-redirects the browser to `FRONTEND_URL` + `/subscription/success` or `/subscription/failed`.
 
-## Development
+## Phát triển
 
 ```bash
 docker-compose logs -f <service-name>       # e.g. auth-service, api-gateway, frontend

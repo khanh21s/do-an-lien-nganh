@@ -134,6 +134,7 @@ export const qk = {
   deckCardsManage: (deckId: string, params: import('./types').DeckCardsQuery = {}) =>
     ['deck-cards', deckId, 'manage', params] as const,
   dictionary: (word: string) => ['dictionary', word] as const,
+  dictionarySuggestions: (query: string) => ['dictionary-suggestions', query] as const,
   // --- end P2-C ---
   // --- P2-anki ---
   /** Global "Ôn tập" session; nested under `review-queue` so existing invalidations refresh it. */

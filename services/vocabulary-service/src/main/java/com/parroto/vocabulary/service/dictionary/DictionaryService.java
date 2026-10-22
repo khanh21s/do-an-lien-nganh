@@ -7,6 +7,7 @@ import com.parroto.common.security.AuthenticatedUser;
 import com.parroto.vocabulary.dto.DictionaryResponse;
 import com.parroto.vocabulary.dto.DictionaryResponse.DefinitionEn;
 import com.parroto.vocabulary.dto.DictionaryResponse.Example;
+import com.parroto.vocabulary.dto.DictionarySuggestion;
 import com.parroto.vocabulary.entity.VocabCard;
 import com.parroto.vocabulary.repository.VocabCardRepository;
 import com.parroto.vocabulary.service.dictionary.FreeDictionaryClient.Lookup;
@@ -88,6 +89,43 @@ public class DictionaryService {
             resolved = ext.word();
         }
         return merge(query, resolved != null ? resolved : query, matched, ext);
+    }
+
+    /** Fast local-only suggestions for the search box; deliberately does not call the external dictionary. */
+    @Transactional(readOnly = true)
+    public List<DictionarySuggestion> suggest(AuthenticatedUser principal, String rawQuery) {
+        String prefix = WordNormalizer.normalize(rawQuery);
+        if (prefix.length() < 2 || prefix.length() > 40 || prefix.contains(" ")
+                || !prefix.matches("[a-z][a-z'-]*")) {
+            return List.of();
+        }
+
+        UUID userId = principal != null ? principal.userUuid() : NOBODY;
+        List<VocabCard> cards = cardRepository.findDictionarySuggestions(prefix, userId, PageRequest.of(0, 100));
+        Map<String, SuggestionBuilder> grouped = new java.util.LinkedHashMap<>();
+        for (VocabCard card : cards) {
+            String word = card.getWord() == null ? "" : card.getWord().trim();
+            if (word.isEmpty()) continue;
+            SuggestionBuilder builder = grouped.computeIfAbsent(word.toLowerCase(java.util.Locale.ROOT),
+                    ignored -> new SuggestionBuilder(word));
+            if (card.getMeaning() != null && !card.getMeaning().isBlank() && builder.meanings.size() < 4) {
+                builder.meanings.add(card.getMeaning().trim());
+            }
+            if (card.getPartOfSpeech() != null && !card.getPartOfSpeech().isBlank()) {
+                builder.partsOfSpeech.add(card.getPartOfSpeech().trim());
+            }
+        }
+        return grouped.values().stream().limit(8)
+                .map(item -> new DictionarySuggestion(item.word, List.copyOf(item.meanings), List.copyOf(item.partsOfSpeech)))
+                .toList();
+    }
+
+    private static final class SuggestionBuilder {
+        private final String word;
+        private final Set<String> meanings = new LinkedHashSet<>();
+        private final Set<String> partsOfSpeech = new LinkedHashSet<>();
+
+        private SuggestionBuilder(String word) { this.word = word; }
     }
 
     void setClock(java.time.Clock clock) {

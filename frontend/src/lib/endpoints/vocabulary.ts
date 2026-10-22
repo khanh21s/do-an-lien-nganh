@@ -153,6 +153,9 @@ export const vocabularyApi = {
     api
       .get<import('@/lib/types').DictionaryEntry>(`/vocabs/dictionary/${encodeURIComponent(word)}`)
       .then((r) => r.data),
+  suggestDictionaryWords: (query: string) =>
+    api.get<import('@/lib/types').DictionarySuggestion[]>('/vocabs/dictionary/suggest', { params: { q: query } })
+      .then((r) => r.data),
   // --- end P2-C ---
 
   // --- P2-anki ---
