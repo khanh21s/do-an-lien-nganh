@@ -173,4 +173,23 @@ public interface VocabCardRepository extends JpaRepository<VocabCard, UUID> {
             """)
     List<VocabCard> findDictionarySuggestions(@Param("prefix") String prefix, @Param("userId") UUID userId,
                                                Pageable pageable);
+
+    @Query(value = """
+            SELECT DISTINCT LOWER(TRIM(c.word)) AS normalized_word
+            FROM vocab_card c JOIN vocab_deck d ON d.id = c.deck_id
+            WHERE ((d.owner_id IS NULL AND COALESCE(d.is_pro_only, false) = false) OR d.owner_id = :userId)
+              AND LENGTH(TRIM(c.word)) BETWEEN :minLength AND :maxLength
+            ORDER BY normalized_word
+            """, nativeQuery = true)
+    List<String> findDictionaryWordsByLength(@Param("minLength") int minLength, @Param("maxLength") int maxLength,
+                                              @Param("userId") UUID userId, Pageable pageable);
+
+    @Query("""
+            SELECT c FROM VocabCard c JOIN FETCH c.deck d
+            WHERE LOWER(TRIM(c.word)) IN :words
+              AND ((d.ownerId IS NULL AND COALESCE(d.isProOnly, false) = false) OR d.ownerId = :userId)
+            ORDER BY LOWER(TRIM(c.word)), CASE WHEN d.ownerId IS NULL THEN 1 ELSE 0 END, c.createdAt ASC
+            """)
+    List<VocabCard> findDictionaryCardsByWords(@Param("words") Collection<String> words, @Param("userId") UUID userId,
+                                                Pageable pageable);
 }

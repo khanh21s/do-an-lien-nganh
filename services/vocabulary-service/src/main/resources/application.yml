@@ -61,6 +61,10 @@ dictionary:
   external-enabled: ${DICTIONARY_EXTERNAL_ENABLED:true}
   connect-timeout-ms: ${DICTIONARY_CONNECT_TIMEOUT_MS:1500}
   read-timeout-ms: ${DICTIONARY_READ_TIMEOUT_MS:2500}
+  translation-api-url: ${DICTIONARY_TRANSLATION_API_URL:https://api.mymemory.translated.net/get}
+  translation-enabled: ${DICTIONARY_TRANSLATION_ENABLED:true}
+  translation-connect-timeout-ms: ${DICTIONARY_TRANSLATION_CONNECT_TIMEOUT_MS:1000}
+  translation-read-timeout-ms: ${DICTIONARY_TRANSLATION_READ_TIMEOUT_MS:1800}
 
 management:
   endpoints:

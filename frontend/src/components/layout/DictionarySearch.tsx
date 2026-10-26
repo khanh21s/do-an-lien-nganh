@@ -3,6 +3,7 @@
 import { WordLookup } from '@/components/vocab/dictionary/WordLookup';
 import { vocabularyApi } from '@/lib/endpoints/vocabulary';
 import { qk } from '@/lib/queryKeys';
+import { readLocalStorage, storageKeys, writeLocalStorage } from '@/lib/storageKeys';
 import type { DictionarySuggestion } from '@/lib/types';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
@@ -15,6 +16,7 @@ export function DictionarySearch({ className }: { className?: string }) {
   const [word, setWord] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [history, setHistory] = useState<string[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export function DictionarySearch({ className }: { className?: string }) {
     event.preventDefault();
     const trimmed = query.trim();
     if (trimmed) {
+      saveHistory(trimmed);
       setOpen(false);
       setWord(trimmed);
     }
@@ -45,9 +48,25 @@ export function DictionarySearch({ className }: { className?: string }) {
 
   function chooseSuggestion(suggestion: DictionarySuggestion) {
     setQuery(suggestion.word);
+    saveHistory(suggestion.word);
     setOpen(false);
     setActiveIndex(-1);
     setWord(suggestion.word);
+  }
+
+  function saveHistory(value: string) {
+    const normalized = value.trim();
+    const next = [normalized, ...readLocalStorage<string[]>(storageKeys.dictionaryHistory, [])
+      .filter((item) => item.toLowerCase() !== normalized.toLowerCase())].slice(0, 8);
+    setHistory(next);
+    writeLocalStorage(storageKeys.dictionaryHistory, next);
+  }
+
+  function chooseHistory(value: string) {
+    saveHistory(value);
+    setQuery(value);
+    setOpen(false);
+    setWord(value);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -87,14 +106,17 @@ export function DictionarySearch({ className }: { className?: string }) {
             id="dictionary-search"
             type="search"
             value={query}
-            onFocus={() => setOpen(true)}
+            onFocus={() => {
+              setHistory(readLocalStorage<string[]>(storageKeys.dictionaryHistory, []));
+              setOpen(true);
+            }}
             onChange={(event) => {
               setQuery(event.target.value);
               setOpen(true);
               setActiveIndex(-1);
             }}
             onKeyDown={onKeyDown}
-            placeholder="Tra từ tiếng Anh..."
+            placeholder="Tra từ hoặc cụm từ tiếng Anh..."
             autoComplete="off"
             role="combobox"
             aria-autocomplete="list"
@@ -118,7 +140,7 @@ export function DictionarySearch({ className }: { className?: string }) {
         </button>
       </form>
 
-      {showSuggestions && (suggestions.length > 0 || suggestionsQuery.isFetching) && (
+      {showSuggestions && (suggestions.length > 0 || suggestionsQuery.isFetching || !suggestionsQuery.isError) && (
         <ul
           id="dictionary-suggestions"
           role="listbox"
@@ -127,7 +149,7 @@ export function DictionarySearch({ className }: { className?: string }) {
         >
           {suggestionsQuery.isFetching && suggestions.length === 0 ? (
             <li className="px-3 py-2 text-sm text-slate-500" role="status">Đang tìm gợi ý...</li>
-          ) : suggestions.map((suggestion, index) => (
+          ) : suggestions.length > 0 ? suggestions.map((suggestion, index) => (
             <li key={suggestion.word} role="presentation">
               <button
                 id={`dictionary-suggestion-${index}`}
@@ -143,17 +165,64 @@ export function DictionarySearch({ className }: { className?: string }) {
               >
                 <span className="flex w-full items-center justify-between gap-3">
                   <span className="font-semibold text-slate-900">{suggestion.word}</span>
-                  {suggestion.partsOfSpeech.length > 0 && (
-                    <span className="shrink-0 text-xs text-slate-500">{suggestion.partsOfSpeech.join(', ')}</span>
-                  )}
+                  <span className="flex shrink-0 items-center gap-2">
+                    {suggestion.correction && <span className="text-xs text-brand-700">Có phải bạn muốn tìm</span>}
+                    {suggestion.partsOfSpeech.length > 0 && (
+                      <span className="text-xs text-slate-500">{suggestion.partsOfSpeech.join(', ')}</span>
+                    )}
+                  </span>
                 </span>
                 {suggestion.meaningsVi.length > 0 && (
                   <span className="mt-0.5 line-clamp-2 text-sm text-slate-600">{suggestion.meaningsVi.join('; ')}</span>
                 )}
               </button>
             </li>
-          ))}
+          )) : (
+            <li>
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  const trimmed = query.trim();
+                  saveHistory(trimmed);
+                  setOpen(false);
+                  setWord(trimmed);
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"
+              >Tra “{query.trim()}” để xem bản dịch tiếng Việt</button>
+            </li>
+          )}
         </ul>
+      )}
+      {open && !query.trim() && history.length > 0 && (
+        <div className="absolute left-0 right-0 top-full z-[80] mt-2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+          <div className="flex items-center justify-between px-3 py-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tra cứu gần đây</span>
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                setHistory([]);
+                writeLocalStorage(storageKeys.dictionaryHistory, []);
+              }}
+              className="text-xs text-slate-500 hover:text-slate-800"
+            >Xóa lịch sử</button>
+          </div>
+          <ul role="listbox" aria-label="Tra cứu gần đây">
+            {history.map((item, index) => (
+              <li key={`${item}-${index}`}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => chooseHistory(item)}
+                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                >{item}</button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <WordLookup word={word} onClose={() => setWord(null)} />
     </div>

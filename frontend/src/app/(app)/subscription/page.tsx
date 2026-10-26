@@ -98,7 +98,6 @@ export default function SubscriptionPage() {
                 key={plan.id}
                 plan={plan}
                 highlight={plan.id === bestId}
-                showFeatures={false}
                 actionLabel={isPremium ? 'Đang là Premium' : 'Thanh toán ngay'}
                 disabled={isPremium || (payMutation.isPending && payMutation.variables !== plan.id)}
                 loading={payMutation.isPending && payMutation.variables === plan.id}

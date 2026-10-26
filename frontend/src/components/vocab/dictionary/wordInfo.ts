@@ -42,6 +42,9 @@ export function prefillFromEntry(
 
 /** Short Vietnamese note about where the data came from / what is missing. */
 export function sourceNote(entry: DictionaryEntry): string | null {
+  if (entry.source.includes('translation')) {
+    return 'Nghĩa tiếng Việt là bản dịch tự động, nên đối chiếu theo ngữ cảnh.';
+  }
   if (entry.externalStatus === 'error') {
     return 'Không kết nối được từ điển tiếng Anh, đang hiển thị dữ liệu có sẵn.';
   }

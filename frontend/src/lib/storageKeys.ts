@@ -12,6 +12,7 @@ export const storageKeys = {
   shortcuts: 'parroto:shortcuts',
   /** T15: last word source picked in the game lobby. */
   gameSource: 'parroto:game-source',
+  dictionaryHistory: 'parroto:dictionary-history',
 
   // sessionStorage (see lib/practice-session.ts)
   practiceSession: (lessonId: string, mode: PracticeMode) => `parroto:session:${lessonId}:${mode}`,

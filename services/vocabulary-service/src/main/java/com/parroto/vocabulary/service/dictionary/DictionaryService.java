@@ -41,6 +41,7 @@ public class DictionaryService {
     static final Duration HIT_TTL = Duration.ofDays(7);
     static final Duration MISS_TTL = Duration.ofDays(1);
     static final String CACHE_PREFIX = "vocab:dict:ext:v1:";
+    static final String TRANSLATION_CACHE_PREFIX = "vocab:dict:vi:v1:";
     static final String MISS_MARKER = "{\"miss\":true}";
     /** At most this many uncached API calls per lookup (each lemma guess costs one). */
     static final int MAX_EXTERNAL_CALLS = 2;
@@ -55,15 +56,25 @@ public class DictionaryService {
 
     private final VocabCardRepository cardRepository;
     private final FreeDictionaryClient client;
+    private final TranslationClient translationClient;
     private final CacheService cacheService;
     private final ObjectMapper objectMapper;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public DictionaryService(VocabCardRepository cardRepository, FreeDictionaryClient client,
+                             TranslationClient translationClient,
                              CacheService cacheService, ObjectMapper objectMapper) {
         this.cardRepository = cardRepository;
         this.client = client;
+        this.translationClient = translationClient;
         this.cacheService = cacheService;
         this.objectMapper = objectMapper;
+    }
+
+    /** Test-friendly constructor retained for dictionary-only unit tests. */
+    DictionaryService(VocabCardRepository cardRepository, FreeDictionaryClient client,
+                      CacheService cacheService, ObjectMapper objectMapper) {
+        this(cardRepository, client, null, cacheService, objectMapper);
     }
 
     @Transactional(readOnly = true)
@@ -88,7 +99,9 @@ public class DictionaryService {
         if (resolved == null && ext.entry() != null) {
             resolved = ext.word();
         }
-        return merge(query, resolved != null ? resolved : query, matched, ext);
+        String translation = matched.stream().noneMatch(c -> c.getMeaning() != null && !c.getMeaning().isBlank())
+                ? translateCached(resolved != null ? resolved : query) : null;
+        return merge(query, resolved != null ? resolved : query, matched, ext, translation);
     }
 
     /** Fast local-only suggestions for the search box; deliberately does not call the external dictionary. */
@@ -104,28 +117,73 @@ public class DictionaryService {
         List<VocabCard> cards = cardRepository.findDictionarySuggestions(prefix, userId, PageRequest.of(0, 100));
         Map<String, SuggestionBuilder> grouped = new java.util.LinkedHashMap<>();
         for (VocabCard card : cards) {
-            String word = card.getWord() == null ? "" : card.getWord().trim();
-            if (word.isEmpty()) continue;
-            SuggestionBuilder builder = grouped.computeIfAbsent(word.toLowerCase(java.util.Locale.ROOT),
-                    ignored -> new SuggestionBuilder(word));
-            if (card.getMeaning() != null && !card.getMeaning().isBlank() && builder.meanings.size() < 4) {
-                builder.meanings.add(card.getMeaning().trim());
-            }
-            if (card.getPartOfSpeech() != null && !card.getPartOfSpeech().isBlank()) {
-                builder.partsOfSpeech.add(card.getPartOfSpeech().trim());
+            addSuggestionCard(grouped, card, false);
+        }
+        if (grouped.size() < 3 && prefix.length() >= 3) {
+            int maxDistance = prefix.length() <= 5 ? 1 : 2;
+            List<String> corrections = cardRepository.findDictionaryWordsByLength(Math.max(2, prefix.length() - maxDistance),
+                            prefix.length() + maxDistance, userId, PageRequest.of(0, 5000)).stream()
+                    .filter(candidate -> !grouped.containsKey(candidate))
+                    .filter(candidate -> candidate.matches("[a-z][a-z'-]*"))
+                    .map(candidate -> Map.entry(candidate, editDistance(prefix, candidate)))
+                    .filter(entry -> entry.getValue() > 0 && entry.getValue() <= maxDistance)
+                    .sorted((left, right) -> {
+                        int byDistance = Integer.compare(left.getValue(), right.getValue());
+                        return byDistance != 0 ? byDistance : left.getKey().compareTo(right.getKey());
+                    })
+                    .limit(8 - grouped.size()).map(Map.Entry::getKey).toList();
+            if (!corrections.isEmpty()) {
+                for (VocabCard card : cardRepository.findDictionaryCardsByWords(corrections, userId, PageRequest.of(0, 100))) {
+                    addSuggestionCard(grouped, card, true);
+                }
             }
         }
         return grouped.values().stream().limit(8)
-                .map(item -> new DictionarySuggestion(item.word, List.copyOf(item.meanings), List.copyOf(item.partsOfSpeech)))
+                .map(item -> new DictionarySuggestion(item.word, List.copyOf(item.meanings),
+                        List.copyOf(item.partsOfSpeech), item.correction))
                 .toList();
+    }
+
+    private static void addSuggestionCard(Map<String, SuggestionBuilder> grouped, VocabCard card, boolean correction) {
+        String word = card.getWord() == null ? "" : card.getWord().trim();
+        if (word.isEmpty()) return;
+        SuggestionBuilder builder = grouped.computeIfAbsent(word.toLowerCase(java.util.Locale.ROOT),
+                ignored -> new SuggestionBuilder(word, correction));
+        if (card.getMeaning() != null && !card.getMeaning().isBlank() && builder.meanings.size() < 4) {
+            builder.meanings.add(card.getMeaning().trim());
+        }
+        if (card.getPartOfSpeech() != null && !card.getPartOfSpeech().isBlank()) {
+            builder.partsOfSpeech.add(card.getPartOfSpeech().trim());
+        }
+    }
+
+    private static int editDistance(String left, String right) {
+        int[][] distance = new int[left.length() + 1][right.length() + 1];
+        for (int i = 0; i <= left.length(); i++) distance[i][0] = i;
+        for (int j = 0; j <= right.length(); j++) distance[0][j] = j;
+        for (int i = 1; i <= left.length(); i++) {
+            for (int j = 1; j <= right.length(); j++) {
+                distance[i][j] = Math.min(Math.min(distance[i - 1][j] + 1, distance[i][j - 1] + 1),
+                        distance[i - 1][j - 1] + (left.charAt(i - 1) == right.charAt(j - 1) ? 0 : 1));
+                if (i > 1 && j > 1 && left.charAt(i - 1) == right.charAt(j - 2)
+                        && left.charAt(i - 2) == right.charAt(j - 1)) {
+                    distance[i][j] = Math.min(distance[i][j], distance[i - 2][j - 2] + 1);
+                }
+            }
+        }
+        return distance[left.length()][right.length()];
     }
 
     private static final class SuggestionBuilder {
         private final String word;
+        private final boolean correction;
         private final Set<String> meanings = new LinkedHashSet<>();
         private final Set<String> partsOfSpeech = new LinkedHashSet<>();
 
-        private SuggestionBuilder(String word) { this.word = word; }
+        private SuggestionBuilder(String word, boolean correction) {
+            this.word = word;
+            this.correction = correction;
+        }
     }
 
     void setClock(java.time.Clock clock) {
@@ -170,7 +228,19 @@ public class DictionaryService {
         return new ExternalResult(null, null, failed ? "error" : "miss");
     }
 
-    static DictionaryResponse merge(String query, String word, List<VocabCard> cards, ExternalResult ext) {
+    private String translateCached(String text) {
+        if (translationClient == null) return null;
+        String key = TRANSLATION_CACHE_PREFIX + text.toLowerCase(java.util.Locale.ROOT);
+        String cached = cacheGet(key);
+        if (cached != null) return MISS_MARKER.equals(cached) ? null : cached;
+        String translated = translationClient.translate(text);
+        cachePut(key, translated != null ? translated : MISS_MARKER,
+                translated != null ? HIT_TTL : MISS_TTL);
+        return translated;
+    }
+
+    static DictionaryResponse merge(String query, String word, List<VocabCard> cards, ExternalResult ext,
+                                    String translatedMeaning) {
         ExternalDictionaryEntry e = ext.entry();
         String ipa = cards.stream().map(VocabCard::getIpa).map(FreeDictionaryClient::stripSlashes)
                 .filter(s -> s != null && !s.isBlank()).findFirst()
@@ -192,6 +262,9 @@ public class DictionaryService {
                 examples.add(new Example(c.getExample().trim(), blankToNull(c.getExampleVi())));
             }
         }
+        if (meanings.isEmpty() && translatedMeaning != null && !translatedMeaning.isBlank()) {
+            meanings.add(translatedMeaning.trim());
+        }
         List<DefinitionEn> defs = new ArrayList<>();
         if (e != null && e.definitions() != null) {
             for (ExternalDictionaryEntry.Definition d : e.definitions()) {
@@ -201,8 +274,12 @@ public class DictionaryService {
         }
         boolean fromCards = !cards.isEmpty();
         boolean fromDict = e != null;
-        String source = fromCards && fromDict ? "cards+dictionary" : fromCards ? "cards" : fromDict ? "dictionary" : "none";
-        return new DictionaryResponse(query, word, fromCards || fromDict, ipa, audio, List.copyOf(meanings),
+        boolean fromTranslation = translatedMeaning != null && !translatedMeaning.isBlank();
+        String source = fromTranslation
+                ? fromCards && fromDict ? "cards+dictionary+translation" : fromCards ? "cards+translation"
+                : fromDict ? "dictionary+translation" : "translation"
+                : fromCards && fromDict ? "cards+dictionary" : fromCards ? "cards" : fromDict ? "dictionary" : "none";
+        return new DictionaryResponse(query, word, fromCards || fromDict || fromTranslation, ipa, audio, List.copyOf(meanings),
                 List.copyOf(pos), defs, examples, source, ext.status());
     }
 

@@ -1288,7 +1288,8 @@ export interface ImportCommitResult {
   errors: { index: number; word: string | null; message: string }[];
 }
 
-export type DictionarySource = 'cards' | 'dictionary' | 'cards+dictionary' | 'none';
+export type DictionarySource = 'cards' | 'dictionary' | 'cards+dictionary' | 'none'
+  | 'translation' | 'cards+translation' | 'dictionary+translation' | 'cards+dictionary+translation';
 export type DictionaryExternalStatus = 'ok' | 'miss' | 'error' | 'skipped' | 'disabled';
 
 /** Local dictionary autocomplete result from public and current-user vocabulary cards. */
@@ -1296,6 +1297,7 @@ export interface DictionarySuggestion {
   word: string;
   meaningsVi: string[];
   partsOfSpeech: string[];
+  correction: boolean;
 }
 
 /** `DictionaryResponse` (GET /vocabs/dictionary/{word}). */
